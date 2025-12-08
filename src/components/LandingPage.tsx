@@ -256,28 +256,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Team Section */}
-      <section className="py-20 px-4 bg-white">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-4xl font-bold text-gray-900 text-center mb-12">Our Team</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { name: "Amit Goyal", role: "Co-Founder & Managing Director" },
-              { name: "Amith Agarwal", role: "Co-Founder & CEO" },
-              { name: "Amit Khandelwal", role: "Co-Founder & Director" }
-            ].map((member, idx) => (
-              <div key={idx} className="text-center">
-                <div className="w-48 h-48 bg-gray-200 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <Users className="w-24 h-24 text-gray-400" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">{member.name}</h3>
-                <p className="text-gray-600">{member.role}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* Corporate Buying Section */}
       <section className="py-20 px-4 bg-green-50">
         <div className="max-w-7xl mx-auto">

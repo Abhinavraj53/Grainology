@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { 
   Home, Gavel, ShoppingCart, FileText, Wallet, Store, 
   Cloud, Search, Handshake, TrendingUp, Play, 
-  Calendar, Users, Building2, CheckCircle
+  Calendar, Building2, CheckCircle
 } from 'lucide-react';
 
 export default function LandingPage() {

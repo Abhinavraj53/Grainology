@@ -1,10 +1,19 @@
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
-import AuthPage from './components/AuthPage';
+import Navigation from './components/Navigation';
+import Footer from './components/Footer';
+import LandingPage from './components/LandingPage';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import About from './pages/About';
+import Services from './pages/Services';
+import Features from './pages/Features';
+import Contact from './pages/Contact';
 import CustomerPanel from './components/CustomerPanel';
 import AdminPanel from './components/AdminPanel';
 
-export default function App() {
-  const { user, profile, loading, signOut } = useAuth();
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, profile, loading } = useAuth();
 
   if (loading) {
     return (
@@ -18,12 +27,74 @@ export default function App() {
   }
 
   if (!user || !profile) {
-    return <AuthPage />;
+    return <Navigate to="/login" replace />;
   }
 
-  if (profile.role === 'admin') {
+  return <>{children}</>;
+}
+
+function Dashboard() {
+  const { profile, signOut } = useAuth();
+
+  if (profile?.role === 'admin') {
     return <AdminPanel profile={profile} onSignOut={signOut} />;
   }
 
   return <CustomerPanel profile={profile} onSignOut={signOut} />;
+}
+
+export default function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={
+          <>
+            <Navigation />
+            <LandingPage />
+            <Footer />
+          </>
+        } />
+        <Route path="/about" element={
+          <>
+            <Navigation />
+            <About />
+          </>
+        } />
+        <Route path="/services" element={
+          <>
+            <Navigation />
+            <Services />
+          </>
+        } />
+        <Route path="/features" element={
+          <>
+            <Navigation />
+            <Features />
+          </>
+        } />
+        <Route path="/contact" element={
+          <>
+            <Navigation />
+            <Contact />
+          </>
+        } />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+
+        {/* Protected Routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Redirect unknown routes to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
 }

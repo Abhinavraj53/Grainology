@@ -32,6 +32,20 @@ const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 // Normalize URL - remove trailing slash for CORS matching
 const normalizedFrontendUrl = frontendUrl.replace(/\/$/, '');
 
+// Allowed origins - always include localhost for development
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:3001',
+  normalizedFrontendUrl,
+  frontendUrl
+].filter(Boolean).map(url => url.replace(/\/$/, '')); // Remove duplicates and trailing slashes
+
+// Add production frontend URL if different
+if (process.env.FRONTEND_URL && !allowedOrigins.includes(process.env.FRONTEND_URL.replace(/\/$/, ''))) {
+  allowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
+}
+
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -40,16 +54,21 @@ app.use(cors({
     // Normalize the origin (remove trailing slash)
     const normalizedOrigin = origin.replace(/\/$/, '');
     
-    // Check if origin matches (with or without trailing slash)
-    if (normalizedOrigin === normalizedFrontendUrl || origin === frontendUrl) {
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.warn(`⚠️  CORS blocked origin: ${origin}`);
+      console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+      callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

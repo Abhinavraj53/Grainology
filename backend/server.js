@@ -1,0 +1,95 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import authRoutes from './routes/auth.js';
+import profileRoutes from './routes/profiles.js';
+import offerRoutes from './routes/offers.js';
+import orderRoutes from './routes/orders.js';
+import qualityRoutes from './routes/quality.js';
+import adminRoutes from './routes/admin.js';
+import adminOrderRoutes from './routes/adminOrders.js';
+import kycRoutes from './routes/kyc.js';
+import mandiRoutes from './routes/mandi.js';
+import weatherRoutes from './routes/weather.js';
+import logisticsRoutes from './routes/logistics.js';
+import logisticsShipmentRoutes from './routes/logisticsShipments.js';
+import varietyMasterRoutes from './routes/varietyMaster.js';
+import purchaseOrderRoutes from './routes/purchaseOrders.js';
+import saleOrderRoutes from './routes/saleOrders.js';
+import reportRoutes from './routes/reports.js';
+import uploadRoutes from './routes/uploads.js';
+import supplyTransactionRoutes from './routes/supplyTransactions.js';
+import cashfreeKYCRoutes from './routes/cashfreeKYC.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grainology')
+.then(() => {
+  console.log('✅ Connected to MongoDB');
+})
+.catch((error) => {
+  console.error('❌ MongoDB connection error:', error.message);
+  console.error('⚠️  Server will continue but database operations may fail.');
+  console.error('💡 Tip: Check your MongoDB Atlas IP whitelist or connection string');
+  // Don't exit - let server start even if DB connection fails
+  // This allows testing other endpoints
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Grainology API is running' });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/profiles', profileRoutes);
+app.use('/api/offers', offerRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/quality', qualityRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/admin/orders', adminOrderRoutes);
+app.use('/api/kyc', kycRoutes);
+app.use('/api/mandi', mandiRoutes);
+app.use('/api/weather', weatherRoutes);
+app.use('/api/logistics', logisticsRoutes);
+app.use('/api/logistics-shipments', logisticsShipmentRoutes);
+app.use('/api/variety-master', varietyMasterRoutes);
+app.use('/api/purchase-orders', purchaseOrderRoutes);
+app.use('/api/sale-orders', saleOrderRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/uploads', uploadRoutes);
+app.use('/api/supply-transactions', supplyTransactionRoutes);
+app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📡 API available at http://localhost:${PORT}/api`);
+});
+

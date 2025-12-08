@@ -1,0 +1,210 @@
+import express from 'express';
+import WeatherData from '../models/WeatherData.js';
+import User from '../models/User.js';
+import { authenticate } from '../middleware/auth.js';
+import { getCurrentWeather, getWeatherForecast } from '../services/weatherService.js';
+
+const router = express.Router();
+
+// Get weather forecast for a location (fetches from OpenWeatherMap API)
+router.get('/forecast', authenticate, async (req, res) => {
+  try {
+    const { location, state, days = 5 } = req.query;
+
+    if (!location) {
+      return res.status(400).json({ error: 'Location parameter is required' });
+    }
+
+    // Check if any weather API key is configured
+    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
+      return res.status(503).json({ 
+        error: 'Weather service not configured',
+        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+      });
+    }
+
+    const forecast = await getWeatherForecast(location, state || '', parseInt(days));
+    
+    // Optionally save to database for caching
+    // Save each day's forecast to database
+    for (const dayForecast of forecast.forecasts) {
+      const existing = await WeatherData.findOne({
+        location: forecast.location,
+        date: new Date(dayForecast.date)
+      });
+
+      if (existing) {
+        await WeatherData.findByIdAndUpdate(existing._id, {
+          latitude: forecast.latitude,
+          longitude: forecast.longitude,
+          temperature_min: dayForecast.temperature_min,
+          temperature_max: dayForecast.temperature_max,
+          humidity: dayForecast.humidity,
+          rainfall: dayForecast.rainfall,
+          wind_speed: dayForecast.wind_speed,
+          weather_condition: dayForecast.weather_condition,
+          forecast_data: { ...dayForecast.forecast_data, state: forecast.state }
+        });
+      } else {
+        await WeatherData.create({
+          location: forecast.location,
+          latitude: forecast.latitude,
+          longitude: forecast.longitude,
+          date: new Date(dayForecast.date),
+          temperature_min: dayForecast.temperature_min,
+          temperature_max: dayForecast.temperature_max,
+          humidity: dayForecast.humidity,
+          rainfall: dayForecast.rainfall,
+          wind_speed: dayForecast.wind_speed,
+          weather_condition: dayForecast.weather_condition,
+          forecast_data: { ...dayForecast.forecast_data, state: forecast.state }
+        });
+      }
+    }
+
+    res.json(forecast);
+  } catch (error) {
+    console.error('Get weather forecast error:', error.message);
+    
+    // Return user-friendly error message
+    if (error.message.includes('API key') || error.message.includes('not configured')) {
+      return res.status(503).json({ 
+        error: 'Weather service not configured',
+        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch weather forecast',
+      message: 'Unable to fetch weather data. Please check the location and try again.'
+    });
+  }
+});
+
+// Get current weather for a location
+router.get('/current', authenticate, async (req, res) => {
+  try {
+    const { location, state } = req.query;
+
+    if (!location) {
+      return res.status(400).json({ error: 'Location parameter is required' });
+    }
+
+    // Check if any weather API key is configured
+    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
+      return res.status(503).json({ 
+        error: 'Weather service not configured',
+        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+      });
+    }
+
+    const currentWeather = await getCurrentWeather(location, state || '');
+    res.json(currentWeather);
+  } catch (error) {
+    console.error('Get current weather error:', error.message);
+    
+    // Return user-friendly error message
+    if (error.message.includes('API key') || error.message.includes('not configured')) {
+      return res.status(503).json({ 
+        error: 'Weather service not configured',
+        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+      });
+    }
+    
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch current weather',
+      message: 'Unable to fetch weather data. Please check the location and try again.'
+    });
+  }
+});
+
+// Get states list
+router.get('/states', authenticate, async (req, res) => {
+  try {
+    const { states } = await import('../data/indianStatesDistricts.js');
+    res.json(states);
+  } catch (error) {
+    console.error('Get states error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch states' });
+  }
+});
+
+// Get districts for a state
+router.get('/districts/:state', authenticate, async (req, res) => {
+  try {
+    const { indianStatesDistricts } = await import('../data/indianStatesDistricts.js');
+    const state = decodeURIComponent(req.params.state);
+    const districts = indianStatesDistricts[state] || [];
+    res.json(districts);
+  } catch (error) {
+    console.error('Get districts error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch districts' });
+  }
+});
+
+// Get customer's default location (state/district)
+router.get('/customer-location', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({
+      state: user.state || '',
+      district: user.district || ''
+    });
+  } catch (error) {
+    console.error('Get customer location error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch customer location' });
+  }
+});
+
+// Get all weather data (from database)
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const { location, date, date__gte } = req.query;
+    const query = {};
+
+    if (location) query.location = location;
+    if (date) query.date = date;
+    if (date__gte) {
+      query.date = { $gte: new Date(date__gte) };
+    }
+
+    const weatherData = await WeatherData.find(query).sort({ date: 1, createdAt: -1 });
+    res.json(weatherData);
+  } catch (error) {
+    console.error('Get weather data error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch weather data' });
+  }
+});
+
+// Get weather data by ID
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const weather = await WeatherData.findById(req.params.id);
+    if (!weather) {
+      return res.status(404).json({ error: 'Weather data not found' });
+    }
+    res.json(weather);
+  } catch (error) {
+    console.error('Get weather data error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch weather data' });
+  }
+});
+
+// Create weather data
+router.post('/', authenticate, async (req, res) => {
+  try {
+    const weather = new WeatherData(req.body);
+    await weather.save();
+    res.status(201).json(weather);
+  } catch (error) {
+    console.error('Create weather data error:', error);
+    res.status(500).json({ error: error.message || 'Failed to create weather data' });
+  }
+});
+
+export default router;
+

@@ -123,6 +123,39 @@ router.post('/verify-pan', async (req, res) => {
       });
     }
 
+    // Method 1: Try Verification API directly (no token needed)
+    try {
+      console.log('Trying Cashfree Verification API for PAN...');
+      const verifyResponse = await axios.post(
+        `${CASHFREE_BASE_URL}/verification/pan`,
+        {
+          pan: cleanPan,
+          name: cleanName,
+        },
+        {
+          headers: {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+
+      if (verifyResponse.data.status === 'SUCCESS' || verifyResponse.data.verified) {
+        return res.json({
+          success: true,
+          verified: true,
+          pan: cleanPan,
+          name: verifyResponse.data.name || cleanName,
+          type: verifyResponse.data.type || 'Individual',
+          details: verifyResponse.data,
+        });
+      }
+    } catch (verifyError) {
+      console.log('Verification API failed, trying Payout API...', verifyError.response?.data || verifyError.message);
+    }
+
+    // Method 2: Fallback to Payout API with token
     const token = await getCashfreeAccessToken();
 
     if (!token) {
@@ -130,14 +163,14 @@ router.post('/verify-pan', async (req, res) => {
       return res.status(500).json({
         success: false,
         error: 'Failed to authenticate with verification service',
-        message: 'Unable to connect to verification service. Please check your Cashfree credentials.',
-        details: 'Token generation failed',
+        message: 'Unable to connect to verification service. Please check your Cashfree credentials and ensure they have verification API access.',
+        details: 'Token generation failed. Make sure your Cashfree account has Payout/Verification API access enabled.',
       });
     }
 
-    console.log('Calling Cashfree PAN verification API...');
+    console.log('Calling Cashfree PAN verification API (Payout)...');
 
-    // Verify PAN using Cashfree API
+    // Verify PAN using Cashfree Payout API
     const response = await axios.post(
       `${CASHFREE_BASE_URL}/payout/v1.2/validation/pan`,
       {

@@ -1,4 +1,3 @@
-import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { Mail, Phone, MapPin, Send } from 'lucide-react';
 import { useState } from 'react';
@@ -23,7 +22,6 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navigation />
       
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-green-50 to-green-100 py-20 px-4">

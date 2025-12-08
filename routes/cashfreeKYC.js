@@ -291,6 +291,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
 
     try {
       // Method 1: Try using Cashfree Verification API with client credentials
+      // Add timeout to prevent hanging
       const response = await axios.post(
         `${CASHFREE_BASE_URL}/verification/digilocker`,
         {
@@ -304,7 +305,8 @@ router.post('/verify-aadhaar-number', async (req, res) => {
             'x-client-id': CASHFREE_CLIENT_ID,
             'x-client-secret': CASHFREE_CLIENT_SECRET,
             'Content-Type': 'application/json',
-          }
+          },
+          timeout: 10000 // 10 second timeout
         }
       );
 
@@ -321,7 +323,22 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         });
       }
     } catch (verifyApiError) {
-      console.error('Cashfree Verification API error:', verifyApiError.response?.data || verifyApiError.message);
+      console.error('Cashfree Verification API error:', {
+        message: verifyApiError.message,
+        code: verifyApiError.code,
+        response: verifyApiError.response?.data,
+        timeout: verifyApiError.code === 'ECONNABORTED'
+      });
+      
+      // If timeout, return error immediately
+      if (verifyApiError.code === 'ECONNABORTED' || verifyApiError.message?.includes('timeout')) {
+        return res.status(504).json({
+          success: false,
+          error: 'Verification request timed out',
+          message: 'The verification service took too long to respond. Please try again.',
+          aadhaar_number: cleanAadhaar,
+        });
+      }
       
       // Method 2: Fallback to old endpoint with Bearer token
       try {
@@ -339,7 +356,8 @@ router.post('/verify-aadhaar-number', async (req, res) => {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
                 'x-api-version': '2022-09-01',
-              }
+              },
+              timeout: 10000 // 10 second timeout
             }
           );
 

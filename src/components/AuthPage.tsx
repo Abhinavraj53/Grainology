@@ -444,11 +444,17 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         setKycVerifying(true);
                         setError('');
                         try {
+                          // Create AbortController for timeout
+                          const controller = new AbortController();
+                          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                          
                           const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/verify-aadhaar-number`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ aadhaar_number: aadhaarNumber }),
+                            signal: controller.signal
                           });
+                          clearTimeout(timeoutId);
                           const result = await response.json();
                           if (result.success) {
                             // If DigiLocker verification URL is provided, open it
@@ -525,7 +531,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                             setError(result.error || 'Aadhaar verification failed');
                           }
                         } catch (err: any) {
-                          setError(err.message || 'Verification failed');
+                          if (err.name === 'AbortError') {
+                            setError('Verification request timed out. Please check your internet connection and try again.');
+                          } else {
+                            setError(err.message || 'Verification failed. Please try again.');
+                          }
+                          console.error('Aadhaar verification error:', err);
                         } finally {
                           setKycVerifying(false);
                         }

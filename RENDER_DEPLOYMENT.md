@@ -14,7 +14,7 @@ PORT=10000
 MONGODB_URI=your_mongodb_atlas_connection_string
 JWT_SECRET=your-strong-jwt-secret-key-here
 JWT_EXPIRES_IN=7d
-FRONTEND_URL=https://rareus.store/
+FRONTEND_URL=https://rareus.store
 ```
 
 ### Optional Variables (if using Cashfree)

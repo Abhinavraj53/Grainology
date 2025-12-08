@@ -79,6 +79,26 @@ node scripts/seedData.js
 
 ## Environment Variables
 
+### Production (Render.com)
+```env
+PORT=10000
+NODE_ENV=production
+MONGODB_URI=your_mongodb_atlas_connection_string
+JWT_SECRET=your-secret-key
+JWT_EXPIRES_IN=7d
+FRONTEND_URL=https://rareus.store/
+# Cashfree KYC Configuration
+CASHFREE_CLIENT_ID=your_cashfree_client_id
+CASHFREE_CLIENT_SECRET=your_cashfree_client_secret
+CASHFREE_BASE_URL=https://api.cashfree.com
+# Didit.me KYC Verification Configuration (Optional)
+DIDIT_APP_ID=your_didit_app_id
+DIDIT_API_KEY=your_didit_api_key
+DIDIT_BASE_URL=https://verification.didit.me
+DIDIT_WORKFLOW_ID=your-workflow-id-here
+```
+
+### Development (Local)
 ```env
 PORT=3001
 NODE_ENV=development
@@ -86,9 +106,13 @@ MONGODB_URI=mongodb://localhost:27017/grainology
 JWT_SECRET=your-secret-key
 JWT_EXPIRES_IN=7d
 FRONTEND_URL=http://localhost:5173
-# Didit.me KYC Verification Configuration
-DIDIT_APP_ID=9e436e07-d8a2-4e4e-8832-fba0e66183e6
-DIDIT_API_KEY=uaYe00AVB711Cv_wf1Rky-ZUW4L-_6-fIa9WlNlg8GM
+# Cashfree KYC Configuration
+CASHFREE_CLIENT_ID=your_cashfree_client_id
+CASHFREE_CLIENT_SECRET=your_cashfree_client_secret
+CASHFREE_BASE_URL=https://sandbox.cashfree.com
+# Didit.me KYC Verification Configuration (Optional)
+DIDIT_APP_ID=your_didit_app_id
+DIDIT_API_KEY=your_didit_api_key
 DIDIT_BASE_URL=https://verification.didit.me
 DIDIT_WORKFLOW_ID=your-workflow-id-here
 ```

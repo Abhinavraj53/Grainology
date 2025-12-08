@@ -37,16 +37,21 @@ sudo systemctl start mongodb
 
 3. **Configure environment:**
 
-Create `backend/.env`:
+Create `.env` file (see `.env.example` for template):
 ```env
+# Development
 PORT=3001
 NODE_ENV=development
 MONGODB_URI=mongodb://localhost:27017/grainology
 JWT_SECRET=your-secret-key-change-in-production
 JWT_EXPIRES_IN=7d
 FRONTEND_URL=http://localhost:5173
-QUICKEKYC_API_KEY=your-quickekyc-key
-QUICKEKYC_BASE_URL=https://api.quickekyc.com
+
+# Production (Render.com)
+# PORT=10000
+# NODE_ENV=production
+# MONGODB_URI=your_mongodb_atlas_connection_string
+# FRONTEND_URL=https://rareus.store/
 ```
 
 Create `.env` in root:

@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "dev:frontend": "vite --host",
     "build": "vite build",
     "build:frontend": "vite build",
     "preview": "vite preview",

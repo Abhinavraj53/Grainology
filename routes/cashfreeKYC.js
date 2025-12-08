@@ -616,5 +616,79 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
   }
 });
 
+// Cashfree Webhook Endpoint
+// This endpoint receives webhook notifications from Cashfree
+router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    // Cashfree sends webhook data in the request body
+    // Handle both raw JSON and parsed JSON
+    let webhookData;
+    if (Buffer.isBuffer(req.body)) {
+      webhookData = JSON.parse(req.body.toString());
+    } else if (typeof req.body === 'string') {
+      webhookData = JSON.parse(req.body);
+    } else {
+      webhookData = req.body;
+    }
+    
+    console.log('Cashfree Webhook Received:', JSON.stringify(webhookData, null, 2));
+    
+    // Extract webhook information
+    const {
+      type,           // Webhook event type
+      data,           // Event data
+      eventTime,      // Timestamp
+      referenceId,    // Reference ID for the verification
+      verification_id, // Alternative field name
+    } = webhookData;
+
+    // Handle different webhook event types
+    switch (type) {
+      case 'VERIFICATION.SUCCESS':
+      case 'verification.success':
+        // Verification completed successfully
+        console.log('✅ Verification successful for:', referenceId || verification_id);
+        // You can update your database here
+        // Example: Update user KYC status
+        break;
+        
+      case 'VERIFICATION.FAILED':
+      case 'verification.failed':
+        // Verification failed
+        console.log('❌ Verification failed for:', referenceId || verification_id);
+        // Handle failure case
+        break;
+        
+      case 'VERIFICATION.PENDING':
+      case 'verification.pending':
+        // Verification is pending
+        console.log('⏳ Verification pending for:', referenceId || verification_id);
+        break;
+        
+      default:
+        console.log('ℹ️  Unknown webhook type:', type, 'Data:', data);
+    }
+
+    // Always return 200 OK to acknowledge receipt
+    // Cashfree will retry if it doesn't receive 200
+    res.status(200).json({ 
+      success: true, 
+      message: 'Webhook received',
+      received: true,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Webhook processing error:', error);
+    // Still return 200 to prevent Cashfree from retrying
+    // Log the error for debugging
+    res.status(200).json({ 
+      success: false, 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 export default router;
 

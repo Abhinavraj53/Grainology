@@ -1,4 +1,3 @@
-import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 import { CheckCircle, TrendingUp, Shield, Users, Truck, BarChart3, Smartphone, Globe } from 'lucide-react';
 
@@ -48,8 +47,6 @@ export default function Features() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navigation />
-      
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-green-50 to-green-100 py-20 px-4">
         <div className="max-w-4xl mx-auto text-center">

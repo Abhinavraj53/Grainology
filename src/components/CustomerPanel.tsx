@@ -1,0 +1,349 @@
+import { useState, useEffect } from 'react';
+import { Profile, supabase, Offer, Order, QualityParameter } from '../lib/supabase';
+import { Home, ShoppingBag, PlusCircle, LogOut, Cloud, TrendingUp, List, Package, ShoppingCart, Store, Menu, X } from 'lucide-react';
+import Dashboard from './customer/Dashboard';
+import Marketplace from './customer/Marketplace';
+import CreateTrade from './customer/CreateTrade';
+import ActiveTrades from './customer/ActiveTrades';
+import MandiBhaav from './MandiBhaav';
+import WeatherForecast from './WeatherForecast';
+import OrderTracking from './customer/OrderTracking';
+import PurchaseOrder from './customer/PurchaseOrder';
+import SaleOrder from './customer/SaleOrder';
+
+type View = 'dashboard' | 'marketplace' | 'create-trade' | 'active-trades' | 'mandi' | 'weather' | 'tracking' | 'purchase-order' | 'sale-order';
+
+interface CustomerPanelProps {
+  profile: Profile;
+  onSignOut: () => void;
+}
+
+export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps) {
+  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [qualityParams, setQualityParams] = useState<QualityParameter[]>([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    loadOffers();
+    loadMyOrders();
+    loadQualityParams();
+  }, []);
+
+  const loadOffers = async () => {
+    const { data, error } = await supabase
+      .from('offers')
+      .select('*, seller:profiles!offers_seller_id_fkey(name)')
+      .eq('status', 'Active')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setOffers(data as any);
+    }
+  };
+
+  const loadMyOrders = async () => {
+    if (profile.role === 'farmer') {
+      const { data: farmerOffers } = await supabase
+        .from('offers')
+        .select('id')
+        .eq('seller_id', profile.id);
+
+      if (!farmerOffers || farmerOffers.length === 0) {
+        setMyOrders([]);
+        return;
+      }
+
+      const offerIds = farmerOffers.map(o => o.id);
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, offer:offers(*, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
+        .in('offer_id', offerIds)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setMyOrders(data as any);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*, offer:offers(*, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
+        .eq('buyer_id', profile.id)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setMyOrders(data as any);
+      }
+    }
+  };
+
+  const loadQualityParams = async () => {
+    const { data, error } = await supabase
+      .from('quality_parameters')
+      .select('*')
+      .order('commodity', { ascending: true });
+
+    if (!error && data) {
+      setQualityParams(data);
+    }
+  };
+
+  const handleCreateOffer = async (offerData: any) => {
+    if (profile.kyc_status !== 'verified') {
+      return { error: { message: 'Please complete KYC verification before creating offers' } };
+    }
+
+    const { error } = await supabase.from('offers').insert({
+      seller_id: profile.id,
+      ...offerData,
+    });
+
+    if (!error) {
+      await loadOffers();
+      setCurrentView('dashboard');
+    }
+
+    return { error };
+  };
+
+  const handlePlaceOrder = async (offerId: string, quantity: number, price: number) => {
+    if (profile.kyc_status !== 'verified') {
+      return { error: { message: 'Please complete KYC verification before placing orders' } };
+    }
+
+    const { error } = await supabase.from('orders').insert({
+      offer_id: offerId,
+      buyer_id: profile.id,
+      quantity_mt: quantity,
+      final_price_per_quintal: price,
+      status: 'Pending Approval',
+    });
+
+    if (!error) {
+      await loadMyOrders();
+      await loadOffers();
+    }
+
+    return { error };
+  };
+
+  const handleViewChange = (view: View) => {
+    setCurrentView(view);
+    setIsMobileMenuOpen(false);
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
+        isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
+        <div className="p-6 border-b border-gray-200 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-green-700">Grainology</h1>
+              <p className="text-sm text-gray-600 mt-1">{profile.name}</p>
+              <p className="text-xs text-gray-500 capitalize">{profile.role}</p>
+            </div>
+            <button
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="md:hidden text-gray-600 hover:bg-gray-100 p-2 rounded-lg"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+          <button
+            onClick={() => handleViewChange('dashboard')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'dashboard'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Home className="w-5 h-5" />
+            <span className="font-medium">Dashboard</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('marketplace')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'marketplace'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            <span className="font-medium">Marketplace</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('create-trade')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'create-trade'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <PlusCircle className="w-5 h-5" />
+            <span className="font-medium">Create Trade</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('active-trades')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'active-trades'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <List className="w-5 h-5" />
+            <span className="font-medium">Your Trades</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('mandi')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'mandi'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <TrendingUp className="w-5 h-5" />
+            <span className="font-medium">Mandi Bhaav</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('weather')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'weather'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Cloud className="w-5 h-5" />
+            <span className="font-medium">Weather</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('tracking')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'tracking'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            <span className="font-medium">Track Orders</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('purchase-order')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'purchase-order'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <ShoppingCart className="w-5 h-5" />
+            <span className="font-medium">Purchase Order</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('sale-order')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'sale-order'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Store className="w-5 h-5" />
+            <span className="font-medium">Sale Order</span>
+          </button>
+        </nav>
+
+        <div className="p-4 border-t border-gray-200 flex-shrink-0">
+          <button
+            onClick={onSignOut}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="font-medium">Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      <main className="flex-1 overflow-auto">
+        <header className="bg-white shadow-sm border-b border-gray-200 p-4 md:p-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden text-gray-600 hover:text-gray-900 p-2 -ml-2"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex-1">
+            {currentView === 'dashboard' && 'Dashboard'}
+            {currentView === 'marketplace' && 'Marketplace'}
+            {currentView === 'create-trade' && 'Create Trade'}
+            {currentView === 'active-trades' && 'Your Trades'}
+            {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
+            {currentView === 'weather' && 'Weather Forecast'}
+            {currentView === 'tracking' && 'Track Your Orders'}
+            {currentView === 'purchase-order' && 'Create Purchase Order'}
+            {currentView === 'sale-order' && 'Create Sale Order'}
+            </h2>
+          </div>
+        </header>
+
+        <div className="p-4 md:p-6">
+          {currentView === 'dashboard' && (
+            <Dashboard profile={profile} orders={myOrders} offers={offers} />
+          )}
+          {currentView === 'marketplace' && (
+            <Marketplace
+              offers={offers}
+              profile={profile}
+              onPlaceOrder={handlePlaceOrder}
+            />
+          )}
+          {currentView === 'create-trade' && (
+            <CreateTrade
+              qualityParams={qualityParams}
+              onCreateOffer={handleCreateOffer}
+              userRole={profile.role}
+            />
+          )}
+          {currentView === 'active-trades' && (
+            <ActiveTrades offers={offers} profile={profile} />
+          )}
+          {currentView === 'mandi' && (
+            <MandiBhaav />
+          )}
+          {currentView === 'weather' && (
+            <WeatherForecast />
+          )}
+          {currentView === 'tracking' && (
+            <OrderTracking profileId={profile.id} />
+          )}
+          {currentView === 'purchase-order' && (
+            <PurchaseOrder userId={profile.id} userName={profile.name} />
+          )}
+          {currentView === 'sale-order' && (
+            <SaleOrder userId={profile.id} userName={profile.name} />
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

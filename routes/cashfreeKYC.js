@@ -55,28 +55,69 @@ router.post('/verify-pan', async (req, res) => {
   try {
     const { pan, name } = req.body;
 
+    // Log incoming request for debugging
+    console.log('PAN verification request:', { pan: pan ? pan.substring(0, 3) + '***' : 'missing', name: name ? name.substring(0, 3) + '***' : 'missing' });
+
     if (!pan || !name) {
       return res.status(400).json({
+        success: false,
         error: 'PAN number and name are required',
+        message: 'Please provide both PAN number and name',
+      });
+    }
+
+    // Trim whitespace
+    const cleanPan = pan.trim().toUpperCase();
+    const cleanName = name.trim();
+
+    if (!cleanPan || !cleanName) {
+      return res.status(400).json({
+        success: false,
+        error: 'PAN number and name cannot be empty',
+        message: 'Please provide valid PAN number and name',
       });
     }
 
     // PAN format validation
     const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-    if (!panRegex.test(pan.toUpperCase())) {
+    if (!panRegex.test(cleanPan)) {
       return res.status(400).json({
+        success: false,
         error: 'Invalid PAN format. PAN should be in format: ABCDE1234F',
+        message: 'PAN must be 10 characters: 5 letters, 4 numbers, 1 letter (e.g., ABCDE1234F)',
+      });
+    }
+
+    // Check if Cashfree credentials are configured
+    if (!CASHFREE_CLIENT_ID || !CASHFREE_CLIENT_SECRET) {
+      console.error('Cashfree credentials not configured');
+      return res.status(500).json({
+        success: false,
+        error: 'Verification service not configured',
+        message: 'Cashfree credentials are missing. Please contact support.',
       });
     }
 
     const token = await getCashfreeAccessToken();
 
+    if (!token) {
+      console.error('Failed to get Cashfree access token');
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to authenticate with verification service',
+        message: 'Unable to connect to verification service. Please check your Cashfree credentials.',
+        details: 'Token generation failed',
+      });
+    }
+
+    console.log('Calling Cashfree PAN verification API...');
+
     // Verify PAN using Cashfree API
     const response = await axios.post(
       `${CASHFREE_BASE_URL}/payout/v1.2/validation/pan`,
       {
-        pan: pan.toUpperCase(),
-        name: name,
+        pan: cleanPan,
+        name: cleanName,
       },
       {
         headers: {
@@ -87,28 +128,75 @@ router.post('/verify-pan', async (req, res) => {
       }
     );
 
+    console.log('Cashfree PAN verification response:', {
+      status: response.data.status,
+      message: response.data.message,
+    });
+
     if (response.data.status === 'SUCCESS' && response.data.message === 'PAN details are valid') {
       return res.json({
         success: true,
         verified: true,
-        pan: pan.toUpperCase(),
-        name: response.data.name || name,
+        pan: cleanPan,
+        name: response.data.name || cleanName,
         type: response.data.type || 'Individual',
         details: response.data,
       });
     } else {
+      // Cashfree returned a response but verification failed
       return res.status(400).json({
         success: false,
         verified: false,
-        error: 'PAN verification failed',
+        error: response.data.message || 'PAN verification failed',
+        message: response.data.message || 'The PAN number or name does not match. Please check and try again.',
         details: response.data,
       });
     }
   } catch (error) {
-    console.error('PAN verification error:', error.response?.data || error.message);
+    console.error('PAN verification error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
+
+    // Handle specific error cases
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data;
+
+      if (status === 401 || status === 403) {
+        return res.status(500).json({
+          success: false,
+          error: 'Authentication failed',
+          message: 'Verification service authentication failed. Please check Cashfree credentials.',
+          details: data,
+        });
+      }
+
+      if (status === 400) {
+        return res.status(400).json({
+          success: false,
+          verified: false,
+          error: data.message || 'Invalid PAN details',
+          message: data.message || 'The provided PAN number or name is invalid. Please check and try again.',
+          details: data,
+        });
+      }
+
+      return res.status(status).json({
+        success: false,
+        error: 'Verification service error',
+        message: data.message || 'An error occurred during PAN verification. Please try again.',
+        details: data,
+      });
+    }
+
+    // Network or other errors
     return res.status(500).json({
+      success: false,
       error: 'Failed to verify PAN',
-      details: error.response?.data || error.message,
+      message: 'Unable to connect to verification service. Please try again later.',
+      details: error.message,
     });
   }
 });

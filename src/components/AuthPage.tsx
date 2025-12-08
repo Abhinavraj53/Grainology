@@ -372,24 +372,36 @@ export default function AuthPage() {
                           const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/verify-pan`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ pan: panNumber, name: panName }),
+                            body: JSON.stringify({ pan: panNumber.trim().toUpperCase(), name: panName.trim() }),
                           });
+                          
                           const result = await response.json();
+                          
+                          if (!response.ok) {
+                            // Handle error responses
+                            const errorMessage = result.message || result.error || 'PAN verification failed';
+                            setError(errorMessage);
+                            console.error('PAN verification error:', result);
+                            return;
+                          }
+                          
                           if (result.success && result.verified) {
                             setKycVerified(true);
                             setKycVerificationData(result);
                             setAutoFilledData({
                               name: result.name || panName,
-                              documentNumber: panNumber,
+                              documentNumber: panNumber.toUpperCase(),
                               documentType: 'PAN',
                               verifiedDetails: result,
                             });
                             setStep(4);
                           } else {
-                            setError(result.error || 'PAN verification failed');
+                            const errorMessage = result.message || result.error || 'PAN verification failed. Please check your PAN number and name.';
+                            setError(errorMessage);
                           }
                         } catch (err: any) {
-                          setError(err.message || 'Verification failed');
+                          console.error('PAN verification network error:', err);
+                          setError(err.message || 'Network error. Please check your connection and try again.');
                         } finally {
                           setKycVerifying(false);
                         }

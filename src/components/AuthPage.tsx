@@ -3,8 +3,12 @@ import { useAuth } from '../hooks/useAuth';
 import { Sprout, Shield, CheckCircle } from 'lucide-react';
 import { api } from '../lib/api';
 
-export default function AuthPage() {
-  const [isLogin, setIsLogin] = useState(true);
+interface AuthPageProps {
+  initialMode?: 'login' | 'register';
+}
+
+export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) {
+  const [isLogin, setIsLogin] = useState(initialMode === 'login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');

@@ -30,11 +30,32 @@ const upload = multer({
 // Get Cashfree access token (for Payout APIs)
 async function getCashfreeAccessToken() {
   try {
+    // Try method 1: Using x-client-id and x-client-secret headers (Verification API style)
+    try {
+      const response = await axios.post(
+        `${CASHFREE_BASE_URL}/payout/v1/authorize`,
+        {},
+        {
+          headers: {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
+            'Content-Type': 'application/json',
+          }
+        }
+      );
+      if (response.data.data?.token || response.data.token) {
+        return response.data.data?.token || response.data.token;
+      }
+    } catch (headerError) {
+      console.log('Header-based auth failed, trying body-based...');
+    }
+
+    // Try method 2: Using body with clientId and clientSecret (Payout API style)
     const response = await axios.post(
       `${CASHFREE_BASE_URL}/payout/v1/authorize`,
       {
-        clientId: CASHFREE_CLIENT_ID,
-        clientSecret: CASHFREE_CLIENT_SECRET,
+        client_id: CASHFREE_CLIENT_ID,
+        client_secret: CASHFREE_CLIENT_SECRET,
       },
       {
         headers: {
@@ -44,7 +65,11 @@ async function getCashfreeAccessToken() {
     );
     return response.data.data?.token || response.data.token;
   } catch (error) {
-    console.error('Cashfree token error:', error.response?.data || error.message);
+    console.error('Cashfree token error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+    });
     // Return null instead of throwing - verification APIs use client credentials directly
     return null;
   }

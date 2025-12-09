@@ -475,9 +475,14 @@ router.post('/verify-aadhaar-number', async (req, res) => {
     }
 
     const verification_id = `aadhaar_${cleanAadhaar}_${Date.now()}`;
-    // Fix double slash in redirect URL - remove trailing slash from FRONTEND_URL
-    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, ''); // Remove trailing slash
+    // Fix double slash in redirect URL - remove trailing slash from FRONTEND_URL and any double slashes
+    let baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').trim();
+    baseUrl = baseUrl.replace(/\/+$/, ''); // Remove all trailing slashes
     const redirect_url = `${baseUrl}/kyc-callback?ref=${verification_id}&aadhaar=${cleanAadhaar}`;
+    
+    // Log the constructed redirect URL for debugging
+    console.log('Constructed redirect URL:', redirect_url);
+    console.log('FRONTEND_URL env value:', process.env.FRONTEND_URL);
 
     try {
       // Step 1: Verify DigiLocker Account (optional - can skip if you want to proceed directly)
@@ -531,6 +536,96 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         clientId: CASHFREE_CLIENT_ID ? `${CASHFREE_CLIENT_ID.substring(0, 10)}...` : 'MISSING',
         baseUrl: CASHFREE_BASE_URL,
       });
+
+      // Try SDK FIRST (it handles endpoints internally and is more reliable)
+      console.log('Trying Cashfree SDK first...');
+      let sdkSuccess = false;
+      try {
+        const sdkResponse = await Cashfree.VrsDigilockerVerificationCreateUrl(
+          requestBody,
+          '2023-12-18', // Pass API version explicitly
+          { timeout: 15000 }
+        );
+
+        // Handle SDK response carefully to avoid circular structure error
+        // Don't try to JSON.stringify the response - extract values directly
+        let verificationUrl = null;
+        let referenceId = verification_id;
+        let status = 'PENDING';
+        let userFlowValue = userFlow;
+        
+        try {
+          // Extract data safely without logging the full object
+          if (sdkResponse) {
+            // Try different possible response structures
+            const possibleData = sdkResponse.data || sdkResponse.response?.data || sdkResponse;
+            
+            if (possibleData) {
+              // Extract verification_url from various possible locations
+              verificationUrl = possibleData.verification_url || 
+                              possibleData.verificationUrl || 
+                              possibleData.url ||
+                              possibleData.data?.verification_url ||
+                              possibleData.data?.verificationUrl;
+              
+              // Extract other fields
+              referenceId = possibleData.reference_id || 
+                           possibleData.referenceId || 
+                           possibleData.data?.reference_id ||
+                           verification_id;
+                           
+              status = possibleData.status || 
+                      possibleData.data?.status || 
+                      'PENDING';
+                      
+              userFlowValue = possibleData.user_flow || 
+                             possibleData.userFlow || 
+                             possibleData.data?.user_flow ||
+                             userFlow;
+            }
+          }
+          
+          if (verificationUrl) {
+            console.log('✅ SDK returned verification_url successfully');
+            sdkSuccess = true;
+            return res.json({
+              success: true,
+              verified: false,
+              verification_pending: true,
+              verification_url: verificationUrl,
+              verification_id: verification_id,
+              reference_id: referenceId,
+              aadhaar_number: cleanAadhaar,
+              status: status,
+              user_flow: userFlowValue,
+              message: 'Please complete verification via DigiLocker',
+              verification_method: 'digilocker',
+            });
+          } else {
+            console.log('SDK response received but no verification_url found');
+            // Log what we can safely log
+            console.log('SDK response type:', typeof sdkResponse);
+            console.log('SDK has data property:', !!sdkResponse?.data);
+            if (sdkResponse?.data && typeof sdkResponse.data === 'object') {
+              console.log('SDK data keys:', Object.keys(sdkResponse.data).slice(0, 10));
+            }
+          }
+        } catch (parseError) {
+          console.error('Error extracting data from SDK response:', parseError.message);
+        }
+      } catch (sdkError) {
+        console.error('SDK Error:', {
+          message: sdkError.message,
+          code: sdkError.code,
+          status: sdkError.response?.status,
+          // Don't try to log full response to avoid circular structure
+        });
+      }
+      
+      // If SDK failed, try direct API endpoints as fallback
+      if (!sdkSuccess) {
+        console.log('SDK did not return verification_url, trying direct API endpoints...');
+      }
 
       // Try different endpoint formats (404 error suggests wrong endpoint)
       // Based on Cashfree docs, the endpoint might be under /pg/ or /verification/
@@ -645,8 +740,8 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         return res.json(successfulResponse);
       }
 
-      // If all endpoints failed, try SDK as last resort
-      console.log('All direct API endpoints failed, trying SDK as fallback...');
+      // Try SDK first (before direct API) - SDK handles endpoints internally
+      console.log('Trying Cashfree SDK...');
       try {
         const sdkResponse = await Cashfree.VrsDigilockerVerificationCreateUrl(
           requestBody,
@@ -655,52 +750,79 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         );
 
         // Handle SDK response carefully to avoid circular structure error
-        let sdkData;
+        // Don't try to JSON.stringify the response - extract values directly
+        let verificationUrl = null;
+        let referenceId = verification_id;
+        let status = 'PENDING';
+        let userFlowValue = userFlow;
+        
         try {
-          // Extract data safely to avoid circular structure
-          if (sdkResponse && typeof sdkResponse === 'object') {
-            sdkData = sdkResponse.data || sdkResponse;
-            if (sdkData && typeof sdkData === 'object') {
-              // Try to get the actual data
-              sdkData = sdkData.data || sdkData;
+          // Extract data safely without logging the full object
+          if (sdkResponse) {
+            // Try different possible response structures
+            const possibleData = sdkResponse.data || sdkResponse.response?.data || sdkResponse;
+            
+            if (possibleData) {
+              // Extract verification_url from various possible locations
+              verificationUrl = possibleData.verification_url || 
+                              possibleData.verificationUrl || 
+                              possibleData.url ||
+                              possibleData.data?.verification_url ||
+                              possibleData.data?.verificationUrl;
+              
+              // Extract other fields
+              referenceId = possibleData.reference_id || 
+                           possibleData.referenceId || 
+                           possibleData.data?.reference_id ||
+                           verification_id;
+                           
+              status = possibleData.status || 
+                      possibleData.data?.status || 
+                      'PENDING';
+                      
+              userFlowValue = possibleData.user_flow || 
+                             possibleData.userFlow || 
+                             possibleData.data?.user_flow ||
+                             userFlow;
             }
           }
           
-          // Try to extract verification_url safely
-          if (sdkData && typeof sdkData === 'object') {
-            const verificationUrl = sdkData.verification_url || sdkData.verificationUrl || sdkData.url;
-            if (verificationUrl) {
-              console.log('✅ SDK returned verification_url');
-              return res.json({
-                success: true,
-                verified: false,
-                verification_pending: true,
-                verification_url: verificationUrl,
-                verification_id: verification_id,
-                reference_id: sdkData.reference_id || sdkData.referenceId || verification_id,
-                aadhaar_number: cleanAadhaar,
-                status: sdkData.status || 'PENDING',
-                user_flow: sdkData.user_flow || sdkData.userFlow || userFlow,
-                message: 'Please complete verification via DigiLocker',
-                verification_method: 'digilocker',
-              });
-            }
+          if (verificationUrl) {
+            console.log('✅ SDK returned verification_url successfully');
+            return res.json({
+              success: true,
+              verified: false,
+              verification_pending: true,
+              verification_url: verificationUrl,
+              verification_id: verification_id,
+              reference_id: referenceId,
+              aadhaar_number: cleanAadhaar,
+              status: status,
+              user_flow: userFlowValue,
+              message: 'Please complete verification via DigiLocker',
+              verification_method: 'digilocker',
+            });
+          } else {
+            console.log('SDK response received but no verification_url found');
+            // Log what we can safely log
+            console.log('SDK response type:', typeof sdkResponse);
+            console.log('SDK has data property:', !!sdkResponse?.data);
           }
-          console.log('SDK response structure:', {
-            hasData: !!sdkResponse.data,
-            hasVerificationUrl: !!(sdkData?.verification_url || sdkData?.verificationUrl),
-            keys: sdkData ? Object.keys(sdkData).slice(0, 10) : 'no data',
-          });
         } catch (parseError) {
-          console.error('Error parsing SDK response:', parseError.message);
+          console.error('Error extracting data from SDK response:', parseError.message);
         }
       } catch (sdkError) {
         console.error('SDK Error:', {
           message: sdkError.message,
           code: sdkError.code,
+          status: sdkError.response?.status,
           // Don't try to log full response to avoid circular structure
         });
+        // Continue to direct API attempts
       }
+      
+      // If SDK failed, try direct API endpoints
+      console.log('SDK did not return verification_url, trying direct API endpoints...');
 
       // If everything failed, return detailed error
       const errorStatus = lastError?.response?.status || 400;

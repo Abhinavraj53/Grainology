@@ -533,10 +533,12 @@ router.post('/verify-aadhaar-number', async (req, res) => {
       });
 
       // Try different endpoint formats (404 error suggests wrong endpoint)
+      // Based on Cashfree docs, the endpoint might be under /pg/ or /verification/
       const endpoints = [
-        `${CASHFREE_BASE_URL}/verification/digilocker/create-url`, // Most likely correct format (without /v2/)
-        `${CASHFREE_BASE_URL}/verification/v2/digilocker/create-url`,
-        `${CASHFREE_BASE_URL}/verification/digilocker/v2/create-url`,
+        `${CASHFREE_BASE_URL}/pg/lrs/digilocker/link`, // Payout API format (older, but might work)
+        `${CASHFREE_BASE_URL}/verification/digilocker/create-url`, // Verification API format
+        `${CASHFREE_BASE_URL}/verification/v2/digilocker/create-url`, // V2 format
+        `${CASHFREE_BASE_URL}/verification/digilocker/v2/create-url`, // Alternative V2 format
       ];
 
       let lastError = null;
@@ -547,16 +549,44 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         try {
           console.log(`Trying endpoint: ${endpoint}`);
           
+          // Adjust request body and headers based on endpoint type
+          let apiRequestBody = requestBody;
+          let apiHeaders = {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
+            'Content-Type': 'application/json',
+            'x-api-version': '2023-12-18',
+          };
+          
+          // If using Payout API format (/pg/lrs/digilocker/link), adjust request format
+          if (endpoint.includes('/pg/lrs/digilocker/link')) {
+            apiRequestBody = {
+              reference_id: verification_id,
+              document_type: 'aadhaar',
+              redirect_url: redirect_url,
+            };
+            // Payout API uses Bearer token authentication
+            try {
+              const token = await getCashfreeAccessToken();
+              if (token) {
+                apiHeaders = {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                  'x-api-version': '2022-09-01',
+                };
+                delete apiHeaders['x-client-id'];
+                delete apiHeaders['x-client-secret'];
+              }
+            } catch (tokenError) {
+              console.log('Could not get token for Payout API, trying with client credentials');
+            }
+          }
+          
           const directApiResponse = await axios.post(
             endpoint,
-            requestBody,
+            apiRequestBody,
             {
-              headers: {
-                'x-client-id': CASHFREE_CLIENT_ID,
-                'x-client-secret': CASHFREE_CLIENT_SECRET,
-                'Content-Type': 'application/json',
-                'x-api-version': '2023-12-18',
-              },
+              headers: apiHeaders,
               timeout: 15000,
             }
           );
@@ -564,19 +594,30 @@ router.post('/verify-aadhaar-number', async (req, res) => {
           console.log(`Endpoint ${endpoint} - Response Status:`, directApiResponse.status);
           console.log(`Endpoint ${endpoint} - Response Data:`, JSON.stringify(directApiResponse.data, null, 2));
 
-          const responseData = directApiResponse.data?.data || directApiResponse.data;
+          // Handle different response formats
+          let responseData = directApiResponse.data?.data || directApiResponse.data;
           
-          if (responseData?.verification_url) {
+          // For Payout API format, the response structure might be different
+          if (endpoint.includes('/pg/lrs/digilocker/link')) {
+            // Payout API might return data directly or in a different structure
+            if (directApiResponse.data?.status === 'SUCCESS') {
+              responseData = directApiResponse.data.data || directApiResponse.data;
+            }
+          }
+          
+          const verificationUrl = responseData?.verification_url || responseData?.verificationUrl || responseData?.url;
+          
+          if (verificationUrl) {
             successfulResponse = {
               success: true,
               verified: false,
               verification_pending: true,
-              verification_url: responseData.verification_url,
+              verification_url: verificationUrl,
               verification_id: verification_id,
-              reference_id: responseData.reference_id || verification_id,
+              reference_id: responseData.reference_id || responseData.referenceId || verification_id,
               aadhaar_number: cleanAadhaar,
               status: responseData.status || 'PENDING',
-              user_flow: responseData.user_flow || userFlow,
+              user_flow: responseData.user_flow || responseData.userFlow || userFlow,
               message: 'Please complete verification via DigiLocker',
               verification_method: 'digilocker',
             };
@@ -1096,7 +1137,7 @@ router.post('/verify-aadhaar', async (req, res) => {
       {
         reference_id: reference_id,
         document_type: 'aadhaar',
-        redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback`,
+        redirect_url: `${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')}/kyc-callback`,
       },
       {
         headers: {
@@ -1152,7 +1193,7 @@ router.post('/create-digilocker-link', async (req, res) => {
       {
         reference_id: reference_id,
         document_type: 'aadhaar',
-        redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback`,
+        redirect_url: `${(process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '')}/kyc-callback`,
       },
       {
         headers: {

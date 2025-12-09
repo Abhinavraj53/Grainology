@@ -2,10 +2,11 @@ import express from 'express';
 import axios from 'axios';
 import multer from 'multer';
 import FormDataLib from 'form-data';
+import Cashfree from '../lib/cashfree.js';
 
 const router = express.Router();
 
-// Cashfree Configuration
+// Cashfree Configuration (for fallback methods)
 const CASHFREE_CLIENT_ID = process.env.CASHFREE_CLIENT_ID || '';
 const CASHFREE_CLIENT_SECRET = process.env.CASHFREE_CLIENT_SECRET || '';
 const CASHFREE_BASE_URL = process.env.CASHFREE_BASE_URL || 'https://api.cashfree.com';
@@ -123,25 +124,17 @@ router.post('/verify-pan', async (req, res) => {
       });
     }
 
-    // Method 1: Try Verification API directly (no token needed)
+    // Method 1: Try using Cashfree Verification SDK
     try {
-      console.log('Trying Cashfree Verification API for PAN...');
-      const verifyResponse = await axios.post(
-        `${CASHFREE_BASE_URL}/verification/pan`,
-        {
-          pan: cleanPan,
-          name: cleanName,
-        },
-        {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'Content-Type': 'application/json',
-          }
-        }
-      );
+      console.log('Trying Cashfree Verification SDK for PAN...');
+      const panRequest = {
+        pan: cleanPan,
+        name: cleanName
+      };
 
-      if (verifyResponse.data.status === 'SUCCESS' || verifyResponse.data.verified) {
+      const verifyResponse = await Cashfree.VrsPanVerification(panRequest);
+      
+      if (verifyResponse.data?.status === 'SUCCESS' || verifyResponse.data?.status === 'VALID') {
         return res.json({
           success: true,
           verified: true,
@@ -150,9 +143,17 @@ router.post('/verify-pan', async (req, res) => {
           type: verifyResponse.data.type || 'Individual',
           details: verifyResponse.data,
         });
+      } else if (verifyResponse.data?.status === 'INVALID_PAN') {
+        return res.status(400).json({
+          success: false,
+          verified: false,
+          error: 'Invalid PAN',
+          message: 'The PAN number or name does not match. Please check and try again.',
+          details: verifyResponse.data,
+        });
       }
     } catch (verifyError) {
-      console.log('Verification API failed, trying Payout API...', verifyError.response?.data || verifyError.message);
+      console.log('SDK verification failed, trying fallback...', verifyError.response?.data || verifyError.message);
     }
 
     // Method 2: Fallback to Payout API with token
@@ -290,27 +291,17 @@ router.post('/verify-aadhaar-number', async (req, res) => {
     const reference_id = `aadhaar_${cleanAadhaar}_${Date.now()}`;
 
     try {
-      // Method 1: Try using Cashfree Verification API with client credentials
-      // Add timeout to prevent hanging
-      const response = await axios.post(
-        `${CASHFREE_BASE_URL}/verification/digilocker`,
-        {
-          verification_id: reference_id,
-          document_requested: ['AADHAAR'],
-          redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback?ref=${reference_id}&aadhaar=${cleanAadhaar}`,
-          user_flow: 'signup',
-        },
-        {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'Content-Type': 'application/json',
-          },
-          timeout: 10000 // 10 second timeout
-        }
-      );
+      // Method 1: Try using Cashfree Verification SDK
+      console.log('Trying Cashfree Verification SDK for DigiLocker...');
+      const digilockerRequest = {
+        verification_id: reference_id,
+        redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback?ref=${reference_id}&aadhaar=${cleanAadhaar}`,
+        document_requested: ['AADHAAR']
+      };
 
-      if (response.data.verification_url || response.data.data?.verification_url) {
+      const response = await Cashfree.VrsDigilockerVerificationCreateUrl(digilockerRequest, undefined, { timeout: 10000 });
+
+      if (response.data?.verification_url || response.data?.data?.verification_url) {
         return res.json({
           success: true,
           verified: false, // Not verified yet - user needs to complete DigiLocker flow
@@ -408,36 +399,21 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
     const { aadhaar_number } = req.query;
 
     try {
-      // Method 1: Try using Cashfree Verification API
-      const statusResponse = await axios.get(
-        `${CASHFREE_BASE_URL}/verification/digilocker?verification_id=${referenceId}`,
-        {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-          }
-        }
-      );
-
-      const statusData = statusResponse.data.data || statusResponse.data;
-      const isVerified = statusData.verification_status === 'SUCCESS' || 
-                        statusData.status === 'SUCCESS' || 
-                        statusData.status === 'verified';
+      // Method 1: Try using Cashfree Verification SDK
+      console.log('Checking DigiLocker status using SDK...');
+      const statusResponse = await Cashfree.VrsDigilockerVerificationFetchStatus(undefined, undefined, referenceId, { timeout: 10000 });
+      
+      const statusData = statusResponse.data?.data || statusResponse.data;
+      const isVerified = statusData?.verification_status === 'SUCCESS' || 
+                        statusData?.status === 'SUCCESS' || 
+                        statusData?.status === 'verified';
 
       if (isVerified) {
-        // Fetch document details
+        // Fetch document details using SDK
         try {
-          const docResponse = await axios.get(
-            `${CASHFREE_BASE_URL}/verification/digilocker/document/AADHAAR?verification_id=${referenceId}`,
-            {
-              headers: {
-                'x-client-id': CASHFREE_CLIENT_ID,
-                'x-client-secret': CASHFREE_CLIENT_SECRET,
-              }
-            }
-          );
-
-          const docData = docResponse.data.data || docResponse.data;
+          const docResponse = await Cashfree.VrsDigilockerVerificationFetchDocument('AADHAAR', undefined, undefined, referenceId, { timeout: 10000 });
+          
+          const docData = docResponse.data?.data || docResponse.data;
           return res.json({
             success: true,
             verified: true,
@@ -466,7 +442,7 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
       return res.json({
         success: true,
         verified: false,
-        status: statusData.verification_status || statusData.status || 'pending',
+        status: statusData?.verification_status || statusData?.status || 'pending',
         message: 'Verification pending',
       });
     } catch (verifyApiError) {

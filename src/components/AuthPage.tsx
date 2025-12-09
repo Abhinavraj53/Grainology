@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Sprout, Shield, CheckCircle } from 'lucide-react';
+// @ts-ignore - JS module without types
 import { api } from '../lib/api';
 
 interface AuthPageProps {
@@ -41,8 +42,26 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   const [kycVerified, setKycVerified] = useState(false);
   const [kycVerificationData, setKycVerificationData] = useState<any>(null);
   const [autoFilledData, setAutoFilledData] = useState<any>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingStartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingMaxTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { signIn } = useAuth();
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+      if (pollingStartTimeoutRef.current) {
+        clearTimeout(pollingStartTimeoutRef.current);
+      }
+      if (pollingMaxTimeoutRef.current) {
+        clearTimeout(pollingMaxTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -66,7 +85,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
     if (!isLogin && step < 5) {
       if (step === 1) {
         // Step 1: Validate role selection
-        if (!role || role === '') {
+        if (!role) {
           setError('Please select your role to continue');
           return;
         }
@@ -441,12 +460,33 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           setError('Please enter a valid 12-digit Aadhaar number');
                           return;
                         }
+                        
+                        // Clear any existing polling
+                        if (pollingIntervalRef.current) {
+                          clearInterval(pollingIntervalRef.current);
+                          pollingIntervalRef.current = null;
+                        }
+                        if (pollingStartTimeoutRef.current) {
+                          clearTimeout(pollingStartTimeoutRef.current);
+                          pollingStartTimeoutRef.current = null;
+                        }
+                        if (pollingMaxTimeoutRef.current) {
+                          clearTimeout(pollingMaxTimeoutRef.current);
+                          pollingMaxTimeoutRef.current = null;
+                        }
+                        
                         setKycVerifying(true);
                         setError('');
+                        let timeoutId: NodeJS.Timeout | null = null;
+                        const controller = new AbortController();
+                        
                         try {
-                          // Create AbortController for timeout
-                          const controller = new AbortController();
-                          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                          // Increase timeout to 60 seconds for initial request (backend might be slow)
+                          timeoutId = setTimeout(() => {
+                            if (!controller.signal.aborted) {
+                              controller.abort();
+                            }
+                          }, 60000);
                           
                           const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/verify-aadhaar-number`, {
                             method: 'POST',
@@ -454,58 +494,271 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                             body: JSON.stringify({ aadhaar_number: aadhaarNumber }),
                             signal: controller.signal
                           });
-                          clearTimeout(timeoutId);
+                          
+                          // Clear timeout immediately after fetch completes
+                          if (timeoutId) {
+                            clearTimeout(timeoutId);
+                            timeoutId = null;
+                          }
+                          
+                          // Check if response is OK before parsing JSON
+                          if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({ error: 'Request failed' }));
+                            throw new Error(errorData.error || `Server error: ${response.status}`);
+                          }
+                          
                           const result = await response.json();
+                          console.log('Aadhaar verification response:', result);
+                          
                           if (result.success) {
                             // If DigiLocker verification URL is provided, open it
                             if (result.verification_url && !result.verified) {
-                              // Open DigiLocker verification in new window
-                              const digilockerWindow = window.open(
-                                result.verification_url,
-                                'digilocker_verification',
-                                'width=600,height=700,scrollbars=yes'
-                              );
+                              console.log('Opening DigiLocker URL:', result.verification_url);
+                              
+                              // Store reference_id for polling (use verification_id if reference_id not available)
+                              const referenceId = result.reference_id || result.verification_id;
+                              
+                              if (!referenceId) {
+                                setError('Missing verification reference ID. Please try again.');
+                                setKycVerifying(false);
+                                return;
+                              }
+                              
+                              // Store reference ID in a ref so polling can access it
+                              const storedReferenceId = referenceId;
+                              
+                              // Open popup immediately (must be in direct response to user action)
+                              // Use window.open synchronously - don't wrap in setTimeout
+                              let digilockerWindow: Window | null = null;
+                              
+                              try {
+                                // Open popup with proper features
+                                digilockerWindow = window.open(
+                                  result.verification_url,
+                                  'digilocker_verification',
+                                  'width=900,height=700,scrollbars=yes,resizable=yes,menubar=no,toolbar=no,location=yes,status=yes'
+                                );
+                                
+                                // Check if popup was blocked (must check immediately)
+                                if (!digilockerWindow || digilockerWindow.closed) {
+                                  console.warn('Popup was blocked, trying new tab...');
+                                  // Popup blocked - try new tab
+                                  const newTab = window.open(result.verification_url, '_blank');
+                                  if (newTab) {
+                                    setError('Popup was blocked. Opened DigiLocker verification in a new tab. Please complete it there, we will automatically fetch your details once verified.');
+                                    digilockerWindow = newTab;
+                                  } else {
+                                    // Even new tab was blocked - show URL with copy option
+                                    navigator.clipboard?.writeText(result.verification_url).then(() => {
+                                      setError(`Popup blocked. Verification URL copied to clipboard. Please paste it in a new browser tab/window.`);
+                                    }).catch(() => {
+                                      setError(`Popup blocked. Please manually open this URL: ${result.verification_url}`);
+                                    });
+                                  }
+                                } else {
+                                  console.log('Popup opened successfully');
+                                  setError('Please complete verification in the popup window. We will automatically fetch your details once verified.');
+                                }
+                              } catch (openError) {
+                                console.error('Error opening popup:', openError);
+                                // Fallback: try new tab
+                                const newTab = window.open(result.verification_url, '_blank');
+                                if (newTab) {
+                                  setError('Opened DigiLocker verification in a new tab. Please complete it there.');
+                                  digilockerWindow = newTab;
+                                } else {
+                                  setError(`Please manually open this URL: ${result.verification_url}`);
+                                }
+                              }
+
+                              let pollCount = 0;
+                              const maxPolls = 120; // Poll for up to 6 minutes (120 * 3 seconds = 6 minutes)
                               
                               // Poll for verification status
                               const checkStatus = async () => {
                                 try {
-                                  const statusResponse = await fetch(
-                                    `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/digilocker-status/${result.reference_id}?aadhaar=${aadhaarNumber}`
-                                  );
-                                  const statusResult = await statusResponse.json();
+                                  pollCount++;
+                                  console.log(`Checking DigiLocker status (poll ${pollCount}/${maxPolls})...`);
                                   
-                                  if (statusResult.verified && statusResult.name) {
-                                    // Verification successful with details
-                                    setKycVerified(true);
-                                    setKycVerificationData(statusResult);
-                                    setAutoFilledData({
-                                      name: statusResult.name,
-                                      dateOfBirth: statusResult.date_of_birth,
-                                      address: statusResult.address,
-                                      aadhaarNumber: statusResult.aadhaar_number || aadhaarNumber,
-                                      documentType: 'Aadhaar',
-                                      verification_method: 'digilocker',
-                                      verifiedDetails: statusResult,
-                                    });
-                                    if (digilockerWindow) digilockerWindow.close();
-                                    setStep(4);
-                                  } else if (statusResult.status === 'failed') {
-                                    setError('DigiLocker verification failed. Please try again.');
-                                    if (digilockerWindow) digilockerWindow.close();
-                                  } else {
-                                    // Continue polling
-                                    setTimeout(checkStatus, 3000);
+                                  const statusResponse = await fetch(
+                                    `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/digilocker-status/${storedReferenceId}?aadhaar=${aadhaarNumber}`
+                                  );
+                                  
+                                  if (!statusResponse.ok) {
+                                    throw new Error(`Status check failed: ${statusResponse.status}`);
                                   }
+                                  
+                                  const statusResult = await statusResponse.json();
+                                  console.log('DigiLocker status result:', statusResult);
+                                  
+                                  // Handle statuses according to Cashfree documentation:
+                                  // PENDING, AUTHENTICATED, EXPIRED, CONSENT_DENIED
+                                  const currentStatus = statusResult.status || statusResult.verification_status || 'PENDING';
+                                  
+                                  if (currentStatus === 'AUTHENTICATED' || statusResult.verified === true) {
+                                    // User has authenticated and given consent - fetch document
+                                    if (statusResult.name) {
+                                      // Verification successful with details
+                                      if (pollingIntervalRef.current) {
+                                        clearInterval(pollingIntervalRef.current);
+                                        pollingIntervalRef.current = null;
+                                      }
+                                      if (pollingStartTimeoutRef.current) {
+                                        clearTimeout(pollingStartTimeoutRef.current);
+                                        pollingStartTimeoutRef.current = null;
+                                      }
+                                      if (pollingMaxTimeoutRef.current) {
+                                        clearTimeout(pollingMaxTimeoutRef.current);
+                                        pollingMaxTimeoutRef.current = null;
+                                      }
+                                      
+                                      setKycVerified(true);
+                                      setKycVerificationData(statusResult);
+                                      setAutoFilledData({
+                                        name: statusResult.name,
+                                        dateOfBirth: statusResult.date_of_birth,
+                                        address: statusResult.address,
+                                        aadhaarNumber: statusResult.aadhaar_number || aadhaarNumber,
+                                        documentType: 'Aadhaar',
+                                        verification_method: 'digilocker',
+                                        verifiedDetails: statusResult,
+                                      });
+                                      if (digilockerWindow && !digilockerWindow.closed) {
+                                        digilockerWindow.close();
+                                      }
+                                      setKycVerifying(false);
+                                      setError('');
+                                      setStep(4);
+                                      return;
+                                    } else if (statusResult.error === 'eaadhaar_not_available') {
+                                      // Aadhaar document not available in DigiLocker
+                                      if (pollingIntervalRef.current) {
+                                        clearInterval(pollingIntervalRef.current);
+                                        pollingIntervalRef.current = null;
+                                      }
+                                      if (pollingStartTimeoutRef.current) {
+                                        clearTimeout(pollingStartTimeoutRef.current);
+                                        pollingStartTimeoutRef.current = null;
+                                      }
+                                      if (pollingMaxTimeoutRef.current) {
+                                        clearTimeout(pollingMaxTimeoutRef.current);
+                                        pollingMaxTimeoutRef.current = null;
+                                      }
+                                      setError('Aadhaar document not available in DigiLocker. Please log in to DigiLocker and link your Aadhaar document, then try again.');
+                                      setKycVerifying(false);
+                                      if (digilockerWindow && !digilockerWindow.closed) {
+                                        digilockerWindow.close();
+                                      }
+                                      return;
+                                    }
+                                    // Status is AUTHENTICATED but no name yet - continue polling
+                                  } else if (currentStatus === 'EXPIRED') {
+                                    // Link expired
+                                    if (pollingIntervalRef.current) {
+                                      clearInterval(pollingIntervalRef.current);
+                                      pollingIntervalRef.current = null;
+                                    }
+                                    if (pollingStartTimeoutRef.current) {
+                                      clearTimeout(pollingStartTimeoutRef.current);
+                                      pollingStartTimeoutRef.current = null;
+                                    }
+                                    if (pollingMaxTimeoutRef.current) {
+                                      clearTimeout(pollingMaxTimeoutRef.current);
+                                      pollingMaxTimeoutRef.current = null;
+                                    }
+                                    setError('DigiLocker verification link has expired. Please start the verification process again.');
+                                    setKycVerifying(false);
+                                    if (digilockerWindow && !digilockerWindow.closed) {
+                                      digilockerWindow.close();
+                                    }
+                                    return;
+                                  } else if (currentStatus === 'CONSENT_DENIED') {
+                                    // User denied consent
+                                    if (pollingIntervalRef.current) {
+                                      clearInterval(pollingIntervalRef.current);
+                                      pollingIntervalRef.current = null;
+                                    }
+                                    if (pollingStartTimeoutRef.current) {
+                                      clearTimeout(pollingStartTimeoutRef.current);
+                                      pollingStartTimeoutRef.current = null;
+                                    }
+                                    if (pollingMaxTimeoutRef.current) {
+                                      clearTimeout(pollingMaxTimeoutRef.current);
+                                      pollingMaxTimeoutRef.current = null;
+                                    }
+                                    setError('You denied consent to share documents. Please try again and provide consent to complete verification.');
+                                    setKycVerifying(false);
+                                    if (digilockerWindow && !digilockerWindow.closed) {
+                                      digilockerWindow.close();
+                                    }
+                                    return;
+                                  } else if (currentStatus === 'PENDING') {
+                                    // Still pending - continue polling
+                                    console.log('Verification still pending, continuing to poll...');
+                                  } else if (pollCount >= maxPolls) {
+                                    // Max polls reached - stop polling
+                                    if (pollingIntervalRef.current) {
+                                      clearInterval(pollingIntervalRef.current);
+                                      pollingIntervalRef.current = null;
+                                    }
+                                    if (pollingStartTimeoutRef.current) {
+                                      clearTimeout(pollingStartTimeoutRef.current);
+                                      pollingStartTimeoutRef.current = null;
+                                    }
+                                    if (pollingMaxTimeoutRef.current) {
+                                      clearTimeout(pollingMaxTimeoutRef.current);
+                                      pollingMaxTimeoutRef.current = null;
+                                    }
+                                    setError('Verification is taking longer than expected. Please check if you completed the DigiLocker process or try again later.');
+                                    setKycVerifying(false);
+                                    if (digilockerWindow && !digilockerWindow.closed) {
+                                      digilockerWindow.close();
+                                    }
+                                    return;
+                                  }
+                                  // Otherwise continue polling (status is still PENDING)
                                 } catch (err) {
                                   console.error('Status check error:', err);
-                                  setTimeout(checkStatus, 3000);
+                                  // Continue polling on error unless we've reached max polls
+                                  if (pollCount >= maxPolls) {
+                                    if (pollingIntervalRef.current) {
+                                      clearInterval(pollingIntervalRef.current);
+                                      pollingIntervalRef.current = null;
+                                    }
+                                    if (pollingStartTimeoutRef.current) {
+                                      clearTimeout(pollingStartTimeoutRef.current);
+                                      pollingStartTimeoutRef.current = null;
+                                    }
+                                    if (pollingMaxTimeoutRef.current) {
+                                      clearTimeout(pollingMaxTimeoutRef.current);
+                                      pollingMaxTimeoutRef.current = null;
+                                    }
+                                    setError('Error checking verification status. Please try again.');
+                                    setKycVerifying(false);
+                                  }
                                 }
                               };
                               
-                              // Start polling after a delay
-                              setTimeout(checkStatus, 5000);
+                              // Start polling after 3 seconds, then every 3 seconds
+                              pollingStartTimeoutRef.current = setTimeout(() => {
+                                checkStatus(); // First check
+                                pollingIntervalRef.current = setInterval(checkStatus, 3000); // Then every 3 seconds
+                              }, 3000);
                               
-                              setError('Please complete verification in the popup window. We will fetch your details once verified.');
+                              // Set max polling duration (6 minutes total)
+                              pollingMaxTimeoutRef.current = setTimeout(() => {
+                                if (pollingIntervalRef.current) {
+                                  clearInterval(pollingIntervalRef.current);
+                                  pollingIntervalRef.current = null;
+                                }
+                                setError('Verification timeout. Please check if you completed the DigiLocker process or try again.');
+                                setKycVerifying(false);
+                                if (digilockerWindow && !digilockerWindow.closed) {
+                                  digilockerWindow.close();
+                                }
+                              }, 360000); // 6 minutes
+                              
+                              // Keep kycVerifying true while polling
                               return;
                             }
                             
@@ -522,23 +775,40 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                 verification_method: result.verification_method || 'digilocker',
                                 verifiedDetails: result,
                               });
+                              setKycVerifying(false);
                               setStep(4);
                             } else {
                               // Format validation only - NOT verified
                               setError(result.error || result.message || 'Aadhaar format validated, but full verification is required. Please complete DigiLocker verification to fetch your details.');
+                              setKycVerifying(false);
                             }
                           } else {
                             setError(result.error || 'Aadhaar verification failed');
+                            setKycVerifying(false);
                           }
                         } catch (err: any) {
-                          if (err.name === 'AbortError') {
-                            setError('Verification request timed out. Please check your internet connection and try again.');
+                          // Always clear timeout in catch block
+                          if (timeoutId) {
+                            clearTimeout(timeoutId);
+                            timeoutId = null;
+                          }
+                          
+                          // Handle different error types
+                          if (err.name === 'AbortError' || err.message?.includes('aborted') || controller.signal.aborted) {
+                            setError('Verification request timed out (60s). The server may be slow. Please try again.');
+                          } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+                            setError('Network error. Please check your internet connection and try again.');
                           } else {
                             setError(err.message || 'Verification failed. Please try again.');
                           }
                           console.error('Aadhaar verification error:', err);
-                        } finally {
                           setKycVerifying(false);
+                        } finally {
+                          // Ensure timeout is always cleared
+                          if (timeoutId) {
+                            clearTimeout(timeoutId);
+                            timeoutId = null;
+                          }
                         }
                       }}
                       disabled={kycVerifying || !aadhaarNumber}

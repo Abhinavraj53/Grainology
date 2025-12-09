@@ -274,7 +274,179 @@ router.post('/verify-pan', async (req, res) => {
   }
 });
 
+// Step 1: Verify DigiLocker Account (check if Aadhaar is linked with DigiLocker)
+router.post('/digilocker/verify-account', async (req, res) => {
+  try {
+    const { aadhaar_number, mobile_number, verification_id } = req.body;
+
+    if (!aadhaar_number && !mobile_number) {
+      return res.status(400).json({
+        success: false,
+        error: 'Either Aadhaar number or mobile number is required',
+      });
+    }
+
+    if (!verification_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Verification ID is required',
+      });
+    }
+
+    try {
+      // Use Cashfree Verification SDK to verify account
+      const verifyAccountRequest = {
+        verification_id: verification_id,
+        ...(aadhaar_number && { aadhaar_number: aadhaar_number.replace(/\s/g, '') }),
+        ...(mobile_number && { mobile_number: mobile_number.replace(/\s/g, '') }),
+      };
+
+      // Call Verify Account API via SDK or direct API
+      const verifyResponse = await axios.post(
+        `${CASHFREE_BASE_URL}/verification/digilocker/verify-account`,
+        verifyAccountRequest,
+        {
+          headers: {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
+            'Content-Type': 'application/json',
+            'x-api-version': '2023-12-18',
+          },
+          timeout: 15000,
+        }
+      );
+
+      return res.json({
+        success: true,
+        ...verifyResponse.data,
+      });
+    } catch (error) {
+      console.error('DigiLocker verify account error:', error.response?.data || error.message);
+      return res.status(error.response?.status || 500).json({
+        success: false,
+        error: 'Failed to verify DigiLocker account',
+        details: error.response?.data || error.message,
+      });
+    }
+  } catch (error) {
+    console.error('Verify account error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to verify DigiLocker account',
+      details: error.message,
+    });
+  }
+});
+
+// Step 2: Create DigiLocker URL (Generate consent URL)
+router.post('/digilocker/create-url', async (req, res) => {
+  try {
+    const { verification_id, aadhaar_number, redirect_url, document_requested, user_flow } = req.body;
+
+    if (!verification_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Verification ID is required',
+      });
+    }
+
+    if (!redirect_url) {
+      return res.status(400).json({
+        success: false,
+        error: 'Redirect URL is required',
+      });
+    }
+
+    try {
+      // Use Cashfree Verification SDK
+      const createUrlRequest = {
+        verification_id: verification_id,
+        redirect_url: redirect_url,
+        document_requested: document_requested || ['AADHAAR'],
+        ...(user_flow && { user_flow: user_flow }), // 'signin' or 'signup'
+      };
+
+      const response = await Cashfree.VrsDigilockerVerificationCreateUrl(createUrlRequest, undefined, { timeout: 15000 });
+
+      const responseData = response.data?.data || response.data;
+      
+      if (responseData?.verification_url) {
+        return res.json({
+          success: true,
+          verification_url: responseData.verification_url,
+          verification_id: verification_id,
+          reference_id: responseData.reference_id,
+          status: responseData.status || 'PENDING',
+          user_flow: responseData.user_flow,
+          document_requested: responseData.document_requested,
+          redirect_url: redirect_url,
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to create DigiLocker URL',
+          details: responseData,
+        });
+      }
+    } catch (error) {
+      console.error('Create DigiLocker URL error:', error.response?.data || error.message);
+      
+      // Fallback to direct API call
+      try {
+        const fallbackResponse = await axios.post(
+          `${CASHFREE_BASE_URL}/verification/digilocker/create-url`,
+          {
+            verification_id: verification_id,
+            redirect_url: redirect_url,
+            document_requested: document_requested || ['AADHAAR'],
+            ...(user_flow && { user_flow: user_flow }),
+          },
+          {
+            headers: {
+              'x-client-id': CASHFREE_CLIENT_ID,
+              'x-client-secret': CASHFREE_CLIENT_SECRET,
+              'Content-Type': 'application/json',
+              'x-api-version': '2023-12-18',
+            },
+            timeout: 15000,
+          }
+        );
+
+        const fallbackData = fallbackResponse.data?.data || fallbackResponse.data;
+        if (fallbackData?.verification_url) {
+          return res.json({
+            success: true,
+            verification_url: fallbackData.verification_url,
+            verification_id: verification_id,
+            reference_id: fallbackData.reference_id,
+            status: fallbackData.status || 'PENDING',
+            user_flow: fallbackData.user_flow,
+            document_requested: fallbackData.document_requested,
+            redirect_url: redirect_url,
+          });
+        }
+      } catch (fallbackError) {
+        console.error('Fallback create URL error:', fallbackError.response?.data || fallbackError.message);
+      }
+
+      return res.status(error.response?.status || 500).json({
+        success: false,
+        error: 'Failed to create DigiLocker URL',
+        details: error.response?.data || error.message,
+      });
+    }
+  } catch (error) {
+    console.error('Create URL error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to create DigiLocker URL',
+      details: error.message,
+    });
+  }
+});
+
 // Verify Aadhaar via number only using DigiLocker (pre-signup - public route)
+// This endpoint combines Step 1 (Verify Account) and Step 2 (Create URL) for convenience
 router.post('/verify-aadhaar-number', async (req, res) => {
   try {
     const { aadhaar_number } = req.body;
@@ -302,29 +474,75 @@ router.post('/verify-aadhaar-number', async (req, res) => {
       });
     }
 
-    const reference_id = `aadhaar_${cleanAadhaar}_${Date.now()}`;
+    const verification_id = `aadhaar_${cleanAadhaar}_${Date.now()}`;
+    const redirect_url = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback?ref=${verification_id}&aadhaar=${cleanAadhaar}`;
 
     try {
-      // Method 1: Try using Cashfree Verification SDK
-      console.log('Trying Cashfree Verification SDK for DigiLocker...');
-      const digilockerRequest = {
-        verification_id: reference_id,
-        redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback?ref=${reference_id}&aadhaar=${cleanAadhaar}`,
-        document_requested: ['AADHAAR']
+      // Step 1: Verify DigiLocker Account (optional - can skip if you want to proceed directly)
+      let accountExists = false;
+      let userFlow = 'signin'; // Default to signin
+      
+      try {
+        const verifyAccountResponse = await axios.post(
+          `${CASHFREE_BASE_URL}/verification/digilocker/verify-account`,
+          {
+            verification_id: `verify_${verification_id}`,
+            aadhaar_number: cleanAadhaar,
+          },
+          {
+            headers: {
+              'x-client-id': CASHFREE_CLIENT_ID,
+              'x-client-secret': CASHFREE_CLIENT_SECRET,
+              'Content-Type': 'application/json',
+              'x-api-version': '2023-12-18',
+            },
+            timeout: 10000,
+          }
+        );
+
+        if (verifyAccountResponse.data?.status === 'ACCOUNT_EXISTS') {
+          accountExists = true;
+          userFlow = 'signin';
+        } else {
+          userFlow = 'signup';
+        }
+      } catch (verifyError) {
+        // If verify account fails, proceed with default flow
+        console.log('Verify account step skipped, proceeding with default flow');
+      }
+
+      // Step 2: Create DigiLocker URL using Cashfree Verification SDK
+      console.log('Creating DigiLocker URL with flow:', userFlow);
+      const createUrlRequest = {
+        verification_id: verification_id,
+        redirect_url: redirect_url,
+        document_requested: ['AADHAAR'],
+        user_flow: userFlow,
       };
 
-      const response = await Cashfree.VrsDigilockerVerificationCreateUrl(digilockerRequest, undefined, { timeout: 10000 });
+      const response = await Cashfree.VrsDigilockerVerificationCreateUrl(createUrlRequest, undefined, { timeout: 15000 });
 
-      if (response.data?.verification_url || response.data?.data?.verification_url) {
+      const responseData = response.data?.data || response.data;
+
+      if (responseData?.verification_url) {
         return res.json({
           success: true,
           verified: false, // Not verified yet - user needs to complete DigiLocker flow
           verification_pending: true,
-          verification_url: response.data.verification_url || response.data.data?.verification_url,
-          reference_id: reference_id,
+          verification_url: responseData.verification_url,
+          verification_id: verification_id,
+          reference_id: responseData.reference_id || verification_id,
           aadhaar_number: cleanAadhaar,
+          status: responseData.status || 'PENDING',
+          user_flow: responseData.user_flow || userFlow,
           message: 'Please complete verification via DigiLocker',
           verification_method: 'digilocker',
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Failed to create DigiLocker URL',
+          details: responseData,
         });
       }
     } catch (verifyApiError) {
@@ -345,55 +563,12 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         });
       }
       
-      // Method 2: Fallback to old endpoint with Bearer token
-      try {
-        const token = await getCashfreeAccessToken();
-        if (token) {
-          const fallbackResponse = await axios.post(
-            `${CASHFREE_BASE_URL}/pg/lrs/digilocker/link`,
-            {
-              reference_id: reference_id,
-              document_type: 'aadhaar',
-              redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback?ref=${reference_id}&aadhaar=${cleanAadhaar}`,
-            },
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-                'x-api-version': '2022-09-01',
-              },
-              timeout: 10000 // 10 second timeout
-            }
-          );
-
-          if (fallbackResponse.data.status === 'SUCCESS' || fallbackResponse.data.verification_url) {
-            return res.json({
-              success: true,
-              verified: false,
-              verification_pending: true,
-              verification_url: fallbackResponse.data.data?.verification_url || fallbackResponse.data.verification_url,
-              reference_id: reference_id,
-              aadhaar_number: cleanAadhaar,
-              message: 'Please complete verification via DigiLocker',
-              verification_method: 'digilocker',
-            });
-          }
-        }
-      } catch (fallbackError) {
-        console.error('Fallback DigiLocker error:', fallbackError.response?.data || fallbackError.message);
-      }
-      
-      // If both methods fail, return format validation only
-      return res.json({
-        success: true,
-        verified: false, // NOT verified - only format validated
-        verification_pending: true,
-        aadhaar_number: cleanAadhaar,
-        message: 'Aadhaar format validated. Full verification requires DigiLocker authentication.',
-        verification_method: 'format_validation',
-        error: 'DigiLocker verification unavailable. Please try again.',
+      // Return error with details
+      return res.status(verifyApiError.response?.status || 500).json({
+        success: false,
+        error: 'Failed to create DigiLocker verification URL',
+        message: verifyApiError.response?.data?.message || 'DigiLocker verification unavailable. Please try again.',
         details: verifyApiError.response?.data || verifyApiError.message,
-        note: 'Format validation only. Full verification with details fetch requires DigiLocker authentication.',
       });
     }
 
@@ -406,32 +581,60 @@ router.post('/verify-aadhaar-number', async (req, res) => {
   }
 });
 
-// Get DigiLocker verification status and fetch details (pre-signup - public route)
+// Step 3: Get DigiLocker verification status (pre-signup - public route)
+// Can use either verification_id or reference_id (both work according to Cashfree docs)
 router.get('/digilocker-status/:referenceId', async (req, res) => {
   try {
     const { referenceId } = req.params;
-    const { aadhaar_number } = req.query;
+    const { aadhaar_number, verification_id } = req.query;
+
+    // Use verification_id from query if provided, otherwise use referenceId from params
+    const idToUse = verification_id || referenceId;
+
+    if (!idToUse) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reference ID or Verification ID is required',
+      });
+    }
 
     try {
       // Method 1: Try using Cashfree Verification SDK
-      console.log('Checking DigiLocker status using SDK...');
-      const statusResponse = await Cashfree.VrsDigilockerVerificationFetchStatus(undefined, undefined, referenceId, { timeout: 10000 });
+      // The SDK accepts either verification_id or reference_id
+      console.log('Checking DigiLocker status using SDK for ID:', idToUse);
+      const statusResponse = await Cashfree.VrsDigilockerVerificationFetchStatus(undefined, undefined, idToUse, { timeout: 15000 });
       
       const statusData = statusResponse.data?.data || statusResponse.data;
-      const isVerified = statusData?.verification_status === 'SUCCESS' || 
-                        statusData?.status === 'SUCCESS' || 
-                        statusData?.status === 'verified';
+      const currentStatus = statusData?.verification_status || statusData?.status || 'PENDING';
+      
+      console.log('DigiLocker status:', currentStatus);
 
-      if (isVerified) {
-        // Fetch document details using SDK
+      // Handle different statuses according to documentation:
+      // PENDING, AUTHENTICATED, EXPIRED, CONSENT_DENIED
+      if (currentStatus === 'AUTHENTICATED' || currentStatus === 'SUCCESS') {
+        // User has authenticated and given consent - fetch document
         try {
-          const docResponse = await Cashfree.VrsDigilockerVerificationFetchDocument('AADHAAR', undefined, undefined, referenceId, { timeout: 10000 });
+          console.log('Status is AUTHENTICATED, fetching document...');
+          const docResponse = await Cashfree.VrsDigilockerVerificationFetchDocument('AADHAAR', undefined, undefined, referenceId, { timeout: 15000 });
           
           const docData = docResponse.data?.data || docResponse.data;
+          
+          // Check if document has eaadhaar available
+          if (docData?.eaadhaar === 'N' || !docData?.name) {
+            return res.json({
+              success: true,
+              verified: false,
+              status: 'AUTHENTICATED',
+              message: 'Aadhaar document not available in DigiLocker. Please log in to DigiLocker and link your Aadhaar document.',
+              aadhaar_number: aadhaar_number,
+              error: 'eaadhaar_not_available',
+            });
+          }
+          
           return res.json({
             success: true,
             verified: true,
-            status: 'verified',
+            status: 'AUTHENTICATED',
             aadhaar_number: aadhaar_number || docData.aadhaar_number,
             name: docData.name || docData.full_name,
             date_of_birth: docData.date_of_birth || docData.dob,
@@ -442,73 +645,174 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
           });
         } catch (docError) {
           console.error('Document fetch error:', docError.response?.data || docError.message);
-          // Return verified status even if document fetch fails
+          // Return authenticated status even if document fetch fails
           return res.json({
             success: true,
-            verified: true,
-            status: 'verified',
+            verified: false,
+            status: 'AUTHENTICATED',
             aadhaar_number: aadhaar_number,
-            message: 'Verification successful, but details fetch failed',
+            message: 'Authentication successful, but document fetch failed. Please try again.',
+            error: 'document_fetch_failed',
+            details: docError.response?.data || docError.message,
           });
         }
+      } else if (currentStatus === 'EXPIRED') {
+        return res.json({
+          success: false,
+          verified: false,
+          status: 'EXPIRED',
+          message: 'DigiLocker verification link has expired. Please start the verification process again.',
+          error: 'link_expired',
+        });
+      } else if (currentStatus === 'CONSENT_DENIED') {
+        return res.json({
+          success: false,
+          verified: false,
+          status: 'CONSENT_DENIED',
+          message: 'User denied consent to share documents. Please try again and provide consent.',
+          error: 'consent_denied',
+        });
+      } else if (currentStatus === 'PENDING') {
+        return res.json({
+          success: true,
+          verified: false,
+          status: 'PENDING',
+          message: 'Verification is pending. Please complete the DigiLocker authentication process.',
+        });
       }
 
+      // Unknown status
       return res.json({
         success: true,
         verified: false,
-        status: statusData?.verification_status || statusData?.status || 'pending',
-        message: 'Verification pending',
+        status: currentStatus,
+        message: `Verification status: ${currentStatus}`,
       });
     } catch (verifyApiError) {
       console.error('Verification API error:', verifyApiError.response?.data || verifyApiError.message);
       
-      // Method 2: Fallback to old endpoint with Bearer token
-      const token = await getCashfreeAccessToken();
-      if (token) {
-        try {
-          const fallbackResponse = await axios.get(
-            `${CASHFREE_BASE_URL}/pg/lrs/digilocker/status/${referenceId}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'x-api-version': '2022-09-01',
-              }
-            }
-          );
+      // Method 2: Fallback to direct API call
+      try {
+        const fallbackResponse = await axios.get(
+          `${CASHFREE_BASE_URL}/verification/digilocker/verification-status/${idToUse}`,
+          {
+            headers: {
+              'x-client-id': CASHFREE_CLIENT_ID,
+              'x-client-secret': CASHFREE_CLIENT_SECRET,
+              'Content-Type': 'application/json',
+              'x-api-version': '2023-12-18',
+            },
+            timeout: 15000,
+          }
+        );
 
-          if (fallbackResponse.data.status === 'SUCCESS') {
-            const data = fallbackResponse.data.data || {};
-            const isVerified = data.verification_status === 'SUCCESS' || data.status === 'verified';
-            
-            if (isVerified && data.document_data) {
-              const docData = data.document_data || {};
-              return res.json({
-                success: true,
-                verified: true,
-                status: 'verified',
-                aadhaar_number: aadhaar_number || docData.aadhaar_number,
-                name: docData.name || docData.full_name,
-                date_of_birth: docData.date_of_birth || docData.dob,
-                gender: docData.gender,
-                address: docData.address || docData.full_address,
-                father_name: docData.father_name,
-                details: docData,
-              });
-            }
-            
+        const fallbackData = fallbackResponse.data?.data || fallbackResponse.data;
+        const fallbackStatus = fallbackData?.verification_status || fallbackData?.status || 'PENDING';
+
+        if (fallbackStatus === 'AUTHENTICATED' || fallbackStatus === 'SUCCESS') {
+          // Try to fetch document
+          try {
+            const docResponse = await axios.get(
+              `${CASHFREE_BASE_URL}/verification/digilocker/document/${idToUse}?document_requested=AADHAAR`,
+              {
+                headers: {
+                  'x-client-id': CASHFREE_CLIENT_ID,
+                  'x-client-secret': CASHFREE_CLIENT_SECRET,
+                  'Content-Type': 'application/json',
+                  'x-api-version': '2023-12-18',
+                },
+                timeout: 15000,
+              }
+            );
+
+            const docData = docResponse.data?.data || docResponse.data;
             return res.json({
               success: true,
-              verified: isVerified,
-              status: data.verification_status || data.status || 'pending',
-              message: isVerified ? 'Verification successful' : 'Verification pending',
+              verified: true,
+              status: 'AUTHENTICATED',
+              aadhaar_number: aadhaar_number || docData.aadhaar_number,
+              name: docData.name || docData.full_name,
+              date_of_birth: docData.date_of_birth || docData.dob,
+              gender: docData.gender,
+              address: docData.address || docData.full_address,
+              father_name: docData.father_name,
+              details: docData,
+            });
+          } catch (docError) {
+            return res.json({
+              success: true,
+              verified: false,
+              status: 'AUTHENTICATED',
+              aadhaar_number: aadhaar_number,
+              message: 'Authentication successful, but document fetch failed.',
+              error: 'document_fetch_failed',
             });
           }
-        } catch (fallbackError) {
-          console.error('Fallback status error:', fallbackError.response?.data || fallbackError.message);
+        }
+
+        return res.json({
+          success: true,
+          verified: false,
+          status: fallbackStatus,
+          message: `Verification status: ${fallbackStatus}`,
+        });
+      } catch (fallbackError) {
+        console.error('Fallback status check error:', fallbackError.response?.data || fallbackError.message);
+        
+        // Last resort: Try old endpoint with Bearer token
+        const token = await getCashfreeAccessToken();
+        if (token) {
+          try {
+            const oldEndpointResponse = await axios.get(
+              `${CASHFREE_BASE_URL}/pg/lrs/digilocker/status/${idToUse}`,
+              {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'x-api-version': '2022-09-01',
+                },
+                timeout: 15000,
+              }
+            );
+
+            if (oldEndpointResponse.data.status === 'SUCCESS') {
+              const data = oldEndpointResponse.data.data || {};
+              const isVerified = data.verification_status === 'SUCCESS' || data.status === 'verified';
+              
+              if (isVerified && data.document_data) {
+                const docData = data.document_data || {};
+                return res.json({
+                  success: true,
+                  verified: true,
+                  status: 'AUTHENTICATED',
+                  aadhaar_number: aadhaar_number || docData.aadhaar_number,
+                  name: docData.name || docData.full_name,
+                  date_of_birth: docData.date_of_birth || docData.dob,
+                  gender: docData.gender,
+                  address: docData.address || docData.full_address,
+                  father_name: docData.father_name,
+                  details: docData,
+                });
+              }
+              
+              return res.json({
+                success: true,
+                verified: isVerified,
+                status: data.verification_status || data.status || 'PENDING',
+                message: isVerified ? 'Verification successful' : 'Verification pending',
+              });
+            }
+          } catch (oldEndpointError) {
+            console.error('Old endpoint error:', oldEndpointError.response?.data || oldEndpointError.message);
+          }
         }
       }
       
-      throw verifyApiError;
+      // If all methods fail, return error
+      return res.status(verifyApiError.response?.status || 500).json({
+        success: false,
+        error: 'Failed to get DigiLocker status',
+        details: verifyApiError.response?.data || verifyApiError.message,
+      });
     }
   } catch (error) {
     console.error('DigiLocker status error:', error.response?.data || error.message);

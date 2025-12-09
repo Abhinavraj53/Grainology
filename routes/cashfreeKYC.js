@@ -394,7 +394,7 @@ router.post('/digilocker/create-url', async (req, res) => {
       // Fallback to direct API call
       try {
         const fallbackResponse = await axios.post(
-          `${CASHFREE_BASE_URL}/verification/digilocker/create-url`,
+          `${CASHFREE_BASE_URL}/verification/v2/digilocker/create-url`,
           {
             verification_id: verification_id,
             redirect_url: redirect_url,
@@ -520,37 +520,124 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         user_flow: userFlow,
       };
 
-      const response = await Cashfree.VrsDigilockerVerificationCreateUrl(createUrlRequest, undefined, { timeout: 15000 });
+      console.log('DigiLocker Create URL Request:', JSON.stringify(createUrlRequest, null, 2));
+      console.log('Cashfree Config:', {
+        clientId: CASHFREE_CLIENT_ID ? `${CASHFREE_CLIENT_ID.substring(0, 10)}...` : 'MISSING',
+        baseUrl: CASHFREE_BASE_URL,
+      });
 
-      const responseData = response.data?.data || response.data;
+      let response;
+      let responseData;
+      
+      try {
+        // Try SDK first
+        response = await Cashfree.VrsDigilockerVerificationCreateUrl(createUrlRequest, undefined, { timeout: 15000 });
+        console.log('Cashfree SDK Response:', JSON.stringify(response, null, 2));
+        
+        responseData = response.data?.data || response.data || response;
 
-      if (responseData?.verification_url) {
-        return res.json({
-          success: true,
-          verified: false, // Not verified yet - user needs to complete DigiLocker flow
-          verification_pending: true,
-          verification_url: responseData.verification_url,
-          verification_id: verification_id,
-          reference_id: responseData.reference_id || verification_id,
-          aadhaar_number: cleanAadhaar,
-          status: responseData.status || 'PENDING',
-          user_flow: responseData.user_flow || userFlow,
-          message: 'Please complete verification via DigiLocker',
-          verification_method: 'digilocker',
+        if (responseData?.verification_url) {
+          return res.json({
+            success: true,
+            verified: false, // Not verified yet - user needs to complete DigiLocker flow
+            verification_pending: true,
+            verification_url: responseData.verification_url,
+            verification_id: verification_id,
+            reference_id: responseData.reference_id || verification_id,
+            aadhaar_number: cleanAadhaar,
+            status: responseData.status || 'PENDING',
+            user_flow: responseData.user_flow || userFlow,
+            message: 'Please complete verification via DigiLocker',
+            verification_method: 'digilocker',
+          });
+        }
+      } catch (sdkError) {
+        console.error('SDK Error:', {
+          message: sdkError.message,
+          code: sdkError.code,
+          response: sdkError.response?.data,
         });
-      } else {
-        return res.status(400).json({
-          success: false,
-          error: 'Failed to create DigiLocker URL',
-          details: responseData,
+        // Continue to fallback
+      }
+
+      // Fallback: Try direct API call if SDK fails or doesn't return URL
+      console.log('SDK did not return verification_url, trying direct API call...');
+      try {
+        const directApiResponse = await axios.post(
+          `${CASHFREE_BASE_URL}/verification/v2/digilocker/create-url`,
+          {
+            verification_id: verification_id,
+            redirect_url: redirect_url,
+            document_requested: ['AADHAAR'],
+            ...(userFlow && { user_flow: userFlow }),
+          },
+          {
+            headers: {
+              'x-client-id': CASHFREE_CLIENT_ID,
+              'x-client-secret': CASHFREE_CLIENT_SECRET,
+              'Content-Type': 'application/json',
+              'x-api-version': '2023-12-18',
+            },
+            timeout: 15000,
+          }
+        );
+
+        console.log('Direct API Response:', JSON.stringify(directApiResponse.data, null, 2));
+        const directApiData = directApiResponse.data?.data || directApiResponse.data;
+        
+        if (directApiData?.verification_url) {
+          return res.json({
+            success: true,
+            verified: false,
+            verification_pending: true,
+            verification_url: directApiData.verification_url,
+            verification_id: verification_id,
+            reference_id: directApiData.reference_id || verification_id,
+            aadhaar_number: cleanAadhaar,
+            status: directApiData.status || 'PENDING',
+            user_flow: directApiData.user_flow || userFlow,
+            message: 'Please complete verification via DigiLocker',
+            verification_method: 'digilocker',
+          });
+        } else {
+          // Direct API also didn't return URL
+          console.error('Direct API did not return verification_url:', directApiData);
+        }
+      } catch (directApiError) {
+        console.error('Direct API call failed:', {
+          message: directApiError.message,
+          status: directApiError.response?.status,
+          data: directApiError.response?.data,
         });
       }
+
+      // If both SDK and direct API fail, return detailed error
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to create DigiLocker URL',
+        message: 'Cashfree API did not return a verification URL. Please check your Cashfree credentials and API access.',
+        details: {
+          sdk_response: responseData,
+          verification_id: verification_id,
+          redirect_url: redirect_url,
+          user_flow: userFlow,
+        },
+        troubleshooting: [
+          '1. Verify Cashfree credentials (CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET) are correct',
+          '2. Ensure your Cashfree account has DigiLocker API access enabled',
+          '3. Check that redirect_url is a valid, accessible URL',
+          '4. Verify API version (2023-12-18) is supported',
+        ],
+      });
     } catch (verifyApiError) {
       console.error('Cashfree Verification API error:', {
         message: verifyApiError.message,
         code: verifyApiError.code,
+        status: verifyApiError.response?.status,
+        statusText: verifyApiError.response?.statusText,
         response: verifyApiError.response?.data,
-        timeout: verifyApiError.code === 'ECONNABORTED'
+        timeout: verifyApiError.code === 'ECONNABORTED',
+        stack: verifyApiError.stack,
       });
       
       // If timeout, return error immediately
@@ -563,12 +650,20 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         });
       }
       
-      // Return error with details
-      return res.status(verifyApiError.response?.status || 500).json({
+      // Return detailed error with Cashfree response
+      const errorStatus = verifyApiError.response?.status || 500;
+      const errorData = verifyApiError.response?.data || {};
+      
+      return res.status(errorStatus).json({
         success: false,
         error: 'Failed to create DigiLocker verification URL',
-        message: verifyApiError.response?.data?.message || 'DigiLocker verification unavailable. Please try again.',
-        details: verifyApiError.response?.data || verifyApiError.message,
+        message: errorData.message || errorData.error?.message || verifyApiError.message || 'DigiLocker verification unavailable. Please try again.',
+        details: errorData,
+        status_code: errorStatus,
+        troubleshooting: errorStatus === 401 ? 'Check your Cashfree credentials (CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET)' :
+                      errorStatus === 403 ? 'Your Cashfree account may not have DigiLocker API access enabled' :
+                      errorStatus === 400 ? 'Invalid request parameters. Check verification_id and redirect_url format' :
+                      'Check Cashfree dashboard and API documentation',
       });
     }
 

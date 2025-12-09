@@ -7,10 +7,16 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.auth.getSession().then(({ data: { session } }) => {
+    api.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        loadProfile(session.user.id);
+        // Ensure token is available before loading profile
+        // getSession should have saved it, but double-check
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+          api.setToken(token);
+        }
+        await loadProfile(session.user.id);
       } else {
         setLoading(false);
       }
@@ -32,16 +38,33 @@ export function useAuth() {
   }, []);
 
   async function loadProfile(userId: string) {
-    const { data, error } = await api
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
+    try {
+      const { data, error } = await api
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
 
-    if (!error && data) {
-      setProfile(data);
+      if (!error && data) {
+        setProfile(data);
+      } else if (error) {
+        // If 401, token might be invalid - clear it
+        if (error.error === 'Authentication required' || error.error === 'Invalid or expired token') {
+          console.warn('Profile load failed: authentication error, clearing token');
+          api.setToken(null);
+          setProfile(null);
+        }
+      }
+    } catch (err: any) {
+      console.error('Error loading profile:', err);
+      // If it's a 401, clear the token
+      if (err?.error === 'Authentication required' || err?.status === 401) {
+        api.setToken(null);
+        setProfile(null);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const signUp = async (

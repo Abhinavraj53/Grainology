@@ -22,8 +22,12 @@ class ApiClient {
       ...options.headers,
     };
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
+    // Always get the latest token from localStorage in case it was updated
+    const token = localStorage.getItem('auth_token') || this.token;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      // Update this.token to keep it in sync
+      this.token = token;
     }
 
     try {
@@ -34,7 +38,16 @@ class ApiClient {
 
       // Handle 401 (Unauthorized) gracefully for session endpoint
       if (response.status === 401 && endpoint === '/auth/session') {
+        // Clear invalid token
+        this.setToken(null);
         return { user: null, session: null };
+      }
+
+      // For 401 on other endpoints, clear token and throw
+      if (response.status === 401) {
+        this.setToken(null);
+        const error = await response.json().catch(() => ({ error: 'Authentication required' }));
+        throw error;
       }
 
       if (!response.ok) {
@@ -56,11 +69,21 @@ class ApiClient {
   auth = {
     getSession: async () => {
       try {
+        // First check if we have a token in localStorage
+        const storedToken = localStorage.getItem('auth_token');
+        if (storedToken) {
+          this.token = storedToken;
+        }
+
         const data = await this.request('/auth/session');
 
         // Persist access token if the session includes one (supports existing logins)
         if (data?.session?.access_token) {
           this.setToken(data.session.access_token);
+        } else if (data?.session && !data.session.access_token && storedToken) {
+          // If session exists but no token in response, use stored token
+          // This handles cases where backend doesn't return token in session response
+          this.token = storedToken;
         }
 
         return {

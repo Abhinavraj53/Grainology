@@ -45,28 +45,47 @@ router.post('/signup', async (req, res) => {
       kyc_verification_data
     } = req.body;
 
+    // Validate required fields
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password is required and must be at least 6 characters' });
+    }
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+
     // Check if user exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
     // Create user with KYC status based on verification
     const user = new User({
-      email,
+      email: email.toLowerCase().trim(),
       password,
-      name,
-      mobile_number,
+      name: name.trim(),
+      mobile_number: mobile_number?.trim() || undefined,
       preferred_language: preferred_language || 'English',
-      address_line1,
-      address_line2,
-      district,
-      state,
+      address_line1: address_line1?.trim() || undefined,
+      address_line2: address_line2?.trim() || undefined,
+      district: district?.trim() || undefined,
+      state: state?.trim() || undefined,
       country: country || 'India',
-      pincode,
+      pincode: pincode?.trim() || undefined,
       role: role || 'farmer',
       entity_type: entity_type || 'individual',
-      business_name: entity_type === 'company' ? business_name : undefined,
+      business_name: entity_type === 'company' ? business_name?.trim() : undefined,
       business_type: entity_type === 'company' ? business_type : undefined,
       kyc_status: kyc_verification_data ? 'verified' : 'not_started',
       kyc_verified_at: kyc_verification_data ? new Date() : undefined,
@@ -105,6 +124,22 @@ router.post('/signup', async (req, res) => {
     });
   } catch (error) {
     console.error('Signup error:', error);
+    
+    // Handle Mongoose validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        error: 'Validation failed',
+        details: errors.join(', '),
+        message: errors[0] || 'Invalid input data'
+      });
+    }
+    
+    // Handle duplicate email error (MongoDB unique constraint)
+    if (error.code === 11000 || error.code === 11001) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+    
     // Check if it's a database connection error
     if (error.name === 'MongooseError' || error.message?.includes('buffering timed out') || error.message?.includes('connection')) {
       return res.status(503).json({ 
@@ -112,7 +147,11 @@ router.post('/signup', async (req, res) => {
         message: 'Please check your MongoDB connection. The database may not be accessible or your IP may not be whitelisted in MongoDB Atlas.'
       });
     }
-    res.status(500).json({ error: error.message || 'Failed to create user' });
+    
+    res.status(500).json({ 
+      error: error.message || 'Failed to create user',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

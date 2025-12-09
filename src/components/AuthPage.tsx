@@ -119,8 +119,20 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
     // Final validation for step 5
     if (!isLogin && step === 5) {
-      if (!email || !password) {
-        setError('Please fill in all required fields');
+      if (!email || !email.trim()) {
+        setError('Email is required');
+        setLoading(false);
+        return;
+      }
+      if (!password || password.length < 6) {
+        setError('Password is required and must be at least 6 characters');
+        setLoading(false);
+        return;
+      }
+      // Ensure name is available (from auto-filled data or manual input)
+      const finalName = autoFilledData?.name || name;
+      if (!finalName || !finalName.trim()) {
+        setError('Name is required. Please complete KYC verification or enter your name manually.');
         setLoading(false);
         return;
       }
@@ -138,31 +150,64 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         await signIn(email, password);
       } else {
         // Complete signup with verified KYC data
-        const { data: authData, error: signUpError } = await api.auth.signUp({
-          email,
+        // Ensure we have a valid name
+        const finalName = autoFilledData?.name || name;
+        if (!finalName || !finalName.trim()) {
+          setError('Name is required. Please complete KYC verification or enter your name manually.');
+          setLoading(false);
+          return;
+        }
+
+        const signUpPayload: any = {
+          email: email.trim(),
           password,
-          name: autoFilledData?.name || name,
-          mobile_number: mobileNumber,
-          preferred_language: preferredLanguage,
-          address_line1: autoFilledData?.address || addressLine1,
-          address_line2: addressLine2,
-          district: district,
-          state: state,
-          country: country,
-          pincode: pincode,
-          role,
-          entity_type: entityType,
+          name: finalName.trim(),
+          mobile_number: mobileNumber?.trim() || undefined,
+          preferred_language: preferredLanguage || 'English',
+          address_line1: autoFilledData?.address || addressLine1 || undefined,
+          address_line2: addressLine2 || undefined,
+          district: district || undefined,
+          state: state || undefined,
+          country: country || 'India',
+          pincode: pincode || undefined,
+          role: role || 'farmer',
+          entity_type: entityType || 'individual',
           business_name: entityType === 'company' ? businessName : undefined,
           business_type: entityType === 'company' ? businessType : undefined,
-          kyc_verification_data: kycVerified ? {
+        };
+
+        // Add KYC data if verified
+        if (kycVerified && kycVerificationData) {
+          signUpPayload.kyc_verification_data = {
             verificationMethod: verificationMethod,
+            verification_id: kycVerificationData.verification_id,
+            aadhaar_data: {
+              name: autoFilledData?.name,
+              date_of_birth: autoFilledData?.dateOfBirth,
+              gender: autoFilledData?.gender || kycVerificationData.gender,
+              address: autoFilledData?.address,
+              aadhaar_number: autoFilledData?.aadhaarNumber,
+              father_name: autoFilledData?.father_name || kycVerificationData.father_name,
+              verified_at: autoFilledData?.verifiedAt || new Date().toISOString(),
+            },
             ...kycVerificationData,
             autoFilledData: autoFilledData,
-          } : undefined,
-        });
+          };
+        }
+
+        console.log('Signup payload:', { ...signUpPayload, password: '***' }); // Log without password
+
+        const { data: authData, error: signUpError } = await api.auth.signUp(signUpPayload);
 
         if (signUpError) throw signUpError;
         if (!authData?.user) throw new Error('Failed to create user');
+        
+        // Show success message
+        console.log('✅ Account created successfully with Aadhaar verification!');
+        console.log('Aadhaar data stored:', kycVerificationData);
+        
+        // Automatically sign in the user after successful registration
+        await signIn(email, password);
       }
     } catch (err: any) {
       setError(err.message || err.error?.message || 'An error occurred');
@@ -515,17 +560,19 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                             if (result.verification_url && !result.verified) {
                               console.log('Opening DigiLocker URL:', result.verification_url);
                               
-                              // Store reference_id for polling (use verification_id if reference_id not available)
-                              const referenceId = result.reference_id || result.verification_id;
+                              // IMPORTANT: Use verification_id (not reference_id) for status checks
+                              // Cashfree requires verification_id for status API calls
+                              const verificationId = result.verification_id || result.reference_id;
+                              const referenceId = result.reference_id; // Keep for reference
                               
-                              if (!referenceId) {
-                                setError('Missing verification reference ID. Please try again.');
+                              if (!verificationId) {
+                                setError('Missing verification ID. Please try again.');
                                 setKycVerifying(false);
                                 return;
                               }
                               
-                              // Store reference ID in a ref so polling can access it
-                              const storedReferenceId = referenceId;
+                              // Store verification_id for polling (this is what Cashfree needs)
+                              const storedVerificationId = verificationId;
                               
                               // Open popup immediately (must be in direct response to user action)
                               // Use window.open synchronously - don't wrap in setTimeout
@@ -580,8 +627,9 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                   pollCount++;
                                   console.log(`Checking DigiLocker status (poll ${pollCount}/${maxPolls})...`);
                                   
+                                  // Use verification_id in query parameter (required by Cashfree)
                                   const statusResponse = await fetch(
-                                    `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/digilocker-status/${storedReferenceId}?aadhaar=${aadhaarNumber}`
+                                    `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/digilocker-status/${storedVerificationId}?aadhaar=${aadhaarNumber}&verification_id=${storedVerificationId}`
                                   );
                                   
                                   if (!statusResponse.ok) {
@@ -612,22 +660,38 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                         pollingMaxTimeoutRef.current = null;
                                       }
                                       
-                                      setKycVerified(true);
-                                      setKycVerificationData(statusResult);
-                                      setAutoFilledData({
+                                      // Store complete Aadhaar verification data
+                                      const aadhaarData = {
                                         name: statusResult.name,
-                                        dateOfBirth: statusResult.date_of_birth,
-                                        address: statusResult.address,
+                                        dateOfBirth: statusResult.date_of_birth || statusResult.dob,
+                                        gender: statusResult.gender,
+                                        address: statusResult.address || statusResult.full_address,
                                         aadhaarNumber: statusResult.aadhaar_number || aadhaarNumber,
+                                        father_name: statusResult.father_name,
                                         documentType: 'Aadhaar',
                                         verification_method: 'digilocker',
+                                        verification_id: storedVerificationId,
                                         verifiedDetails: statusResult,
+                                        verifiedAt: new Date().toISOString(),
+                                      };
+                                      
+                                      setKycVerified(true);
+                                      setKycVerificationData({
+                                        ...statusResult,
+                                        verification_id: storedVerificationId,
                                       });
+                                      setAutoFilledData(aadhaarData);
+                                      
                                       if (digilockerWindow && !digilockerWindow.closed) {
                                         digilockerWindow.close();
                                       }
                                       setKycVerifying(false);
                                       setError('');
+                                      
+                                      // Show success message
+                                      console.log('✅ Aadhaar verification successful!', aadhaarData);
+                                      
+                                      // Proceed to next step (review and account creation)
                                       setStep(4);
                                       return;
                                     } else if (statusResult.error === 'eaadhaar_not_available') {
@@ -856,12 +920,17 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                   <div className="space-y-4">
                     {autoFilledData.name ? (
                       <>
-                        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 mb-4">
                           <div className="flex items-center gap-2 text-green-800 mb-2">
-                            <CheckCircle className="w-5 h-5" />
-                            <p className="font-medium">Verification Successful!</p>
+                            <CheckCircle className="w-6 h-6 text-green-600" />
+                            <p className="font-bold text-lg">✅ Aadhaar Verification Successful!</p>
                           </div>
-                          <p className="text-xs text-green-700">These details were extracted from your verified document and cannot be edited.</p>
+                          <p className="text-sm text-green-700 mb-2">
+                            Your Aadhaar has been successfully verified via DigiLocker. Your details have been automatically extracted and will be saved when you create your account.
+                          </p>
+                          <p className="text-xs text-green-600">
+                            Please review the details below and proceed to create your account.
+                          </p>
                         </div>
 
                         <div>

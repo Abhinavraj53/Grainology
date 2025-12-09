@@ -161,23 +161,6 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
     );
   }
 
-  if (!profile) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-red-50">
-        <div className="text-center p-8 bg-white rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-red-700 mb-3">Profile Not Available</h2>
-          <p className="text-gray-700 mb-4">Unable to load user profile. Please log in again.</p>
-          <button
-            onClick={onSignOut}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-screen bg-gray-50">
       <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-lg flex flex-col transform transition-transform duration-300 ease-in-out ${

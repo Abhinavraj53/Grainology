@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Sprout, Shield, CheckCircle } from 'lucide-react';
 // @ts-ignore - JS module without types
@@ -47,6 +48,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   const pollingMaxTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { signIn } = useAuth();
+  const navigate = useNavigate();
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -148,6 +150,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
     try {
       if (isLogin) {
         await signIn(email, password);
+        // Redirect to dashboard after successful login
+        navigate('/dashboard');
       } else {
         // Complete signup with verified KYC data
         // Ensure we have a valid name
@@ -222,7 +226,17 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         console.log('Aadhaar data stored:', kycVerificationData);
         
         // Automatically sign in the user after successful registration
-        await signIn(email, password);
+        try {
+          await signIn(email, password);
+          // Redirect to dashboard after successful sign in
+          console.log('✅ Sign in successful, redirecting to dashboard...');
+          navigate('/dashboard');
+        } catch (signInError: any) {
+          console.error('Sign in error after signup:', signInError);
+          // Even if sign in fails, redirect to dashboard (user is already created)
+          // The dashboard will handle authentication state
+          navigate('/dashboard');
+        }
       }
     } catch (err: any) {
       console.error('Auth error:', err);

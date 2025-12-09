@@ -108,10 +108,28 @@ export function useAuth() {
   };
 
   const signOut = async () => {
-    const { error } = await api.auth.signOut();
-    if (error) throw error;
-    setUser(null);
-    setProfile(null);
+    try {
+      // Always clear local state first, even if API call fails
+      setUser(null);
+      setProfile(null);
+      setLoading(false);
+
+      // Clear stored token proactively
+      localStorage.removeItem('auth_token');
+      api.setToken(null);
+
+      // Try to call the API, but don't fail if it errors
+      await api.auth.signOut();
+    } catch (error) {
+      // Ignore errors - we've already cleared local state
+      console.warn('Sign out API call failed, but local state cleared:', error);
+      api.setToken(null);
+    } finally {
+      // Ensure token is cleared and force navigation to login
+      localStorage.removeItem('auth_token');
+      api.setToken(null);
+      window.location.href = '/login';
+    }
   };
 
   return {

@@ -3,12 +3,22 @@ import { TrendingUp, Cloud, Package, ShoppingCart, AlertCircle } from 'lucide-re
 import KYCVerification from '../KYCVerification';
 
 interface DashboardProps {
-  profile: Profile;
+  profile: Profile | null;
   orders: Order[];
   offers: Offer[];
 }
 
 export default function Dashboard({ profile, orders, offers }: DashboardProps) {
+  if (!profile) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-white rounded-lg shadow p-6">
+          <p className="text-gray-700">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
   const myOffers = offers.filter(o => o.seller_id === profile.id);
   const pendingOrders = orders.filter(o => o.status === 'Pending Approval');
 
@@ -24,9 +34,6 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
 
   return (
     <div className="space-y-6">
-      {profile.kyc_status !== 'verified' && (
-        <KYCVerification profile={profile} onVerificationComplete={handleKYCComplete} />
-      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
           <div className="flex items-center justify-between">

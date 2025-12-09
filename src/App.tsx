@@ -11,6 +11,7 @@ import Features from './pages/Features';
 import Contact from './pages/Contact';
 import CustomerPanel from './components/CustomerPanel';
 import AdminPanel from './components/AdminPanel';
+import KYCCallback from './pages/KYCCallback';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -81,6 +82,7 @@ export default function App() {
         } />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/kyc-callback" element={<KYCCallback />} />
 
         {/* Protected Routes */}
         <Route

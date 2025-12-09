@@ -161,13 +161,16 @@ class ApiClient {
 
     signOut: async () => {
       try {
+        // Try to call the backend first (with token if available)
         await this.request('/auth/signout', { method: 'POST' });
-        this.setToken(null);
-        return { error: null };
       } catch (error) {
+        // Ignore errors - we'll clear token anyway
+        // This handles cases where token is invalid/expired or backend is unreachable
+      } finally {
+        // Always clear token, even if request fails
         this.setToken(null);
-        return { error };
       }
+      return { error: null };
     },
 
     getUser: async () => {

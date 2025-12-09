@@ -9,8 +9,14 @@ export default function Navigation() {
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
+    try {
+      await signOut();
+    } catch (error) {
+      console.warn('Sign out error:', error);
+    } finally {
+      // Always navigate to home, even if signOut fails
+      navigate('/');
+    }
   };
 
   return (

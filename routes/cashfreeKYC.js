@@ -3,6 +3,7 @@ import axios from 'axios';
 import multer from 'multer';
 import FormDataLib from 'form-data';
 import Cashfree from '../lib/cashfree.js';
+import { generateCashfreeSignature, getCashfreeHeaders } from '../utils/cashfreeSignature.js';
 
 const router = express.Router();
 
@@ -31,18 +32,26 @@ const upload = multer({
 // Get Cashfree access token (for Payout APIs)
 async function getCashfreeAccessToken() {
   try {
+    // Generate 2FA signature if public key is available
+    const signature = generateCashfreeSignature(CASHFREE_CLIENT_ID);
+    
     // Try method 1: Using x-client-id and x-client-secret headers (Verification API style)
     try {
+      const headers = {
+        'x-client-id': CASHFREE_CLIENT_ID,
+        'x-client-secret': CASHFREE_CLIENT_SECRET,
+        'Content-Type': 'application/json',
+      };
+      
+      // Add 2FA signature if available
+      if (signature) {
+        headers['x-cf-signature'] = signature;
+      }
+      
       const response = await axios.post(
         `${CASHFREE_BASE_URL}/payout/v1/authorize`,
         {},
-        {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'Content-Type': 'application/json',
-          }
-        }
+        { headers }
       );
       if (response.data.data?.token || response.data.token) {
         return response.data.data?.token || response.data.token;
@@ -52,17 +61,22 @@ async function getCashfreeAccessToken() {
     }
 
     // Try method 2: Using body with clientId and clientSecret (Payout API style)
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add 2FA signature if available
+    if (signature) {
+      headers['x-cf-signature'] = signature;
+    }
+    
     const response = await axios.post(
       `${CASHFREE_BASE_URL}/payout/v1/authorize`,
       {
         client_id: CASHFREE_CLIENT_ID,
         client_secret: CASHFREE_CLIENT_SECRET,
       },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      }
+      { headers }
     );
     return response.data.data?.token || response.data.token;
   } catch (error) {

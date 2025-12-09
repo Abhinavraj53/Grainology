@@ -14,7 +14,7 @@ import SaleOrder from './customer/SaleOrder';
 type View = 'dashboard' | 'marketplace' | 'create-trade' | 'active-trades' | 'mandi' | 'weather' | 'tracking' | 'purchase-order' | 'sale-order';
 
 interface CustomerPanelProps {
-  profile: Profile;
+  profile: Profile | null; // Allow profile to be null
   onSignOut: () => void;
 }
 
@@ -24,12 +24,18 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [qualityParams, setQualityParams] = useState<QualityParameter[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadOffers();
-    loadMyOrders();
-    loadQualityParams();
-  }, []);
+    if (profile) {
+      loadOffers();
+      loadMyOrders();
+      loadQualityParams();
+      setLoading(false);
+    } else {
+      setLoading(false);
+    }
+  }, [profile]);
 
   const loadOffers = async () => {
     const { data, error } = await supabase
@@ -44,6 +50,8 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
   };
 
   const loadMyOrders = async () => {
+    if (!profile) return;
+    
     if (profile.role === 'farmer') {
       const { data: farmerOffers } = await supabase
         .from('offers')
@@ -91,6 +99,10 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
   };
 
   const handleCreateOffer = async (offerData: any) => {
+    if (!profile) {
+      return { error: { message: 'User profile not available' } };
+    }
+    
     if (profile.kyc_status !== 'verified') {
       return { error: { message: 'Please complete KYC verification before creating offers' } };
     }
@@ -109,6 +121,10 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
   };
 
   const handlePlaceOrder = async (offerId: string, quantity: number, price: number) => {
+    if (!profile) {
+      return { error: { message: 'User profile not available' } };
+    }
+    
     if (profile.kyc_status !== 'verified') {
       return { error: { message: 'Please complete KYC verification before placing orders' } };
     }
@@ -134,6 +150,34 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
     setIsMobileMenuOpen(false);
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-green-600 border-solid mx-auto mb-4"></div>
+          <p className="text-xl text-gray-700 font-medium">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-red-50">
+        <div className="text-center p-8 bg-white rounded-lg shadow-md">
+          <h2 className="text-2xl font-bold text-red-700 mb-3">Profile Not Available</h2>
+          <p className="text-gray-700 mb-4">Unable to load user profile. Please log in again.</p>
+          <button
+            onClick={onSignOut}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gray-50">
       <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 bg-white shadow-lg flex flex-col transform transition-transform duration-300 ease-in-out ${
@@ -143,8 +187,8 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-green-700">Grainology</h1>
-              <p className="text-sm text-gray-600 mt-1">{profile.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{profile.role}</p>
+              <p className="text-sm text-gray-600 mt-1">{profile?.name || 'User'}</p>
+              <p className="text-xs text-gray-500 capitalize">{profile?.role || 'customer'}</p>
             </div>
             <button
               onClick={() => setIsMobileMenuOpen(false)}
@@ -321,7 +365,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <CreateTrade
               qualityParams={qualityParams}
               onCreateOffer={handleCreateOffer}
-              userRole={profile.role}
+              userRole={profile?.role || 'customer'}
             />
           )}
           {currentView === 'active-trades' && (
@@ -334,13 +378,13 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <WeatherForecast />
           )}
           {currentView === 'tracking' && (
-            <OrderTracking profileId={profile.id} />
+            <OrderTracking profileId={profile?.id || ''} />
           )}
           {currentView === 'purchase-order' && (
-            <PurchaseOrder userId={profile.id} userName={profile.name} />
+            <PurchaseOrder userId={profile?.id || ''} userName={profile?.name || 'User'} />
           )}
           {currentView === 'sale-order' && (
-            <SaleOrder userId={profile.id} userName={profile.name} />
+            <SaleOrder userId={profile?.id || ''} userName={profile?.name || 'User'} />
           )}
         </div>
       </main>

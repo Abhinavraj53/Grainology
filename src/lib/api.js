@@ -57,6 +57,12 @@ class ApiClient {
     getSession: async () => {
       try {
         const data = await this.request('/auth/session');
+
+        // Persist access token if the session includes one (supports existing logins)
+        if (data?.session?.access_token) {
+          this.setToken(data.session.access_token);
+        }
+
         return {
           data: {
             session: data.session,

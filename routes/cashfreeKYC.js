@@ -475,7 +475,9 @@ router.post('/verify-aadhaar-number', async (req, res) => {
     }
 
     const verification_id = `aadhaar_${cleanAadhaar}_${Date.now()}`;
-    const redirect_url = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/kyc-callback?ref=${verification_id}&aadhaar=${cleanAadhaar}`;
+    // Fix double slash in redirect URL - remove trailing slash from FRONTEND_URL
+    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, ''); // Remove trailing slash
+    const redirect_url = `${baseUrl}/kyc-callback?ref=${verification_id}&aadhaar=${cleanAadhaar}`;
 
     try {
       // Step 1: Verify DigiLocker Account (optional - can skip if you want to proceed directly)
@@ -511,122 +513,177 @@ router.post('/verify-aadhaar-number', async (req, res) => {
         console.log('Verify account step skipped, proceeding with default flow');
       }
 
-      // Step 2: Create DigiLocker URL using Cashfree Verification SDK
+      // Step 2: Create DigiLocker URL - Try direct API call first (more reliable)
       console.log('Creating DigiLocker URL with flow:', userFlow);
-      const createUrlRequest = {
+      
+      const requestBody = {
         verification_id: verification_id,
         redirect_url: redirect_url,
         document_requested: ['AADHAAR'],
-        user_flow: userFlow,
       };
+      
+      if (userFlow && (userFlow === 'signin' || userFlow === 'signup')) {
+        requestBody.user_flow = userFlow;
+      }
 
-      console.log('DigiLocker Create URL Request:', JSON.stringify(createUrlRequest, null, 2));
+      console.log('DigiLocker Create URL Request:', JSON.stringify(requestBody, null, 2));
       console.log('Cashfree Config:', {
         clientId: CASHFREE_CLIENT_ID ? `${CASHFREE_CLIENT_ID.substring(0, 10)}...` : 'MISSING',
         baseUrl: CASHFREE_BASE_URL,
       });
 
-      let response;
-      let responseData;
-      
-      try {
-        // Try SDK first
-        response = await Cashfree.VrsDigilockerVerificationCreateUrl(createUrlRequest, undefined, { timeout: 15000 });
-        console.log('Cashfree SDK Response:', JSON.stringify(response, null, 2));
-        
-        responseData = response.data?.data || response.data || response;
+      // Try different endpoint formats (404 error suggests wrong endpoint)
+      const endpoints = [
+        `${CASHFREE_BASE_URL}/verification/digilocker/create-url`, // Most likely correct format (without /v2/)
+        `${CASHFREE_BASE_URL}/verification/v2/digilocker/create-url`,
+        `${CASHFREE_BASE_URL}/verification/digilocker/v2/create-url`,
+      ];
 
-        if (responseData?.verification_url) {
-          return res.json({
-            success: true,
-            verified: false, // Not verified yet - user needs to complete DigiLocker flow
-            verification_pending: true,
-            verification_url: responseData.verification_url,
-            verification_id: verification_id,
-            reference_id: responseData.reference_id || verification_id,
-            aadhaar_number: cleanAadhaar,
-            status: responseData.status || 'PENDING',
-            user_flow: responseData.user_flow || userFlow,
-            message: 'Please complete verification via DigiLocker',
-            verification_method: 'digilocker',
+      let lastError = null;
+      let successfulResponse = null;
+      
+      // Try each endpoint format
+      for (const endpoint of endpoints) {
+        try {
+          console.log(`Trying endpoint: ${endpoint}`);
+          
+          const directApiResponse = await axios.post(
+            endpoint,
+            requestBody,
+            {
+              headers: {
+                'x-client-id': CASHFREE_CLIENT_ID,
+                'x-client-secret': CASHFREE_CLIENT_SECRET,
+                'Content-Type': 'application/json',
+                'x-api-version': '2023-12-18',
+              },
+              timeout: 15000,
+            }
+          );
+
+          console.log(`Endpoint ${endpoint} - Response Status:`, directApiResponse.status);
+          console.log(`Endpoint ${endpoint} - Response Data:`, JSON.stringify(directApiResponse.data, null, 2));
+
+          const responseData = directApiResponse.data?.data || directApiResponse.data;
+          
+          if (responseData?.verification_url) {
+            successfulResponse = {
+              success: true,
+              verified: false,
+              verification_pending: true,
+              verification_url: responseData.verification_url,
+              verification_id: verification_id,
+              reference_id: responseData.reference_id || verification_id,
+              aadhaar_number: cleanAadhaar,
+              status: responseData.status || 'PENDING',
+              user_flow: responseData.user_flow || userFlow,
+              message: 'Please complete verification via DigiLocker',
+              verification_method: 'digilocker',
+            };
+            console.log(`✅ Success with endpoint: ${endpoint}`);
+            break; // Success, exit loop
+          } else {
+            console.log(`Endpoint ${endpoint} worked but no verification_url in response:`, responseData);
+            // Continue to next endpoint
+            continue;
+          }
+        } catch (endpointError) {
+          console.log(`❌ Endpoint ${endpoint} failed:`, {
+            status: endpointError.response?.status,
+            message: endpointError.message,
+            data: endpointError.response?.data,
           });
+          lastError = endpointError;
+          // Try next endpoint
+          continue;
+        }
+      }
+
+      // If we got a successful response, return it
+      if (successfulResponse) {
+        return res.json(successfulResponse);
+      }
+
+      // If all endpoints failed, try SDK as last resort
+      console.log('All direct API endpoints failed, trying SDK as fallback...');
+      try {
+        const sdkResponse = await Cashfree.VrsDigilockerVerificationCreateUrl(
+          requestBody,
+          '2023-12-18', // Pass API version explicitly
+          { timeout: 15000 }
+        );
+
+        // Handle SDK response carefully to avoid circular structure error
+        let sdkData;
+        try {
+          // Extract data safely to avoid circular structure
+          if (sdkResponse && typeof sdkResponse === 'object') {
+            sdkData = sdkResponse.data || sdkResponse;
+            if (sdkData && typeof sdkData === 'object') {
+              // Try to get the actual data
+              sdkData = sdkData.data || sdkData;
+            }
+          }
+          
+          // Try to extract verification_url safely
+          if (sdkData && typeof sdkData === 'object') {
+            const verificationUrl = sdkData.verification_url || sdkData.verificationUrl || sdkData.url;
+            if (verificationUrl) {
+              console.log('✅ SDK returned verification_url');
+              return res.json({
+                success: true,
+                verified: false,
+                verification_pending: true,
+                verification_url: verificationUrl,
+                verification_id: verification_id,
+                reference_id: sdkData.reference_id || sdkData.referenceId || verification_id,
+                aadhaar_number: cleanAadhaar,
+                status: sdkData.status || 'PENDING',
+                user_flow: sdkData.user_flow || sdkData.userFlow || userFlow,
+                message: 'Please complete verification via DigiLocker',
+                verification_method: 'digilocker',
+              });
+            }
+          }
+          console.log('SDK response structure:', {
+            hasData: !!sdkResponse.data,
+            hasVerificationUrl: !!(sdkData?.verification_url || sdkData?.verificationUrl),
+            keys: sdkData ? Object.keys(sdkData).slice(0, 10) : 'no data',
+          });
+        } catch (parseError) {
+          console.error('Error parsing SDK response:', parseError.message);
         }
       } catch (sdkError) {
         console.error('SDK Error:', {
           message: sdkError.message,
           code: sdkError.code,
-          response: sdkError.response?.data,
-        });
-        // Continue to fallback
-      }
-
-      // Fallback: Try direct API call if SDK fails or doesn't return URL
-      console.log('SDK did not return verification_url, trying direct API call...');
-      try {
-        const directApiResponse = await axios.post(
-          `${CASHFREE_BASE_URL}/verification/v2/digilocker/create-url`,
-          {
-            verification_id: verification_id,
-            redirect_url: redirect_url,
-            document_requested: ['AADHAAR'],
-            ...(userFlow && { user_flow: userFlow }),
-          },
-          {
-            headers: {
-              'x-client-id': CASHFREE_CLIENT_ID,
-              'x-client-secret': CASHFREE_CLIENT_SECRET,
-              'Content-Type': 'application/json',
-              'x-api-version': '2023-12-18',
-            },
-            timeout: 15000,
-          }
-        );
-
-        console.log('Direct API Response:', JSON.stringify(directApiResponse.data, null, 2));
-        const directApiData = directApiResponse.data?.data || directApiResponse.data;
-        
-        if (directApiData?.verification_url) {
-          return res.json({
-            success: true,
-            verified: false,
-            verification_pending: true,
-            verification_url: directApiData.verification_url,
-            verification_id: verification_id,
-            reference_id: directApiData.reference_id || verification_id,
-            aadhaar_number: cleanAadhaar,
-            status: directApiData.status || 'PENDING',
-            user_flow: directApiData.user_flow || userFlow,
-            message: 'Please complete verification via DigiLocker',
-            verification_method: 'digilocker',
-          });
-        } else {
-          // Direct API also didn't return URL
-          console.error('Direct API did not return verification_url:', directApiData);
-        }
-      } catch (directApiError) {
-        console.error('Direct API call failed:', {
-          message: directApiError.message,
-          status: directApiError.response?.status,
-          data: directApiError.response?.data,
+          // Don't try to log full response to avoid circular structure
         });
       }
 
-      // If both SDK and direct API fail, return detailed error
-      return res.status(400).json({
+      // If everything failed, return detailed error
+      const errorStatus = lastError?.response?.status || 400;
+      const errorData = lastError?.response?.data || {};
+      
+      return res.status(errorStatus).json({
         success: false,
         error: 'Failed to create DigiLocker URL',
-        message: 'Cashfree API did not return a verification URL. Please check your Cashfree credentials and API access.',
+        message: errorData.message || errorData.error?.message || lastError?.message || 'All API endpoints failed',
         details: {
-          sdk_response: responseData,
+          tried_endpoints: endpoints,
+          last_error_status: errorStatus,
+          last_error_data: typeof errorData === 'string' ? errorData : (errorData.message || errorData),
           verification_id: verification_id,
           redirect_url: redirect_url,
           user_flow: userFlow,
         },
         troubleshooting: [
-          '1. Verify Cashfree credentials (CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET) are correct',
-          '2. Ensure your Cashfree account has DigiLocker API access enabled',
-          '3. Check that redirect_url is a valid, accessible URL',
-          '4. Verify API version (2023-12-18) is supported',
+          '1. Check Cashfree credentials are correct (CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET)',
+          '2. Verify DigiLocker API access is enabled in Cashfree dashboard',
+          '3. Check redirect_url format (should not have double slashes)',
+          '4. Verify API version 2023-12-18 is supported',
+          '5. Check if you need to use sandbox vs production endpoints',
+          '6. Ensure your Cashfree account has Verification API access',
         ],
       });
     } catch (verifyApiError) {

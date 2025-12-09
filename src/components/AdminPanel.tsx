@@ -30,6 +30,8 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
   const [stats, setStats] = useState({
     totalUsers: 0,
     totalFarmers: 0,
@@ -48,11 +50,15 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
 
   const loadData = async () => {
     try {
+      setLoading(true);
+      setErrorMessage('');
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
 
       if (!token) {
         console.error('No authentication token found');
+        setErrorMessage('You are not authenticated. Please sign in again.');
+        setLoading(false);
         return;
       }
 
@@ -74,6 +80,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
       } else {
         const errorData = await statsResponse.json().catch(() => ({}));
         console.error('Stats fetch error:', statsResponse.status, errorData);
+        setErrorMessage('Unable to load dashboard stats. Please check API/auth.');
       }
 
       // Fetch users from backend API
@@ -91,6 +98,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
       } else {
         const errorData = await usersResponse.json().catch(() => ({}));
         console.error('Users fetch error:', usersResponse.status, errorData);
+        setErrorMessage('Unable to load users. Please check API/auth.');
       }
 
       // Fetch orders and offers using the API client
@@ -114,6 +122,9 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
       }
     } catch (error) {
       console.error('Error loading data:', error);
+      setErrorMessage('Failed to load dashboard data. Please check your connection and API.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -379,6 +390,16 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
         </header>
 
         <div className="p-4 md:p-6">
+          {loading && (
+            <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 text-blue-800 p-4">
+              Loading dashboard data...
+            </div>
+          )}
+          {errorMessage && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-4">
+              {errorMessage}
+            </div>
+          )}
           {currentView === 'dashboard' && (
             <EnhancedDashboard stats={stats} orders={orders} offers={offers} />
           )}

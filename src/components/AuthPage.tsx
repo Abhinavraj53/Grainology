@@ -199,8 +199,23 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
         const { data: authData, error: signUpError } = await api.auth.signUp(signUpPayload);
 
-        if (signUpError) throw signUpError;
-        if (!authData?.user) throw new Error('Failed to create user');
+        if (signUpError) {
+          // Extract error message from signup error
+          const errorMessage = signUpError.message || 
+                               signUpError.error?.message || 
+                               signUpError.details || 
+                               'An error occurred while creating an account';
+          console.error('Signup error:', signUpError);
+          setError(errorMessage);
+          setLoading(false);
+          return;
+        }
+        
+        if (!authData?.user) {
+          setError('Failed to create user. Please try again.');
+          setLoading(false);
+          return;
+        }
         
         // Show success message
         console.log('✅ Account created successfully with Aadhaar verification!');
@@ -210,7 +225,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         await signIn(email, password);
       }
     } catch (err: any) {
-      setError(err.message || err.error?.message || 'An error occurred');
+      console.error('Auth error:', err);
+      const errorMessage = err.message || 
+                          err.error?.message || 
+                          err.details || 
+                          'An error occurred';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -581,8 +601,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               try {
                                 // Open popup with proper features
                                 digilockerWindow = window.open(
-                                  result.verification_url,
-                                  'digilocker_verification',
+                                result.verification_url,
+                                'digilocker_verification',
                                   'width=900,height=700,scrollbars=yes,resizable=yes,menubar=no,toolbar=no,location=yes,status=yes'
                                 );
                                 
@@ -646,7 +666,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                   if (currentStatus === 'AUTHENTICATED' || statusResult.verified === true) {
                                     // User has authenticated and given consent - fetch document
                                     if (statusResult.name) {
-                                      // Verification successful with details
+                                    // Verification successful with details
                                       if (pollingIntervalRef.current) {
                                         clearInterval(pollingIntervalRef.current);
                                         pollingIntervalRef.current = null;
@@ -662,16 +682,16 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                       
                                       // Store complete Aadhaar verification data
                                       const aadhaarData = {
-                                        name: statusResult.name,
+                                      name: statusResult.name,
                                         dateOfBirth: statusResult.date_of_birth || statusResult.dob,
                                         gender: statusResult.gender,
                                         address: statusResult.address || statusResult.full_address,
-                                        aadhaarNumber: statusResult.aadhaar_number || aadhaarNumber,
+                                      aadhaarNumber: statusResult.aadhaar_number || aadhaarNumber,
                                         father_name: statusResult.father_name,
-                                        documentType: 'Aadhaar',
-                                        verification_method: 'digilocker',
+                                      documentType: 'Aadhaar',
+                                      verification_method: 'digilocker',
                                         verification_id: storedVerificationId,
-                                        verifiedDetails: statusResult,
+                                      verifiedDetails: statusResult,
                                         verifiedAt: new Date().toISOString(),
                                       };
                                       
@@ -692,7 +712,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                       console.log('✅ Aadhaar verification successful!', aadhaarData);
                                       
                                       // Proceed to next step (review and account creation)
-                                      setStep(4);
+                                    setStep(4);
                                       return;
                                     } else if (statusResult.error === 'eaadhaar_not_available') {
                                       // Aadhaar document not available in DigiLocker

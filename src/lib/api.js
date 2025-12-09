@@ -52,6 +52,13 @@ class ApiClient {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        // Log error for debugging
+        console.error('API request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: error,
+          url: url,
+        });
         throw error;
       }
 
@@ -103,6 +110,7 @@ class ApiClient {
 
     signUp: async (signUpData) => {
       try {
+        console.log('Signup request payload:', { ...signUpData, password: '***' });
         const data = await this.request('/auth/signup', {
           method: 'POST',
           body: JSON.stringify(signUpData),
@@ -118,7 +126,16 @@ class ApiClient {
           error: null
         };
       } catch (error) {
-        return { data: { user: null, session: null }, error };
+        console.error('Signup error details:', error);
+        // Extract error message from response
+        const errorMessage = error.error || error.message || error.details || 'An error occurred while creating an account';
+        return { 
+          data: { user: null, session: null }, 
+          error: {
+            message: errorMessage,
+            details: error.details || error
+          }
+        };
       }
     },
 

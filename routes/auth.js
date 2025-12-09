@@ -26,6 +26,16 @@ router.post('/signup', async (req, res) => {
     const dbError = checkDB(req, res);
     if (dbError) return;
 
+    // Log incoming request for debugging
+    console.log('Signup request received:', {
+      email: req.body.email ? `${req.body.email.substring(0, 3)}***` : 'missing',
+      name: req.body.name ? `${req.body.name.substring(0, 3)}***` : 'missing',
+      hasPassword: !!req.body.password,
+      passwordLength: req.body.password?.length || 0,
+      role: req.body.role,
+      hasKycData: !!req.body.kyc_verification_data,
+    });
+
     const {
       email,
       password,
@@ -47,14 +57,17 @@ router.post('/signup', async (req, res) => {
 
     // Validate required fields
     if (!email || !email.trim()) {
+      console.log('Validation failed: Email is missing or empty');
       return res.status(400).json({ error: 'Email is required' });
     }
     
     if (!password || password.length < 6) {
+      console.log('Validation failed: Password is missing or too short', { passwordLength: password?.length || 0 });
       return res.status(400).json({ error: 'Password is required and must be at least 6 characters' });
     }
     
     if (!name || !name.trim()) {
+      console.log('Validation failed: Name is missing or empty');
       return res.status(400).json({ error: 'Name is required' });
     }
 
@@ -123,11 +136,18 @@ router.post('/signup', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Signup error:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      errors: error.errors,
+      stack: error.stack?.substring(0, 200),
+    });
     
     // Handle Mongoose validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
+      console.log('Mongoose validation errors:', errors);
       return res.status(400).json({ 
         error: 'Validation failed',
         details: errors.join(', '),
@@ -137,17 +157,20 @@ router.post('/signup', async (req, res) => {
     
     // Handle duplicate email error (MongoDB unique constraint)
     if (error.code === 11000 || error.code === 11001) {
+      console.log('Duplicate email error');
       return res.status(400).json({ error: 'User with this email already exists' });
     }
     
     // Check if it's a database connection error
     if (error.name === 'MongooseError' || error.message?.includes('buffering timed out') || error.message?.includes('connection')) {
+      console.log('Database connection error');
       return res.status(503).json({ 
         error: 'Database not connected',
         message: 'Please check your MongoDB connection. The database may not be accessible or your IP may not be whitelisted in MongoDB Atlas.'
       });
     }
     
+    console.log('Unknown error, returning 500');
     res.status(500).json({ 
       error: error.message || 'Failed to create user',
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined

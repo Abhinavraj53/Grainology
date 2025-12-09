@@ -70,7 +70,13 @@ router.post('/signup', async (req, res) => {
       business_type: entity_type === 'company' ? business_type : undefined,
       kyc_status: kyc_verification_data ? 'verified' : 'not_started',
       kyc_verified_at: kyc_verification_data ? new Date() : undefined,
-      kyc_data: kyc_verification_data || {}
+      kyc_data: kyc_verification_data ? {
+        verification_method: kyc_verification_data.verificationMethod || 'digilocker',
+        verification_id: kyc_verification_data.verification_id,
+        aadhaar_data: kyc_verification_data.aadhaar_data || {},
+        verified_at: kyc_verification_data.aadhaar_data?.verified_at || new Date().toISOString(),
+        ...kyc_verification_data,
+      } : {}
     });
 
     await user.save();

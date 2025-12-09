@@ -898,13 +898,17 @@ router.post('/verify-aadhaar-number', async (req, res) => {
 
 // Step 3: Get DigiLocker verification status (pre-signup - public route)
 // Can use either verification_id or reference_id (both work according to Cashfree docs)
+// IMPORTANT: Cashfree prefers verification_id for status checks (reference_id may not work)
 router.get('/digilocker-status/:referenceId', async (req, res) => {
   try {
     const { referenceId } = req.params;
     const { aadhaar_number, verification_id } = req.query;
 
-    // Use verification_id from query if provided, otherwise use referenceId from params
+    // PRIORITIZE verification_id - Cashfree requires verification_id for status checks
+    // reference_id (like "30905") doesn't work, must use verification_id (like "aadhaar_516827225994_1765297089033")
     const idToUse = verification_id || referenceId;
+    
+    console.log('Status check - verification_id:', verification_id, 'referenceId:', referenceId, 'using:', idToUse);
 
     if (!idToUse) {
       return res.status(400).json({
@@ -929,8 +933,9 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
       if (currentStatus === 'AUTHENTICATED' || currentStatus === 'SUCCESS') {
         // User has authenticated and given consent - fetch document
         try {
-          console.log('Status is AUTHENTICATED, fetching document...');
-          const docResponse = await Cashfree.VrsDigilockerVerificationFetchDocument('AADHAAR', undefined, undefined, referenceId, { timeout: 15000 });
+          console.log('Status is AUTHENTICATED, fetching document using verification_id:', idToUse);
+          // Use verification_id (not reference_id) for document fetch
+          const docResponse = await Cashfree.VrsDigilockerVerificationFetchDocument('AADHAAR', undefined, undefined, idToUse, { timeout: 15000 });
           
           const docData = docResponse.data?.data || docResponse.data;
           
@@ -950,6 +955,7 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
             success: true,
             verified: true,
             status: 'AUTHENTICATED',
+            verification_id: idToUse, // Include verification_id in response
             aadhaar_number: aadhaar_number || docData.aadhaar_number,
             name: docData.name || docData.full_name,
             date_of_birth: docData.date_of_birth || docData.dob,
@@ -1407,39 +1413,68 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
     console.log('Cashfree Webhook Received:', JSON.stringify(webhookData, null, 2));
     
     // Extract webhook information
-    const {
-      type,           // Webhook event type
-      data,           // Event data
-      eventTime,      // Timestamp
-      referenceId,    // Reference ID for the verification
-      verification_id, // Alternative field name
-    } = webhookData;
+    // Cashfree uses 'event_type' not 'type'
+    const eventType = webhookData.event_type || webhookData.type;
+    const data = webhookData.data || webhookData;
+    const verification_id = data?.verification_id || webhookData.verification_id;
+    const reference_id = data?.reference_id || webhookData.reference_id;
+    const userDetails = data?.user_details || {};
+    const status = data?.status || '';
+
+    console.log('Webhook event_type:', eventType);
+    console.log('Verification ID:', verification_id);
+    console.log('Reference ID:', reference_id);
+    console.log('Status:', status);
+    console.log('User Details:', userDetails);
 
     // Handle different webhook event types
-    switch (type) {
+    switch (eventType) {
+      case 'DIGILOCKER_VERIFICATION_SUCCESS':
       case 'VERIFICATION.SUCCESS':
       case 'verification.success':
         // Verification completed successfully
-        console.log('✅ Verification successful for:', referenceId || verification_id);
-        // You can update your database here
-        // Example: Update user KYC status
+        console.log('✅ DigiLocker verification successful!');
+        console.log('Verification ID:', verification_id);
+        console.log('Reference ID:', reference_id);
+        console.log('User Details:', JSON.stringify(userDetails, null, 2));
+        
+        // Store verification data temporarily (can be retrieved by verification_id)
+        // In production, you might want to use Redis or a database table
+        // For now, we'll return this data via the status endpoint
+        // The frontend will poll the status endpoint and get this data
+        
+        // Log the verification data for retrieval
+        console.log('✅ Verification data available for verification_id:', verification_id);
+        console.log('Aadhaar data:', {
+          name: userDetails.name,
+          dob: userDetails.dob,
+          gender: userDetails.gender,
+          mobile: userDetails.mobile,
+          eaadhaar: userDetails.eaadhaar,
+        });
         break;
         
+      case 'DIGILOCKER_VERIFICATION_FAILED':
       case 'VERIFICATION.FAILED':
       case 'verification.failed':
         // Verification failed
-        console.log('❌ Verification failed for:', referenceId || verification_id);
-        // Handle failure case
+        console.log('❌ DigiLocker verification failed for:', verification_id || reference_id);
         break;
         
       case 'VERIFICATION.PENDING':
       case 'verification.pending':
         // Verification is pending
-        console.log('⏳ Verification pending for:', referenceId || verification_id);
+        console.log('⏳ Verification pending for:', verification_id || reference_id);
         break;
         
       default:
-        console.log('ℹ️  Unknown webhook type:', type, 'Data:', data);
+        console.log('ℹ️  Unknown webhook event_type:', eventType);
+        console.log('Webhook data structure:', {
+          hasEventType: !!webhookData.event_type,
+          hasType: !!webhookData.type,
+          hasData: !!webhookData.data,
+          keys: Object.keys(webhookData).slice(0, 10),
+        });
     }
 
     // Always return 200 OK to acknowledge receipt

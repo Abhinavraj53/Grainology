@@ -25,6 +25,16 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
+  if (!profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [orders, setOrders] = useState<Order[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -143,8 +153,8 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-white">Grainology</h1>
-              <p className="text-sm text-slate-300 mt-1">{profile.name}</p>
-              <p className="text-xs text-slate-400 capitalize">{profile.role} Panel</p>
+              <p className="text-sm text-slate-300 mt-1">{profile?.name || 'Admin User'}</p>
+              <p className="text-xs text-slate-400 capitalize">{profile?.role || 'admin'} Panel</p>
             </div>
             <button
               onClick={() => setIsMobileMenuOpen(false)}

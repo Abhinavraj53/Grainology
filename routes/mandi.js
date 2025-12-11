@@ -9,7 +9,8 @@ const router = express.Router();
 // Environment for data.gov.in Mandi API
 const MANDI_API_BASE = (process.env.MANDI_API_BASE || 'https://api.data.gov.in').replace(/\/$/, '');
 const MANDI_API_KEY = process.env.MANDI_API_KEY || '';
-const MANDI_RESOURCE_ID = process.env.MANDI_RESOURCE_ID || '9ef84268-d588-465a-a308-a864a43d0070';
+// Default to variety-wise daily market prices resource if env not provided
+const MANDI_RESOURCE_ID = process.env.MANDI_RESOURCE_ID || '35985678-0d79-46b4-9ed6-6f13308a1d24';
 
 // Public: live mandi prices from data.gov.in (no auth required)
 router.get('/live', async (req, res) => {

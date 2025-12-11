@@ -3,6 +3,17 @@ import { supabase, MandiPrice } from '../lib/supabase';
 import { TrendingUp, Search, MapPin, Calendar, IndianRupee } from 'lucide-react';
 import CSVUpload from './CSVUpload';
 
+// Helper to fetch live mandi data from backend
+async function fetchLiveMandi() {
+  const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/live`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || err.message || 'Failed to fetch live mandi prices');
+  }
+  return response.json();
+}
+
 export default function MandiBhaav() {
   const [prices, setPrices] = useState<MandiPrice[]>([]);
   const [filteredPrices, setFilteredPrices] = useState<MandiPrice[]>([]);
@@ -20,16 +31,32 @@ export default function MandiBhaav() {
   }, [prices, commodityFilter, stateFilter, searchTerm]);
 
   const loadPrices = async () => {
-    const { data, error } = await supabase
-      .from('mandi_prices')
-      .select('*')
-      .order('price_date', { ascending: false })
-      .limit(100);
+    try {
+      setLoading(true);
+      // Try live data.gov.in feed via backend proxy
+      const live = await fetchLiveMandi();
+      if (live?.records?.length) {
+        setPrices(live.records);
+        setLoading(false);
+        return;
+      }
 
-    if (!error && data) {
-      setPrices(data);
+      // Fallback to stored data if live fetch fails or returns empty
+      const { data, error } = await supabase
+        .from('mandi_prices')
+        .select('*')
+        .order('price_date', { ascending: false })
+        .limit(100);
+
+      if (!error && data) {
+        setPrices(data);
+      }
+    } catch (err) {
+      console.error('Mandi live fetch error:', err);
+      // Optionally keep prices as-is; fallback to existing data only if available
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const filterPrices = () => {

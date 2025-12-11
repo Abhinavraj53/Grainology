@@ -10,7 +10,8 @@ const router = express.Router();
 // Cashfree Configuration (for fallback methods)
 const CASHFREE_CLIENT_ID = process.env.CASHFREE_CLIENT_ID || '';
 const CASHFREE_CLIENT_SECRET = process.env.CASHFREE_CLIENT_SECRET || '';
-const CASHFREE_BASE_URL = process.env.CASHFREE_BASE_URL || 'https://api.cashfree.com';
+// Normalize base URL to avoid double slashes
+const CASHFREE_BASE_URL = (process.env.CASHFREE_BASE_URL || 'https://api.cashfree.com').replace(/\/$/, '');
 
 // Multer configuration for document uploads
 const storage = multer.memoryStorage();
@@ -48,8 +49,8 @@ async function getCashfreeAccessToken() {
         headers['x-cf-signature'] = signature;
       }
       
-      const response = await axios.post(
-        `${CASHFREE_BASE_URL}/payout/v1/authorize`,
+    const response = await axios.post(
+      `${CASHFREE_BASE_URL}/payout/v1/authorize`,
         {},
         { headers }
       );
@@ -138,7 +139,7 @@ router.post('/verify-pan', async (req, res) => {
       });
     }
 
-    // Method 1: Try using Cashfree Verification SDK
+    // Method 1: Try using Cashfree Verification SDK (explicit API version)
     try {
       console.log('Trying Cashfree Verification SDK for PAN...');
       const panRequest = {
@@ -146,7 +147,12 @@ router.post('/verify-pan', async (req, res) => {
         name: cleanName
       };
 
-      const verifyResponse = await Cashfree.VrsPanVerification(panRequest);
+      const verifyResponse = await Cashfree.VrsPanVerification(
+        panRequest,
+        Cashfree.XApiVersion || '2023-12-18', // ensure version is sent
+        undefined,
+        { timeout: 10000 }
+      );
       
       if (verifyResponse.data?.status === 'SUCCESS' || verifyResponse.data?.status === 'VALID') {
         return res.json({
@@ -165,12 +171,53 @@ router.post('/verify-pan', async (req, res) => {
           message: 'The PAN number or name does not match. Please check and try again.',
           details: verifyResponse.data,
         });
+      } else {
+        console.log('SDK PAN response not successful:', verifyResponse.data);
       }
     } catch (verifyError) {
       console.log('SDK verification failed, trying fallback...', verifyError.response?.data || verifyError.message);
     }
 
-    // Method 2: Fallback to Payout API with token
+    // Method 2: Direct Verification API (without payout token)
+    try {
+      console.log('Trying Cashfree Verification API direct call for PAN...', {
+        url: `${CASHFREE_BASE_URL}/verification/pan`,
+        hasClientId: !!CASHFREE_CLIENT_ID,
+        hasClientSecret: !!CASHFREE_CLIENT_SECRET,
+        apiVersion: '2023-12-18'
+      });
+      const directResponse = await axios.post(
+        `${CASHFREE_BASE_URL}/verification/pan`,
+        { pan: cleanPan, name: cleanName },
+        {
+          headers: {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
+            'x-api-version': '2023-12-18',
+            'Content-Type': 'application/json',
+          },
+          timeout: 10000,
+        }
+      );
+
+      const data = directResponse.data;
+      if (data?.status === 'SUCCESS' || data?.status === 'VALID') {
+        return res.json({
+          success: true,
+          verified: true,
+          pan: cleanPan,
+          name: data.name || cleanName,
+          type: data.type || 'Individual',
+          details: data,
+        });
+      } else {
+        console.log('Direct verification API returned non-success:', data);
+      }
+    } catch (directError) {
+      console.log('Direct verification API failed, moving to payout fallback', directError.response?.data || directError.message);
+    }
+
+    // Method 3: Fallback to Payout API with token
     const token = await getCashfreeAccessToken();
 
     if (!token) {
@@ -238,7 +285,7 @@ router.post('/verify-pan', async (req, res) => {
       const data = error.response.data;
 
       if (status === 401 || status === 403) {
-        return res.status(500).json({
+    return res.status(500).json({
           success: false,
           error: 'Authentication failed',
           message: 'Verification service authentication failed. Please check Cashfree credentials.',
@@ -325,7 +372,7 @@ router.post('/digilocker/verify-account', async (req, res) => {
       return res.status(error.response?.status || 500).json({
         success: false,
         error: 'Failed to verify DigiLocker account',
-        details: error.response?.data || error.message,
+      details: error.response?.data || error.message,
       });
     }
   } catch (error) {
@@ -495,12 +542,12 @@ router.post('/verify-aadhaar-number', async (req, res) => {
           {
             verification_id: `verify_${verification_id}`,
             aadhaar_number: cleanAadhaar,
-          },
-          {
-            headers: {
-              'x-client-id': CASHFREE_CLIENT_ID,
-              'x-client-secret': CASHFREE_CLIENT_SECRET,
-              'Content-Type': 'application/json',
+        },
+        {
+          headers: {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
+            'Content-Type': 'application/json',
               'x-api-version': '2023-12-18',
             },
             timeout: 10000,
@@ -588,19 +635,19 @@ router.post('/verify-aadhaar-number', async (req, res) => {
           if (verificationUrl) {
             console.log('✅ SDK returned verification_url successfully');
             sdkSuccess = true;
-            return res.json({
-              success: true,
+        return res.json({
+          success: true,
               verified: false,
-              verification_pending: true,
+          verification_pending: true,
               verification_url: verificationUrl,
               verification_id: verification_id,
               reference_id: referenceId,
-              aadhaar_number: cleanAadhaar,
+          aadhaar_number: cleanAadhaar,
               status: status,
               user_flow: userFlowValue,
-              message: 'Please complete verification via DigiLocker',
-              verification_method: 'digilocker',
-            });
+          message: 'Please complete verification via DigiLocker',
+          verification_method: 'digilocker',
+        });
           } else {
             console.log('SDK response received but no verification_url found');
             // Log what we can safely log
@@ -661,13 +708,13 @@ router.post('/verify-aadhaar-number', async (req, res) => {
               redirect_url: redirect_url,
             };
             // Payout API uses Bearer token authentication
-            try {
-              const token = await getCashfreeAccessToken();
-              if (token) {
+      try {
+        const token = await getCashfreeAccessToken();
+        if (token) {
                 apiHeaders = {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                  'x-api-version': '2022-09-01',
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'x-api-version': '2022-09-01',
                 };
                 delete apiHeaders['x-client-id'];
                 delete apiHeaders['x-client-secret'];
@@ -789,14 +836,14 @@ router.post('/verify-aadhaar-number', async (req, res) => {
           
           if (verificationUrl) {
             console.log('✅ SDK returned verification_url successfully');
-            return res.json({
-              success: true,
+      return res.json({
+        success: true,
               verified: false,
-              verification_pending: true,
+        verification_pending: true,
               verification_url: verificationUrl,
               verification_id: verification_id,
               reference_id: referenceId,
-              aadhaar_number: cleanAadhaar,
+        aadhaar_number: cleanAadhaar,
               status: status,
               user_flow: userFlowValue,
               message: 'Please complete verification via DigiLocker',
@@ -1016,10 +1063,10 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
       try {
         const fallbackResponse = await axios.get(
           `${CASHFREE_BASE_URL}/verification/digilocker/verification-status/${idToUse}`,
-          {
-            headers: {
-              'x-client-id': CASHFREE_CLIENT_ID,
-              'x-client-secret': CASHFREE_CLIENT_SECRET,
+        {
+          headers: {
+            'x-client-id': CASHFREE_CLIENT_ID,
+            'x-client-secret': CASHFREE_CLIENT_SECRET,
               'Content-Type': 'application/json',
               'x-api-version': '2023-12-18',
             },
@@ -1032,96 +1079,96 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
 
         if (fallbackStatus === 'AUTHENTICATED' || fallbackStatus === 'SUCCESS') {
           // Try to fetch document
-          try {
-            const docResponse = await axios.get(
+        try {
+          const docResponse = await axios.get(
               `${CASHFREE_BASE_URL}/verification/digilocker/document/${idToUse}?document_requested=AADHAAR`,
-              {
-                headers: {
-                  'x-client-id': CASHFREE_CLIENT_ID,
-                  'x-client-secret': CASHFREE_CLIENT_SECRET,
+            {
+              headers: {
+                'x-client-id': CASHFREE_CLIENT_ID,
+                'x-client-secret': CASHFREE_CLIENT_SECRET,
                   'Content-Type': 'application/json',
                   'x-api-version': '2023-12-18',
                 },
                 timeout: 15000,
-              }
-            );
+            }
+          );
 
             const docData = docResponse.data?.data || docResponse.data;
-            return res.json({
-              success: true,
-              verified: true,
+          return res.json({
+            success: true,
+            verified: true,
               status: 'AUTHENTICATED',
-              aadhaar_number: aadhaar_number || docData.aadhaar_number,
-              name: docData.name || docData.full_name,
-              date_of_birth: docData.date_of_birth || docData.dob,
-              gender: docData.gender,
-              address: docData.address || docData.full_address,
-              father_name: docData.father_name,
-              details: docData,
-            });
-          } catch (docError) {
-            return res.json({
-              success: true,
+            aadhaar_number: aadhaar_number || docData.aadhaar_number,
+            name: docData.name || docData.full_name,
+            date_of_birth: docData.date_of_birth || docData.dob,
+            gender: docData.gender,
+            address: docData.address || docData.full_address,
+            father_name: docData.father_name,
+            details: docData,
+          });
+        } catch (docError) {
+          return res.json({
+            success: true,
               verified: false,
               status: 'AUTHENTICATED',
-              aadhaar_number: aadhaar_number,
+            aadhaar_number: aadhaar_number,
               message: 'Authentication successful, but document fetch failed.',
               error: 'document_fetch_failed',
-            });
-          }
+          });
         }
+      }
 
-        return res.json({
-          success: true,
-          verified: false,
+      return res.json({
+        success: true,
+        verified: false,
           status: fallbackStatus,
           message: `Verification status: ${fallbackStatus}`,
-        });
+      });
       } catch (fallbackError) {
         console.error('Fallback status check error:', fallbackError.response?.data || fallbackError.message);
-        
+      
         // Last resort: Try old endpoint with Bearer token
-        const token = await getCashfreeAccessToken();
-        if (token) {
-          try {
+      const token = await getCashfreeAccessToken();
+      if (token) {
+        try {
             const oldEndpointResponse = await axios.get(
               `${CASHFREE_BASE_URL}/pg/lrs/digilocker/status/${idToUse}`,
-              {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'x-api-version': '2022-09-01',
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'x-api-version': '2022-09-01',
                 },
                 timeout: 15000,
-              }
-            );
+            }
+          );
 
             if (oldEndpointResponse.data.status === 'SUCCESS') {
               const data = oldEndpointResponse.data.data || {};
-              const isVerified = data.verification_status === 'SUCCESS' || data.status === 'verified';
-              
-              if (isVerified && data.document_data) {
-                const docData = data.document_data || {};
-                return res.json({
-                  success: true,
-                  verified: true,
-                  status: 'AUTHENTICATED',
-                  aadhaar_number: aadhaar_number || docData.aadhaar_number,
-                  name: docData.name || docData.full_name,
-                  date_of_birth: docData.date_of_birth || docData.dob,
-                  gender: docData.gender,
-                  address: docData.address || docData.full_address,
-                  father_name: docData.father_name,
-                  details: docData,
-                });
-              }
-              
+            const isVerified = data.verification_status === 'SUCCESS' || data.status === 'verified';
+            
+            if (isVerified && data.document_data) {
+              const docData = data.document_data || {};
               return res.json({
                 success: true,
-                verified: isVerified,
-                status: data.verification_status || data.status || 'PENDING',
-                message: isVerified ? 'Verification successful' : 'Verification pending',
+                verified: true,
+                  status: 'AUTHENTICATED',
+                aadhaar_number: aadhaar_number || docData.aadhaar_number,
+                name: docData.name || docData.full_name,
+                date_of_birth: docData.date_of_birth || docData.dob,
+                gender: docData.gender,
+                address: docData.address || docData.full_address,
+                father_name: docData.father_name,
+                details: docData,
               });
             }
+            
+            return res.json({
+              success: true,
+              verified: isVerified,
+                status: data.verification_status || data.status || 'PENDING',
+              message: isVerified ? 'Verification successful' : 'Verification pending',
+            });
+          }
           } catch (oldEndpointError) {
             console.error('Old endpoint error:', oldEndpointError.response?.data || oldEndpointError.message);
           }

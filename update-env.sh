@@ -50,6 +50,20 @@ if [ -f "$ENV_FILE" ]; then
     rm -f "${ENV_FILE}.bak" 2>/dev/null
     echo "✅ Updated existing Didit.me credentials"
   fi
+
+  # Add Mandi (data.gov.in) configuration if not exists
+  if ! grep -q "MANDI_API_KEY" "$ENV_FILE" 2>/dev/null; then
+    {
+      echo ""
+      echo "# Mandi (data.gov.in) configuration"
+      echo "MANDI_API_KEY=your-data-gov-api-key"
+      echo "MANDI_API_BASE=https://api.data.gov.in"
+      echo "MANDI_RESOURCE_ID=35985678-0d79-46b4-9ed6-6f13308a1d24"
+      echo "# For classic resource, you can use:"
+      echo "# MANDI_RESOURCE_ID=9ef84268-d588-465a-a308-a864a43d0070"
+    } >> "$ENV_FILE"
+    echo "✅ Added Mandi (data.gov.in) configuration placeholders"
+  fi
 else
   # Create new .env file
   cat > "$ENV_FILE" << 'ENVEOF'
@@ -79,6 +93,13 @@ DIDIT_WORKFLOW_ID=your-workflow-id-here
 WEATHER_API_KEY=your-weather-api-key
 WEATHER_API_PROVIDER=weatherapi
 GOOGLE_MAPS_API_KEY=your-google-maps-api-key
+
+# Mandi (data.gov.in) configuration
+MANDI_API_KEY=your-data-gov-api-key
+MANDI_API_BASE=https://api.data.gov.in
+MANDI_RESOURCE_ID=35985678-0d79-46b4-9ed6-6f13308a1d24
+# For classic resource, you can use:
+# MANDI_RESOURCE_ID=9ef84268-d588-465a-a308-a864a43d0070
 ENVEOF
   echo "✅ Created new .env file with Didit.me configuration"
 fi

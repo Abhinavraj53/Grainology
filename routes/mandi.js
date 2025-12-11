@@ -110,10 +110,12 @@ router.get('/live', async (req, res) => {
 
     // Normalize records to front-end shape
     const mapped = records.map((r, idx) => {
-      // Try multiple possible field name variations for prices
+      // Try multiple possible field name variations for prices (including capitalized versions)
       const minPrice = extractPrice(r, [
+        'Min_Price', // Capitalized version from data.gov.in
         'min_price',
         'minprice',
+        'MinPrice',
         'min_price_rs_quintal',
         'min_price_rs_quintal_',
         'min_price_rs_per_quintal',
@@ -123,8 +125,10 @@ router.get('/live', async (req, res) => {
       ], 'min');
 
       const maxPrice = extractPrice(r, [
+        'Max_Price', // Capitalized version from data.gov.in
         'max_price',
         'maxprice',
+        'MaxPrice',
         'max_price_rs_quintal',
         'max_price_rs_quintal_',
         'max_price_rs_per_quintal',
@@ -134,8 +138,10 @@ router.get('/live', async (req, res) => {
       ], 'max');
 
       const modalPrice = extractPrice(r, [
+        'Modal_Price', // Capitalized version from data.gov.in
         'modal_price',
         'modalprice',
+        'ModalPrice',
         'modal_price_rs_quintal',
         'modal_price_rs_quintal_',
         'modal_price_rs_per_quintal',
@@ -145,16 +151,16 @@ router.get('/live', async (req, res) => {
       ], 'modal');
 
       return {
-        id: r._id || r.id || `${r.market || r.market_name || 'mandi'}-${idx}`,
-        state: r.state || r.state_name || '',
-        district: r.district || r.district_name || '',
-        market: r.market || r.market_name || '',
-        commodity: r.commodity || r.commodity_name || '',
-        variety: r.variety || r.variety_name || '',
+        id: r._id || r.id || `${r.Market || r.market || r.market_name || 'mandi'}-${idx}`,
+        state: r.State || r.state || r.state_name || '',
+        district: r.District || r.district || r.district_name || '',
+        market: r.Market || r.market || r.market_name || '',
+        commodity: r.Commodity || r.commodity || r.commodity_name || '',
+        variety: r.Variety || r.variety || r.variety_name || '',
         min_price: minPrice,
         max_price: maxPrice,
         modal_price: modalPrice,
-        price_date: r.arrival_date || r.date || r.price_date || new Date().toISOString(),
+        price_date: r.Arrival_Date || r.arrival_date || r.date || r.price_date || new Date().toISOString(),
         created_at: new Date().toISOString(),
       };
     });

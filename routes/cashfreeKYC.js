@@ -217,61 +217,13 @@ router.post('/verify-pan', async (req, res) => {
       console.log('Direct verification API failed, moving to payout fallback', directError.response?.data || directError.message);
     }
 
-    // Method 3: Fallback to Payout API with token
-    const token = await getCashfreeAccessToken();
-
-    if (!token) {
-      console.error('Failed to get Cashfree access token');
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to authenticate with verification service',
-        message: 'Unable to connect to verification service. Please check your Cashfree credentials and ensure they have verification API access.',
-        details: 'Token generation failed. Make sure your Cashfree account has Payout/Verification API access enabled.',
-      });
-    }
-
-    console.log('Calling Cashfree PAN verification API (Payout)...');
-
-    // Verify PAN using Cashfree Payout API
-    const response = await axios.post(
-      `${CASHFREE_BASE_URL}/payout/v1.2/validation/pan`,
-      {
-        pan: cleanPan,
-        name: cleanName,
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-          'x-api-version': '2022-09-01',
-        }
-      }
-    );
-
-    console.log('Cashfree PAN verification response:', {
-      status: response.data.status,
-      message: response.data.message,
+    // If SDK and direct API did not verify, return a clear failure (avoid payout fallback)
+    return res.status(400).json({
+      success: false,
+      verified: false,
+      error: 'PAN verification failed',
+      message: 'The PAN number or name does not match. Please check and try again.',
     });
-
-    if (response.data.status === 'SUCCESS' && response.data.message === 'PAN details are valid') {
-      return res.json({
-        success: true,
-        verified: true,
-        pan: cleanPan,
-        name: response.data.name || cleanName,
-        type: response.data.type || 'Individual',
-        details: response.data,
-      });
-    } else {
-      // Cashfree returned a response but verification failed
-      return res.status(400).json({
-        success: false,
-        verified: false,
-        error: response.data.message || 'PAN verification failed',
-        message: response.data.message || 'The PAN number or name does not match. Please check and try again.',
-        details: response.data,
-      });
-    }
   } catch (error) {
     console.error('PAN verification error:', {
       message: error.message,

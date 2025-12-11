@@ -50,20 +50,118 @@ router.get('/live', async (req, res) => {
 
     const records = response.data?.records || [];
 
+    // Log first record structure and all available keys for debugging
+    if (records.length > 0) {
+      const sampleRecord = records[0];
+      console.log('Sample record keys from data.gov.in:', Object.keys(sampleRecord));
+      console.log('Sample record (first 3 fields):', {
+        ...Object.fromEntries(Object.entries(sampleRecord).slice(0, 3)),
+        '...': '...'
+      });
+      // Log price-related fields specifically
+      const priceFields = Object.keys(sampleRecord).filter(k => 
+        k.toLowerCase().includes('price') || k.toLowerCase().includes('min') || 
+        k.toLowerCase().includes('max') || k.toLowerCase().includes('modal')
+      );
+      if (priceFields.length > 0) {
+        console.log('Price-related fields found:', priceFields.map(k => `${k}: ${sampleRecord[k]}`));
+      } else {
+        console.warn('⚠️  No price-related fields found in record!');
+      }
+    }
+
+    // Helper function to extract price value from various field name formats
+    const extractPrice = (record, possibleKeys, fieldType = '') => {
+      // First try the known possible keys
+      for (const key of possibleKeys) {
+        const value = record[key];
+        if (value !== undefined && value !== null && value !== '') {
+          // Handle string values with commas (e.g., "1,234.56")
+          const cleaned = String(value).replace(/,/g, '').trim();
+          const num = Number(cleaned);
+          if (!isNaN(num) && num > 0) {
+            return num;
+          }
+        }
+      }
+      
+      // Fallback: search for any field containing the price type (case-insensitive)
+      if (fieldType) {
+        const allKeys = Object.keys(record);
+        const matchingKey = allKeys.find(k => 
+          k.toLowerCase().includes(fieldType.toLowerCase()) && 
+          (k.toLowerCase().includes('price') || k.toLowerCase().includes('rs'))
+        );
+        if (matchingKey) {
+          const value = record[matchingKey];
+          if (value !== undefined && value !== null && value !== '') {
+            const cleaned = String(value).replace(/,/g, '').trim();
+            const num = Number(cleaned);
+            if (!isNaN(num) && num > 0) {
+              console.log(`Found ${fieldType} price in field: ${matchingKey} = ${num}`);
+              return num;
+            }
+          }
+        }
+      }
+      
+      return 0;
+    };
+
     // Normalize records to front-end shape
-    const mapped = records.map((r, idx) => ({
-      id: r._id || r.id || `${r.market || 'mandi'}-${idx}`,
-      state: r.state || '',
-      district: r.district || r.district_name || '',
-      market: r.market || r.market_name || '',
-      commodity: r.commodity || '',
-      variety: r.variety || '',
-      min_price: Number(r.min_price) || 0,
-      max_price: Number(r.max_price) || 0,
-      modal_price: Number(r.modal_price) || 0,
-      price_date: r.arrival_date || r.date || new Date().toISOString(),
-      created_at: new Date().toISOString(),
-    }));
+    const mapped = records.map((r, idx) => {
+      // Try multiple possible field name variations for prices
+      const minPrice = extractPrice(r, [
+        'min_price',
+        'minprice',
+        'min_price_rs_quintal',
+        'min_price_rs_quintal_',
+        'min_price_rs_per_quintal',
+        'min_price_rs_per_quintal_',
+        'min_price_rs_quintal__',
+        'min_price_rs_per_quintal__'
+      ], 'min');
+
+      const maxPrice = extractPrice(r, [
+        'max_price',
+        'maxprice',
+        'max_price_rs_quintal',
+        'max_price_rs_quintal_',
+        'max_price_rs_per_quintal',
+        'max_price_rs_per_quintal_',
+        'max_price_rs_quintal__',
+        'max_price_rs_per_quintal__'
+      ], 'max');
+
+      const modalPrice = extractPrice(r, [
+        'modal_price',
+        'modalprice',
+        'modal_price_rs_quintal',
+        'modal_price_rs_quintal_',
+        'modal_price_rs_per_quintal',
+        'modal_price_rs_per_quintal_',
+        'modal_price_rs_quintal__',
+        'modal_price_rs_per_quintal__'
+      ], 'modal');
+
+      return {
+        id: r._id || r.id || `${r.market || r.market_name || 'mandi'}-${idx}`,
+        state: r.state || r.state_name || '',
+        district: r.district || r.district_name || '',
+        market: r.market || r.market_name || '',
+        commodity: r.commodity || r.commodity_name || '',
+        variety: r.variety || r.variety_name || '',
+        min_price: minPrice,
+        max_price: maxPrice,
+        modal_price: modalPrice,
+        price_date: r.arrival_date || r.date || r.price_date || new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+    });
+
+    // Log statistics about mapped data
+    const recordsWithPrices = mapped.filter(r => r.min_price > 0 || r.max_price > 0 || r.modal_price > 0);
+    console.log(`Mandi API: Fetched ${records.length} records, ${recordsWithPrices.length} have valid prices`);
 
     return res.json({
       success: true,

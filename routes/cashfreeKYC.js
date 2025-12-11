@@ -12,6 +12,7 @@ const CASHFREE_CLIENT_ID = process.env.CASHFREE_CLIENT_ID || '';
 const CASHFREE_CLIENT_SECRET = process.env.CASHFREE_CLIENT_SECRET || '';
 // Normalize base URL to avoid double slashes
 const CASHFREE_BASE_URL = (process.env.CASHFREE_BASE_URL || 'https://api.cashfree.com').replace(/\/$/, '');
+const CASHFREE_API_VERSION = '2023-12-18';
 
 // Multer configuration for document uploads
 const storage = multer.memoryStorage();
@@ -27,6 +28,126 @@ const upload = multer({
     } else {
       cb(new Error('Invalid file type. Only JPEG, PNG, and PDF are allowed.'));
     }
+  }
+});
+
+// Verify GSTIN (public route)
+router.post('/verify-gstin', async (req, res) => {
+  try {
+    const { GSTIN, business_name } = req.body;
+
+    // Basic validation
+    if (!GSTIN || typeof GSTIN !== 'string' || GSTIN.length !== 15) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid GSTIN',
+        message: 'GSTIN is required and must be 15 characters.',
+      });
+    }
+
+    // Validate GSTIN format (alphanumeric, 15 chars)
+    const gstRegex = /^[0-9A-Z]{15}$/;
+    if (!gstRegex.test(GSTIN.toUpperCase())) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid GSTIN format',
+        message: 'GSTIN must be 15 alphanumeric uppercase characters.',
+      });
+    }
+
+    // Check credentials
+    if (!CASHFREE_CLIENT_ID || !CASHFREE_CLIENT_SECRET) {
+      console.error('Cashfree credentials not configured for GSTIN verification');
+      return res.status(500).json({
+        success: false,
+        error: 'Verification service not configured',
+        message: 'Cashfree credentials are missing. Please contact support.',
+      });
+    }
+
+    // Call Cashfree GSTIN verification API (V2)
+    const gstBody = {
+      GSTIN: GSTIN.toUpperCase(),
+      ...(business_name ? { business_name } : {}),
+    };
+
+    console.log('Calling Cashfree GSTIN verification...', {
+      url: `${CASHFREE_BASE_URL}/verification/gstin`,
+      hasClientId: !!CASHFREE_CLIENT_ID,
+      hasClientSecret: !!CASHFREE_CLIENT_SECRET,
+      apiVersion: CASHFREE_API_VERSION,
+      gstin: `${GSTIN.substring(0, 3)}******${GSTIN.substring(GSTIN.length - 3)}`,
+    });
+
+    const gstResponse = await axios.post(
+      `${CASHFREE_BASE_URL}/verification/gstin`,
+      gstBody,
+      {
+        headers: {
+          'x-client-id': CASHFREE_CLIENT_ID,
+          'x-client-secret': CASHFREE_CLIENT_SECRET,
+          'x-api-version': CASHFREE_API_VERSION,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const data = gstResponse.data || {};
+
+    if (data.valid === true || data.gst_in_status === 'Active') {
+      return res.json({
+        success: true,
+        verified: true,
+        gstin: GSTIN.toUpperCase(),
+        business_name: data.legal_name_of_business || data.trade_name_of_business || business_name,
+        status: data.gst_in_status || 'Active',
+        details: data,
+      });
+    }
+
+    // If not valid, return 400 with details
+    return res.status(400).json({
+      success: false,
+      verified: false,
+      error: data.message || 'GSTIN verification failed',
+      message: data.message || 'GSTIN could not be verified. Please check the GSTIN and business name.',
+      details: data,
+    });
+  } catch (error) {
+    console.error('GSTIN verification error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
+
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data || {};
+
+      if (status === 401 || status === 403) {
+        return res.status(500).json({
+          success: false,
+          error: 'Authentication failed',
+          message: 'Verification service authentication failed. Please check Cashfree credentials.',
+          details: data,
+        });
+      }
+
+      return res.status(status).json({
+        success: false,
+        error: data.message || 'Verification service error',
+        message: data.message || 'An error occurred during GSTIN verification. Please try again.',
+        details: data,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to verify GSTIN',
+      message: 'Unable to connect to verification service. Please try again later.',
+      details: error.message,
+    });
   }
 });
 

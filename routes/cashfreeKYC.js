@@ -151,6 +151,142 @@ router.post('/verify-gstin', async (req, res) => {
   }
 });
 
+// Verify CIN (public route)
+router.post('/verify-cin', async (req, res) => {
+  try {
+    const { cin } = req.body;
+
+    // Basic validation
+    if (!cin || typeof cin !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid CIN',
+        message: 'CIN is required.',
+      });
+    }
+
+    const trimmedCin = cin.trim().toUpperCase();
+
+    // CIN format: alphanumeric, typically 21 characters, but we mainly enforce allowed chars
+    const cinRegex = /^[A-Z0-9]+$/;
+    if (!cinRegex.test(trimmedCin)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid CIN format',
+        message: 'CIN must be alphanumeric (A–Z, 0–9).',
+      });
+    }
+
+    // Check credentials
+    if (!CASHFREE_CLIENT_ID || !CASHFREE_CLIENT_SECRET) {
+      console.error('Cashfree credentials not configured for CIN verification');
+      return res.status(500).json({
+        success: false,
+        error: 'Verification service not configured',
+        message: 'Cashfree credentials are missing. Please contact support.',
+      });
+    }
+
+    // Build request body as per Cashfree docs:
+    // POST {CASHFREE_BASE_URL}/verification/cin
+    // { "verification_id": "ABC00123", "cin": "U72900KA2015PTC082988" }
+    const verification_id = `cin_${trimmedCin}_${Date.now()}`;
+
+    const cinBody = {
+      verification_id,
+      cin: trimmedCin,
+    };
+
+    console.log('Calling Cashfree CIN verification...', {
+      url: `${CASHFREE_BASE_URL}/verification/cin`,
+      hasClientId: !!CASHFREE_CLIENT_ID,
+      hasClientSecret: !!CASHFREE_CLIENT_SECRET,
+      apiVersion: CASHFREE_API_VERSION,
+      cin: trimmedCin,
+    });
+
+    const cinResponse = await axios.post(
+      `${CASHFREE_BASE_URL}/verification/cin`,
+      cinBody,
+      {
+        headers: {
+          'x-client-id': CASHFREE_CLIENT_ID,
+          'x-client-secret': CASHFREE_CLIENT_SECRET,
+          'x-api-version': CASHFREE_API_VERSION,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const data = cinResponse.data || {};
+
+    const isValidCin =
+      data.status === 'VALID' ||
+      data.cin_status === 'ACTIVE';
+
+    if (isValidCin) {
+      return res.json({
+        success: true,
+        verified: true,
+        verification_id: data.verification_id || verification_id,
+        cin: data.cin || trimmedCin,
+        company_name: data.company_name,
+        registration_number: data.registration_number,
+        incorporation_date: data.incorporation_date,
+        cin_status: data.cin_status,
+        email: data.email,
+        incorporation_country: data.incorporation_country,
+        director_details: data.director_details,
+        details: data,
+      });
+    }
+
+    // If not valid, return 400 with details
+    return res.status(400).json({
+      success: false,
+      verified: false,
+      error: data.message || 'CIN verification failed',
+      message: data.message || 'CIN could not be verified. Please check the CIN.',
+      details: data,
+    });
+  } catch (error) {
+    console.error('CIN verification error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
+
+    if (error.response) {
+      const status = error.response.status;
+      const data = error.response.data || {};
+
+      if (status === 401 || status === 403) {
+        return res.status(500).json({
+          success: false,
+          error: 'Authentication failed',
+          message: 'Verification service authentication failed. Please check Cashfree credentials or IP whitelisting.',
+          details: data,
+        });
+      }
+
+      return res.status(status).json({
+        success: false,
+        error: data.message || 'Verification service error',
+        message: data.message || 'An error occurred during CIN verification. Please try again.',
+        details: data,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to verify CIN',
+      message: 'Unable to connect to verification service. Please try again later.',
+      details: error.message,
+    });
+  }
+});
+
 // Get Cashfree access token (for Payout APIs)
 async function getCashfreeAccessToken() {
   try {

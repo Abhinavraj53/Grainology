@@ -972,12 +972,106 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                   </>
                 )}
 
-                {(verificationMethod === 'gst' || verificationMethod === 'cin') && (
+                {verificationMethod === 'gst' && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                     <p className="text-sm text-yellow-800">
-                      <strong>Note:</strong> GST and CIN verification will be implemented soon. Please contact support for company verification.
+                      <strong>Note:</strong> GST verification will be implemented soon. Please contact support for company verification.
                     </p>
                   </div>
+                )}
+
+                {verificationMethod === 'cin' && (
+                  <>
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        CIN Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={panNumber}
+                        onChange={(e) =>
+                          setPanNumber(
+                            e.target.value
+                              .toUpperCase()
+                              .replace(/[^A-Z0-9]/g, '')
+                          )
+                        }
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                        placeholder="U72900KA2015PTC082988"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Example format: U72900KA2015PTC082988
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const cin = panNumber.trim().toUpperCase();
+                        if (!cin) {
+                          setError('Please enter CIN number');
+                          return;
+                        }
+
+                        setKycVerifying(true);
+                        setError('');
+                        try {
+                          const response = await fetch(
+                            `${
+                              import.meta.env.VITE_API_URL ||
+                              'http://localhost:3001/api'
+                            }/cashfree/kyc/verify-cin`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ cin }),
+                            }
+                          );
+
+                          const result = await response.json();
+
+                          if (!response.ok) {
+                            const errorMessage =
+                              result.message ||
+                              result.error ||
+                              'CIN verification failed';
+                            setError(errorMessage);
+                            console.error('CIN verification error:', result);
+                            return;
+                          }
+
+                          if (result.success && result.verified) {
+                            setKycVerified(true);
+                            setKycVerificationData(result);
+                            setAutoFilledData({
+                              name: result.company_name || '',
+                              documentNumber: result.cin || cin,
+                              documentType: 'CIN',
+                              verifiedDetails: result,
+                            });
+                            setStep(4);
+                          } else {
+                            const errorMessage =
+                              result.message ||
+                              result.error ||
+                              'CIN verification failed. Please check your CIN number.';
+                            setError(errorMessage);
+                          }
+                        } catch (err: any) {
+                          console.error('CIN verification network error:', err);
+                          setError(
+                            err.message ||
+                              'Network error. Please check your connection and try again.'
+                          );
+                        } finally {
+                          setKycVerifying(false);
+                        }
+                      }}
+                      disabled={kycVerifying || !panNumber}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {kycVerifying ? 'Verifying...' : 'Verify CIN'}
+                    </button>
+                  </>
                 )}
 
                 <button

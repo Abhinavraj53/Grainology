@@ -164,6 +164,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
           return;
         }
 
+        const isCompany = entityType === 'company';
+
         const signUpPayload: any = {
           email: email.trim(),
           password,
@@ -178,16 +180,27 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
           pincode: pincode || undefined,
           role: role || 'farmer',
           entity_type: entityType || 'individual',
-          business_name: entityType === 'company' ? businessName : undefined,
-          business_type: entityType === 'company' ? businessType : undefined,
+          // For company accounts, prefer verified business/trade name from GSTIN/CIN data when available
+          business_name: isCompany
+            ? (autoFilledData?.documentType === 'GSTIN' || autoFilledData?.documentType === 'CIN'
+                ? (autoFilledData?.name || businessName)
+                : businessName)
+            : undefined,
+          business_type: isCompany ? businessType : undefined,
         };
 
         // Add KYC data if verified
         if (kycVerified && kycVerificationData) {
-          signUpPayload.kyc_verification_data = {
+          const kycData: any = {
             verificationMethod: verificationMethod,
             verification_id: kycVerificationData.verification_id,
-            aadhaar_data: {
+            ...kycVerificationData,
+            autoFilledData: autoFilledData,
+          };
+
+          // Aadhaar-specific structured data
+          if (verificationMethod === 'aadhaar') {
+            kycData.aadhaar_data = {
               name: autoFilledData?.name,
               date_of_birth: autoFilledData?.dateOfBirth,
               gender: autoFilledData?.gender || kycVerificationData.gender,
@@ -195,10 +208,43 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               aadhaar_number: autoFilledData?.aadhaarNumber,
               father_name: autoFilledData?.father_name || kycVerificationData.father_name,
               verified_at: autoFilledData?.verifiedAt || new Date().toISOString(),
-            },
-            ...kycVerificationData,
-            autoFilledData: autoFilledData,
-          };
+            };
+          }
+
+          // GSTIN-specific data
+          if (verificationMethod === 'gst') {
+            kycData.gstin_data = {
+              gstin: autoFilledData?.documentNumber,
+              business_name:
+                autoFilledData?.name ||
+                kycVerificationData.business_name ||
+                kycVerificationData.details?.trade_name_of_business ||
+                kycVerificationData.details?.legal_name_of_business,
+              details: kycVerificationData.details || kycVerificationData,
+            };
+          }
+
+          // CIN-specific data
+          if (verificationMethod === 'cin') {
+            kycData.cin_data = {
+              cin: autoFilledData?.documentNumber,
+              company_name:
+                autoFilledData?.name ||
+                kycVerificationData.company_name,
+              details: kycVerificationData.details || kycVerificationData,
+            };
+          }
+
+          // PAN-specific data
+          if (verificationMethod === 'pan') {
+            kycData.pan_data = {
+              pan: autoFilledData?.documentNumber,
+              name: autoFilledData?.name,
+              details: kycVerificationData.details || kycVerificationData,
+            };
+          }
+
+          signUpPayload.kyc_verification_data = kycData;
         }
 
         console.log('Signup payload:', { ...signUpPayload, password: '***' }); // Log without password
@@ -1215,10 +1261,10 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl p-5 mb-6 shadow-md">
                           <div className="flex items-center gap-2 text-green-800 mb-2">
                             <CheckCircle className="w-6 h-6 text-green-600" />
-                            <p className="font-bold text-lg">✅ Aadhaar Verification Successful!</p>
+                            <p className="font-bold text-lg">✅ Verification Successful!</p>
                           </div>
                           <p className="text-sm text-green-700 mb-2">
-                            Your Aadhaar has been successfully verified via DigiLocker. Your details have been automatically extracted and will be saved when you create your account.
+                            Your document has been successfully verified. Your details have been automatically extracted and will be saved when you create your account.
                           </p>
                           <p className="text-xs text-green-600">
                             Please review the details below and proceed to create your account.
@@ -1227,7 +1273,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
                         <div>
                           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                            Full Name <span className="text-red-500">*</span>
+                            {entityType === 'company' ? 'Business / Trade Name' : 'Full Name'} <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"

@@ -65,6 +65,18 @@ if [ -f "$ENV_FILE" ]; then
     echo "✅ Added Mandi (data.gov.in) configuration placeholders"
   fi
 
+  # Add Cashfree configuration placeholders if not exists
+  if ! grep -q "CASHFREE_CLIENT_ID" "$ENV_FILE" 2>/dev/null; then
+    {
+      echo ""
+      echo "# Cashfree Verification (Production) - fill with your real production credentials"
+      echo "CASHFREE_CLIENT_ID=your-cashfree-production-client-id"
+      echo "CASHFREE_CLIENT_SECRET=your-cashfree-production-client-secret"
+      echo "CASHFREE_BASE_URL=https://api.cashfree.com"
+    } >> "$ENV_FILE"
+    echo "✅ Added Cashfree configuration placeholders (update with production keys)"
+  fi
+
   # Ensure FRONTEND_URL is set to the latest production frontend URL
   if grep -q "^FRONTEND_URL=" "$ENV_FILE" 2>/dev/null; then
     # Update existing FRONTEND_URL

@@ -32,8 +32,8 @@ const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 // Normalize URL - remove trailing slash for CORS matching
 const normalizedFrontendUrl = frontendUrl.replace(/\/$/, '');
 
-// Allowed origins - always include localhost for development
-const allowedOrigins = [
+// Core allowed origins - always include localhost for development
+let allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:3001',
@@ -41,9 +41,24 @@ const allowedOrigins = [
   frontendUrl
 ].filter(Boolean).map(url => url.replace(/\/$/, '')); // Remove duplicates and trailing slashes
 
-// Add production frontend URL if different
-if (process.env.FRONTEND_URL && !allowedOrigins.includes(process.env.FRONTEND_URL.replace(/\/$/, ''))) {
-  allowedOrigins.push(process.env.FRONTEND_URL.replace(/\/$/, ''));
+// Explicitly add known production frontend domains (with and without www)
+const productionOrigins = [
+  'https://grainologyagri.com',
+  'https://www.grainologyagri.com'
+];
+productionOrigins.forEach(origin => {
+  const normalized = origin.replace(/\/$/, '');
+  if (!allowedOrigins.includes(normalized)) {
+    allowedOrigins.push(normalized);
+  }
+});
+
+// Add FRONTEND_URL from env again if somehow different after normalization
+if (process.env.FRONTEND_URL) {
+  const envFrontend = process.env.FRONTEND_URL.replace(/\/$/, '');
+  if (!allowedOrigins.includes(envFrontend)) {
+    allowedOrigins.push(envFrontend);
+  }
 }
 
 app.use(cors({

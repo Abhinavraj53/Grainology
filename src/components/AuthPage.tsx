@@ -973,11 +973,120 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                 )}
 
                 {verificationMethod === 'gst' && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-sm text-yellow-800">
-                      <strong>Note:</strong> GST verification will be implemented soon. Please contact support for company verification.
-                    </p>
-                  </div>
+                  <>
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        GSTIN Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={gstNumber}
+                        onChange={(e) =>
+                          setGstNumber(
+                            e.target.value
+                              .toUpperCase()
+                              .replace(/[^0-9A-Z]/g, '')
+                              .slice(0, 15)
+                          )
+                        }
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                        placeholder="29AAICP2912R1ZR"
+                        maxLength={15}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        GSTIN must be 15 characters (A–Z, 0–9).
+                      </p>
+                    </div>
+
+                    <div className="mt-3">
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Business Name (optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={businessName}
+                        onChange={(e) => setBusinessName(e.target.value)}
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                        placeholder="Legal / trade name of business"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const gstin = gstNumber.trim().toUpperCase();
+                        if (!gstin || gstin.length !== 15) {
+                          setError('Please enter a valid 15-character GSTIN');
+                          return;
+                        }
+
+                        setKycVerifying(true);
+                        setError('');
+                        try {
+                          const response = await fetch(
+                            `${
+                              import.meta.env.VITE_API_URL ||
+                              'http://localhost:3001/api'
+                            }/cashfree/kyc/verify-gstin`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                GSTIN: gstin,
+                                business_name: businessName || undefined,
+                              }),
+                            }
+                          );
+
+                          const result = await response.json();
+
+                          if (!response.ok) {
+                            const errorMessage =
+                              result.message ||
+                              result.error ||
+                              'GSTIN verification failed';
+                            setError(errorMessage);
+                            console.error('GSTIN verification error:', result);
+                            return;
+                          }
+
+                          if (result.success && result.verified) {
+                            setKycVerified(true);
+                            setKycVerificationData(result);
+                            setAutoFilledData({
+                              name:
+                                result.business_name ||
+                                result.details?.legal_name_of_business ||
+                                result.details?.trade_name_of_business ||
+                                businessName,
+                              documentNumber: result.gstin || gstin,
+                              documentType: 'GSTIN',
+                              verifiedDetails: result,
+                            });
+                            setStep(4);
+                          } else {
+                            const errorMessage =
+                              result.message ||
+                              result.error ||
+                              'GSTIN verification failed. Please check your GSTIN.';
+                            setError(errorMessage);
+                          }
+                        } catch (err: any) {
+                          console.error('GSTIN verification network error:', err);
+                          setError(
+                            err.message ||
+                              'Network error. Please check your connection and try again.'
+                          );
+                        } finally {
+                          setKycVerifying(false);
+                        }
+                      }}
+                      disabled={kycVerifying || !gstNumber}
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                    >
+                      {kycVerifying ? 'Verifying...' : 'Verify GSTIN'}
+                    </button>
+                  </>
                 )}
 
                 {verificationMethod === 'cin' && (

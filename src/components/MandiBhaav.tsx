@@ -14,11 +14,20 @@ async function fetchLiveMandi() {
   return response.json();
 }
 
+// Helper to normalize commodity names (optional - can be used for grouping similar commodities)
+const normalizeCommodity = (commodity: string): string => {
+  if (!commodity) return '';
+  // Return as-is, but can normalize if needed
+  return commodity.trim();
+};
+
 export default function MandiBhaav() {
   const [prices, setPrices] = useState<MandiPrice[]>([]);
   const [filteredPrices, setFilteredPrices] = useState<MandiPrice[]>([]);
   const [commodityFilter, setCommodityFilter] = useState('all');
+  const [varietyFilter, setVarietyFilter] = useState('all');
   const [stateFilter, setStateFilter] = useState('all');
+  const [districtFilter, setDistrictFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -28,7 +37,7 @@ export default function MandiBhaav() {
 
   useEffect(() => {
     filterPrices();
-  }, [prices, commodityFilter, stateFilter, searchTerm]);
+  }, [prices, commodityFilter, varietyFilter, stateFilter, districtFilter, searchTerm]);
 
   const loadPrices = async () => {
     try {
@@ -36,7 +45,23 @@ export default function MandiBhaav() {
       // Try live data.gov.in feed via backend proxy
       const live = await fetchLiveMandi();
       if (live?.records?.length) {
-        setPrices(live.records);
+        console.log('Fetched records:', live.records.length);
+        // Show all records, normalize commodity names
+        const processed = live.records
+          .map((record: any) => {
+            const normalized = normalizeCommodity(record.commodity);
+            if (normalized && record.modal_price > 0) {
+              return {
+                ...record,
+                commodity: normalized,
+              };
+            }
+            return null;
+          })
+          .filter((record): record is MandiPrice => record !== null);
+        
+        console.log('Processed records:', processed.length);
+        setPrices(processed);
         setLoading(false);
         return;
       }
@@ -49,7 +74,19 @@ export default function MandiBhaav() {
         .limit(100);
 
       if (!error && data) {
-        setPrices(data);
+        const processed = data
+          .map((record: any) => {
+            const normalized = normalizeCommodity(record.commodity);
+            if (normalized) {
+              return {
+                ...record,
+                commodity: normalized,
+              };
+            }
+            return null;
+          })
+          .filter((record): record is MandiPrice => record !== null);
+        setPrices(processed);
       }
     } catch (err) {
       console.error('Mandi live fetch error:', err);
@@ -66,22 +103,52 @@ export default function MandiBhaav() {
       filtered = filtered.filter(p => p.commodity === commodityFilter);
     }
 
+    if (varietyFilter !== 'all') {
+      filtered = filtered.filter(p => p.variety === varietyFilter);
+    }
+
     if (stateFilter !== 'all') {
       filtered = filtered.filter(p => p.state === stateFilter);
     }
 
+    if (districtFilter !== 'all') {
+      filtered = filtered.filter(p => p.district === districtFilter);
+    }
+
     if (searchTerm) {
       filtered = filtered.filter(p =>
-        p.market.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.district.toLowerCase().includes(searchTerm.toLowerCase())
+        p.market?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.district?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.commodity?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     setFilteredPrices(filtered);
   };
 
-  const uniqueCommodities = [...new Set(prices.map(p => p.commodity))];
-  const uniqueStates = [...new Set(prices.map(p => p.state))];
+  // Get all unique commodities from API data
+  const uniqueCommodities = [...new Set(prices.map(p => p.commodity).filter(Boolean))].sort();
+
+  // Get varieties for the selected commodity
+  const availableVarieties = commodityFilter !== 'all'
+    ? [...new Set(
+        prices
+          .filter(p => p.commodity === commodityFilter && p.variety)
+          .map(p => p.variety)
+      )].sort()
+    : [];
+
+  // Get all unique states
+  const uniqueStates = [...new Set(prices.map(p => p.state).filter(Boolean))].sort();
+
+  // Get districts for the selected state
+  const availableDistricts = stateFilter !== 'all'
+    ? [...new Set(
+        prices
+          .filter(p => p.state === stateFilter && p.district)
+          .map(p => p.district)
+      )].sort()
+    : [];
 
   return (
     <div className="space-y-6">
@@ -93,12 +160,12 @@ export default function MandiBhaav() {
         </h2>
         <p className="text-gray-600 mb-6">Real-time agricultural commodity prices from various mandis across India</p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Search by market or district..."
+              placeholder="Search by market, district, or commodity..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -107,7 +174,10 @@ export default function MandiBhaav() {
 
           <select
             value={commodityFilter}
-            onChange={(e) => setCommodityFilter(e.target.value)}
+            onChange={(e) => {
+              setCommodityFilter(e.target.value);
+              setVarietyFilter('all'); // Reset variety when commodity changes
+            }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
           >
             <option value="all">All Commodities</option>
@@ -116,9 +186,25 @@ export default function MandiBhaav() {
             ))}
           </select>
 
+          {commodityFilter !== 'all' && availableVarieties.length > 0 && (
+            <select
+              value={varietyFilter}
+              onChange={(e) => setVarietyFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value="all">All Varieties</option>
+              {availableVarieties.map(variety => (
+                <option key={variety} value={variety}>{variety}</option>
+              ))}
+            </select>
+          )}
+
           <select
             value={stateFilter}
-            onChange={(e) => setStateFilter(e.target.value)}
+            onChange={(e) => {
+              setStateFilter(e.target.value);
+              setDistrictFilter('all'); // Reset district when state changes
+            }}
             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
           >
             <option value="all">All States</option>
@@ -126,6 +212,19 @@ export default function MandiBhaav() {
               <option key={state} value={state}>{state}</option>
             ))}
           </select>
+
+          {stateFilter !== 'all' && availableDistricts.length > 0 && (
+            <select
+              value={districtFilter}
+              onChange={(e) => setDistrictFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value="all">All Districts</option>
+              {availableDistricts.map(district => (
+                <option key={district} value={district}>{district}</option>
+              ))}
+            </select>
+          )}
         </div>
 
         {loading ? (

@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Sprout, Shield, CheckCircle } from 'lucide-react';
+import Navigation from './Navigation';
+import Footer from './Footer';
 // @ts-ignore - JS module without types
 import { api } from '../lib/api';
 
@@ -251,34 +253,87 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 flex items-center justify-center p-4 sm:p-6 md:p-8">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-6 md:mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-green-600 rounded-full mb-3 md:mb-4">
-            <Sprout className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 text-white" />
+    <div className="min-h-screen flex flex-col">
+      <Navigation />
+      <div className="flex flex-1">
+        {/* Left Side - Image/Branding Section */}
+        <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-green-600 via-emerald-600 to-teal-600 relative overflow-hidden">
+        {/* Decorative Pattern Overlay */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}></div>
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-2">Grainology</h1>
-          <p className="text-sm sm:text-base text-gray-600">Digital Agri-Marketplace</p>
+        
+        {/* Content */}
+        <div className="relative z-10 flex flex-col justify-center items-center text-white p-12 w-full">
+          <div className="max-w-md">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur-sm rounded-2xl mb-8 shadow-xl">
+              <Sprout className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-5xl font-bold mb-4 leading-tight">Welcome to Grainology</h1>
+            <p className="text-xl text-white/90 mb-6 leading-relaxed">
+              Your Digital Agri-Marketplace for seamless trading and market insights
+            </p>
+            <div className="space-y-4 mt-8">
+              <div className="flex items-center gap-3 text-white/90">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+                <span>Real-time Mandi prices and market trends</span>
+              </div>
+              <div className="flex items-center gap-3 text-white/90">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+                <span>Secure KYC verification with DigiLocker</span>
+              </div>
+              <div className="flex items-center gap-3 text-white/90">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+                <span>Direct trading between farmers and traders</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-lg p-5 sm:p-6 md:p-8">
-          <div className="flex gap-2 mb-4 sm:mb-5 md:mb-6">
+        {/* Floating Elements */}
+        <div className="absolute top-20 right-20 w-32 h-32 bg-white/10 rounded-full blur-2xl animate-pulse" />
+        <div className="absolute bottom-20 left-20 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse delay-1000" />
+      </div>
+
+      {/* Right Side - Form Section */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-3 sm:p-4 md:p-6 lg:p-8 bg-gray-50">
+        <div className="w-full max-w-md">
+          {/* Mobile Logo */}
+          <div className="lg:hidden text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-green-600 rounded-2xl mb-4 shadow-lg">
+              <Sprout className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Grainology</h1>
+            <p className="text-gray-600">Digital Agri-Marketplace</p>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 md:p-10 border border-gray-100">
+          {/* Tab Switcher */}
+          <div className="flex gap-2 mb-6 sm:mb-8 bg-gray-100 p-1 rounded-xl">
             <button
               onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-lg text-sm sm:text-base font-medium transition-colors ${
+              className={`flex-1 py-3 px-4 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 ${
                 isLogin
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-white text-green-600 shadow-md'
+                  : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               Login
             </button>
             <button
               onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 px-3 sm:px-4 rounded-lg text-sm sm:text-base font-medium transition-colors ${
+              className={`flex-1 py-3 px-4 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 ${
                 !isLogin
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'bg-white text-green-600 shadow-md'
+                  : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               Register
@@ -286,21 +341,21 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
           </div>
 
           {!isLogin && step <= 5 && (
-            <div className="mb-4 flex justify-between">
-              <div className={`flex-1 h-2 rounded-full ${step >= 1 ? 'bg-green-600' : 'bg-gray-200'} mr-1`}></div>
-              <div className={`flex-1 h-2 rounded-full ${step >= 2 ? 'bg-green-600' : 'bg-gray-200'} mr-1`}></div>
-              <div className={`flex-1 h-2 rounded-full ${step >= 3 ? 'bg-green-600' : 'bg-gray-200'} mr-1`}></div>
-              <div className={`flex-1 h-2 rounded-full ${step >= 4 ? 'bg-green-600' : 'bg-gray-200'} mr-1`}></div>
-              <div className={`flex-1 h-2 rounded-full ${step >= 5 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+            <div className="mb-6 flex justify-between gap-1">
+              <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+              <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+              <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 3 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+              <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 4 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
+              <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 5 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
             {!isLogin && step === 1 && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm font-medium text-blue-900 mb-1">Step 1: Who Are You?</p>
-                  <p className="text-xs text-blue-800">Select your role to get started</p>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
+                  <p className="text-base font-semibold text-blue-900 mb-1">Step 1: Who Are You?</p>
+                  <p className="text-sm text-blue-700">Select your role to get started</p>
                 </div>
 
                 <div>
@@ -319,7 +374,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         setEntityType('company');
                       }
                     }}
-                    className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                   >
                     <option value="">Select your role</option>
                     <option value="farmer">Farmer</option>
@@ -335,12 +390,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
             {!isLogin && step === 2 && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    <p className="text-sm font-medium text-blue-900">Step 2: Choose Verification Method</p>
+                    <p className="text-base font-semibold text-blue-900">Step 2: Choose Verification Method</p>
                   </div>
-                  <p className="text-xs text-blue-800">Select how you want to verify your identity</p>
+                  <p className="text-sm text-blue-700">Select how you want to verify your identity</p>
                 </div>
 
                 {entityType === 'individual' ? (
@@ -353,26 +408,26 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         <button
                           type="button"
                           onClick={() => setVerificationMethod('pan')}
-                          className={`p-4 border-2 rounded-lg text-center transition-colors ${
+                          className={`p-5 border-2 rounded-xl text-center transition-all duration-200 ${
                             verificationMethod === 'pan'
-                              ? 'border-green-600 bg-green-50 text-green-700'
-                              : 'border-gray-300 hover:border-gray-400'
+                              ? 'border-green-600 bg-green-50 text-green-700 shadow-md scale-105'
+                              : 'border-gray-300 hover:border-green-300 hover:bg-green-50/50'
                           }`}
                         >
-                          <div className="font-medium text-sm">PAN Card</div>
-                          <div className="text-xs text-gray-600 mt-1">Verify with PAN</div>
+                          <div className="font-semibold text-sm mb-1">PAN Card</div>
+                          <div className="text-xs text-gray-600">Verify with PAN</div>
                         </button>
                         <button
                           type="button"
                           onClick={() => setVerificationMethod('aadhaar')}
-                          className={`p-4 border-2 rounded-lg text-center transition-colors ${
+                          className={`p-5 border-2 rounded-xl text-center transition-all duration-200 ${
                             verificationMethod === 'aadhaar'
-                              ? 'border-green-600 bg-green-50 text-green-700'
-                              : 'border-gray-300 hover:border-gray-400'
+                              ? 'border-green-600 bg-green-50 text-green-700 shadow-md scale-105'
+                              : 'border-gray-300 hover:border-green-300 hover:bg-green-50/50'
                           }`}
                         >
-                          <div className="font-medium text-sm">Aadhaar Card</div>
-                          <div className="text-xs text-gray-600 mt-1">Verify with Aadhaar</div>
+                          <div className="font-semibold text-sm mb-1">Aadhaar Card</div>
+                          <div className="text-xs text-gray-600">Verify with Aadhaar</div>
                         </button>
                       </div>
                     </div>
@@ -416,7 +471,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors"
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-all duration-200"
                 >
                   Back
                 </button>
@@ -425,12 +480,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
             {!isLogin && step === 3 && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    <p className="text-sm font-medium text-blue-900">Step 3: Document Verification</p>
+                    <p className="text-base font-semibold text-blue-900">Step 3: Document Verification</p>
                   </div>
-                  <p className="text-xs text-blue-800">Enter your document details and verify via Cashfree</p>
+                  <p className="text-sm text-blue-700">Enter your document details and verify via Cashfree</p>
                 </div>
 
                 {verificationMethod === 'pan' && (
@@ -443,7 +498,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         type="text"
                         value={panNumber}
                         onChange={(e) => setPanNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
-                        className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                         placeholder="ABCDE1234F"
                         maxLength={10}
                       />
@@ -457,7 +512,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         type="text"
                         value={panName}
                         onChange={(e) => setPanName(e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                         placeholder="Enter your full name"
                       />
                     </div>
@@ -509,7 +564,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         }
                       }}
                       disabled={kycVerifying || !panNumber || !panName}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {kycVerifying ? 'Verifying...' : 'Verify PAN'}
                     </button>
@@ -526,7 +581,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         type="text"
                         value={aadhaarNumber}
                         onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
-                        className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                         placeholder="Enter 12-digit Aadhaar number"
                         maxLength={12}
                       />
@@ -910,7 +965,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         }
                       }}
                       disabled={kycVerifying || !aadhaarNumber}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {kycVerifying ? 'Verifying...' : 'Verify Aadhaar'}
                     </button>
@@ -942,19 +997,19 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
             {!isLogin && step === 4 && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle className="w-5 h-5 text-blue-600" />
-                    <p className="text-sm font-medium text-blue-900">Step 4: Verified Details</p>
+                    <p className="text-base font-semibold text-blue-900">Step 4: Verified Details</p>
                   </div>
-                  <p className="text-xs text-blue-800">Review the details extracted from your verified document (read-only)</p>
+                  <p className="text-sm text-blue-700">Review the details extracted from your verified document (read-only)</p>
                 </div>
 
                 {autoFilledData && (
                   <div className="space-y-4">
                     {autoFilledData.name ? (
                       <>
-                        <div className="bg-green-50 border-2 border-green-500 rounded-lg p-4 mb-4">
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl p-5 mb-6 shadow-md">
                           <div className="flex items-center gap-2 text-green-800 mb-2">
                             <CheckCircle className="w-6 h-6 text-green-600" />
                             <p className="font-bold text-lg">✅ Aadhaar Verification Successful!</p>
@@ -975,7 +1030,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                             type="text"
                             value={autoFilledData.name || ''}
                             readOnly
-                            className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                            className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                           />
                         </div>
                       </>
@@ -1003,7 +1058,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           type="text"
                           value={name}
                           onChange={(e) => setName(e.target.value)}
-                          className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                           placeholder="Enter your full name"
                           required
                         />
@@ -1019,7 +1074,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           type="text"
                           value={autoFilledData.dateOfBirth || ''}
                           readOnly
-                          className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                          className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                         />
                       </div>
                     )}
@@ -1033,7 +1088,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           value={autoFilledData.address || ''}
                           readOnly
                           rows={3}
-                          className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                          className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                         />
                       </div>
                     )}
@@ -1046,7 +1101,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         type="text"
                         value={autoFilledData.documentType || ''}
                         readOnly
-                        className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                       />
                     </div>
 
@@ -1058,7 +1113,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         type="text"
                         value={autoFilledData.documentNumber || autoFilledData.aadhaarNumber || ''}
                         readOnly
-                        className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg bg-gray-50 text-gray-700 cursor-not-allowed"
+                        className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl bg-gray-50 text-gray-700 cursor-not-allowed"
                       />
                     </div>
                   </div>
@@ -1073,7 +1128,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                       type="tel"
                       value={mobileNumber}
                       onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                       placeholder="Enter 10-digit mobile number"
                       maxLength={10}
                     />
@@ -1087,7 +1142,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                       placeholder="Enter your email"
                       required
                     />
@@ -1101,7 +1156,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                       placeholder="Create a password"
                       required
                     />
@@ -1120,21 +1175,21 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
             {!isLogin && step === 5 && (
               <>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm font-medium text-blue-900 mb-1">Step 5: Review & Create Account</p>
-                  <p className="text-xs text-blue-800">Review all your information before creating your account</p>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
+                  <p className="text-base font-semibold text-blue-900 mb-1">Step 5: Review & Create Account</p>
+                  <p className="text-sm text-blue-700">Review all your information before creating your account</p>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-medium text-gray-900 mb-3">Account Information</h3>
-                    <div className="space-y-2 text-sm">
-                      <div><span className="font-medium">Role:</span> <span className="capitalize">{role}</span></div>
-                      <div><span className="font-medium">Name:</span> {autoFilledData?.name || name || 'N/A'}</div>
-                      <div><span className="font-medium">Email:</span> {email || 'N/A'}</div>
-                      <div><span className="font-medium">Mobile:</span> {mobileNumber || 'N/A'}</div>
+                  <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-5 shadow-sm">
+                    <h3 className="font-semibold text-gray-900 mb-4 text-lg">Account Information</h3>
+                    <div className="space-y-3 text-sm">
+                      <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Role:</span> <span className="capitalize text-gray-900 font-semibold">{role}</span></div>
+                      <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Name:</span> <span className="text-gray-900 font-semibold">{autoFilledData?.name || name || 'N/A'}</span></div>
+                      <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Email:</span> <span className="text-gray-900 font-semibold">{email || 'N/A'}</span></div>
+                      <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Mobile:</span> <span className="text-gray-900 font-semibold">{mobileNumber || 'N/A'}</span></div>
                       {autoFilledData?.documentType && (
-                        <div><span className="font-medium">Verified Document:</span> {autoFilledData.documentType}</div>
+                        <div className="flex justify-between py-2"><span className="font-medium text-gray-600">Verified Document:</span> <span className="text-green-600 font-semibold">{autoFilledData.documentType}</span></div>
                       )}
                     </div>
                   </div>
@@ -1162,7 +1217,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                     placeholder="Enter your email"
                   />
                 </div>
@@ -1176,7 +1231,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full px-3 sm:px-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                     placeholder="Enter your password"
                   />
                 </div>
@@ -1213,7 +1268,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue
               </button>
@@ -1224,23 +1279,26 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Please wait...' : isLogin ? 'Login' : 'Create Account'}
               </button>
             )}
           </form>
 
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm font-medium text-blue-900 mb-2">Getting Started:</p>
-            <ol className="text-xs text-blue-800 space-y-1 list-decimal list-inside">
+          <div className="mt-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl">
+            <p className="text-sm font-semibold text-blue-900 mb-3">Getting Started:</p>
+            <ol className="text-xs text-blue-800 space-y-2 list-decimal list-inside">
               <li>Click "Register" to create a new account</li>
               <li>Choose your role: Farmer, Trader, FPO, Corporate, Miller, Financer, or Admin</li>
               <li>Use any email address (confirmation not required)</li>
             </ol>
           </div>
+          </div>
+        </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

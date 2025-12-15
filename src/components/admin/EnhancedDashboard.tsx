@@ -91,11 +91,102 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
     total: shipments.length
   };
 
-  const marketRates = [
-    { commodity: 'Paddy', rate: '₹2,100/quintal', change: '+2.5%', trend: 'up' },
-    { commodity: 'Maize', rate: '₹1,850/quintal', change: '-1.2%', trend: 'down' },
-    { commodity: 'Wheat', rate: '₹2,400/quintal', change: '+3.8%', trend: 'up' },
-  ];
+  const [marketRates, setMarketRates] = useState([
+    { commodity: 'Paddy', rate: '₹0/quintal', change: '0%', trend: 'neutral' as 'up' | 'down' | 'neutral' },
+    { commodity: 'Maize', rate: '₹0/quintal', change: '0%', trend: 'neutral' as 'up' | 'down' | 'neutral' },
+    { commodity: 'Wheat', rate: '₹0/quintal', change: '0%', trend: 'neutral' as 'up' | 'down' | 'neutral' },
+  ]);
+
+  // Helper to normalize commodity names
+  const normalizeCommodity = (commodity: string): string | null => {
+    if (!commodity) return null;
+    const lower = commodity.toLowerCase();
+    if (lower.includes('maize') || lower.includes('corn')) return 'Maize';
+    if (lower.includes('paddy') || lower.includes('rice')) return 'Paddy';
+    if (lower.includes('wheat')) return 'Wheat';
+    return null;
+  };
+
+  // Fetch live Mandi data
+  const loadMarketRates = async () => {
+    try {
+      const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/live?limit=1000`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch live mandi prices');
+      const live = await response.json();
+      
+      if (live?.records?.length) {
+        const records = live.records.map((r: any) => {
+          const normalized = normalizeCommodity(r.commodity);
+          return normalized ? { ...r, commodity: normalized } : null;
+        }).filter(Boolean);
+
+        // Calculate average prices for each commodity
+        const commodityData: Record<string, { prices: number[], yesterdayPrices: number[] }> = {
+          Maize: { prices: [], yesterdayPrices: [] },
+          Paddy: { prices: [], yesterdayPrices: [] },
+          Wheat: { prices: [], yesterdayPrices: [] },
+        };
+
+        // Get most recent date from records
+        const allDates = records.map((r: any) => new Date(r.price_date).getTime()).filter(Boolean);
+        const mostRecentDate = allDates.length > 0 ? new Date(Math.max(...allDates)) : new Date();
+        mostRecentDate.setHours(0, 0, 0, 0);
+        
+        const yesterday = new Date(mostRecentDate);
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+
+        // Use most recent data (within last 7 days) for today, and day before for yesterday
+        records.forEach((record: any) => {
+          if (commodityData[record.commodity] && record.modal_price > 0) {
+            const priceDate = new Date(record.price_date);
+            priceDate.setHours(0, 0, 0, 0);
+            const daysDiff = Math.floor((mostRecentDate.getTime() - priceDate.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (daysDiff === 0) {
+              commodityData[record.commodity].prices.push(record.modal_price);
+            } else if (daysDiff === 1) {
+              commodityData[record.commodity].yesterdayPrices.push(record.modal_price);
+            } else if (daysDiff <= 7 && commodityData[record.commodity].prices.length === 0) {
+              // If no today's data, use recent data
+              commodityData[record.commodity].prices.push(record.modal_price);
+            }
+          }
+        });
+
+        const rates = ['Maize', 'Paddy', 'Wheat'].map(commodity => {
+          const data = commodityData[commodity];
+          const avgPrice = data.prices.length > 0
+            ? Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length)
+            : 0;
+          const avgYesterday = data.yesterdayPrices.length > 0
+            ? Math.round(data.yesterdayPrices.reduce((a, b) => a + b, 0) / data.yesterdayPrices.length)
+            : avgPrice;
+
+          const change = avgYesterday > 0 && avgPrice > 0
+            ? ((avgPrice - avgYesterday) / avgYesterday * 100).toFixed(1)
+            : '0';
+          const trend = parseFloat(change) > 0 ? 'up' : parseFloat(change) < 0 ? 'down' : 'neutral';
+
+          return {
+            commodity,
+            rate: avgPrice > 0 ? `₹${avgPrice.toLocaleString()}/quintal` : 'No data available',
+            change: avgPrice > 0 ? `${change.startsWith('-') ? '' : '+'}${change}%` : '0%',
+            trend,
+          };
+        });
+
+        setMarketRates(rates);
+      }
+    } catch (err) {
+      console.error('Error loading market rates:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadMarketRates();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -188,7 +279,11 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
                   <p className="font-medium text-gray-800">{rate.commodity}</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">{rate.rate}</p>
                 </div>
-                <div className={`text-right ${rate.trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
+                <div className={`text-right ${
+                  rate.trend === 'up' ? 'text-green-600' : 
+                  rate.trend === 'down' ? 'text-red-600' : 
+                  'text-gray-600'
+                }`}>
                   <p className="text-sm font-medium">{rate.change}</p>
                   <p className="text-xs mt-1">vs yesterday</p>
                 </div>

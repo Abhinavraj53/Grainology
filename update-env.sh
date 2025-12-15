@@ -64,13 +64,29 @@ if [ -f "$ENV_FILE" ]; then
     } >> "$ENV_FILE"
     echo "✅ Added Mandi (data.gov.in) configuration placeholders"
   fi
+
+  # Ensure FRONTEND_URL is set to the latest production frontend URL
+  if grep -q "^FRONTEND_URL=" "$ENV_FILE" 2>/dev/null; then
+    # Update existing FRONTEND_URL
+    sed -i.bak 's#^FRONTEND_URL=.*#FRONTEND_URL=https://grainologyagri.com#' "$ENV_FILE" 2>/dev/null || \
+    sed -i '' 's#^FRONTEND_URL=.*#FRONTEND_URL=https://grainologyagri.com#' "$ENV_FILE" 2>/dev/null
+    rm -f "${ENV_FILE}.bak" 2>/dev/null
+    echo "✅ Updated FRONTEND_URL to https://grainologyagri.com"
+  else
+    {
+      echo ""
+      echo "# Frontend configuration"
+      echo "FRONTEND_URL=https://grainologyagri.com"
+    } >> "$ENV_FILE"
+    echo "✅ Added FRONTEND_URL=https://grainologyagri.com"
+  fi
 else
   # Create new .env file
   cat > "$ENV_FILE" << 'ENVEOF'
 # Server Configuration
 PORT=3001
 NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=https://grainologyagri.com
 APP_BASE_URL=http://localhost:3001
 
 # MongoDB Configuration

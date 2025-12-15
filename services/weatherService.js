@@ -1,15 +1,18 @@
-// Weather service using Google Maps Geocoding API and OpenWeatherMap
+// Weather service using Google Maps Geocoding API and external weather providers
 import axios from 'axios';
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'AIzaSyB51PU-2f2npfvej1rc6AId8KO6huRWmto';
-const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
+// Google Maps API key for geocoding
+const GOOGLE_API_KEY = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+
+// Weather provider keys (WeatherAPI preferred for India, OpenWeather as fallback)
+const OPENWEATHER_API_KEY = (process.env.OPENWEATHER_API_KEY || '').trim();
+const WEATHERAPI_KEY = (process.env.WEATHER_API_KEY || process.env.WEATHERAPI_KEY || '').trim();
 const OPENWEATHER_BASE_URL = 'https://api.openweathermap.org/data/2.5';
 const WEATHERAPI_BASE_URL = 'https://api.weatherapi.com/v1';
-const WEATHERAPI_KEY = process.env.WEATHERAPI_KEY;
 
 // Get coordinates (lat/lon) from location name using Google Geocoding API
 export const geocodeLocation = async (location, state = '', country = 'India') => {

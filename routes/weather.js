@@ -16,10 +16,10 @@ router.get('/forecast', authenticate, async (req, res) => {
     }
 
     // Check if any weather API key is configured
-    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
+    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHER_API_KEY (Recommended - WeatherAPI.com)\n2. OPENWEATHER_API_KEY (OpenWeather)\n3. WEATHERAPI_KEY (legacy name)'
       });
     }
 
@@ -91,10 +91,10 @@ router.get('/current', authenticate, async (req, res) => {
     }
 
     // Check if any weather API key is configured
-    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
+    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHER_API_KEY (Recommended - WeatherAPI.com)\n2. OPENWEATHER_API_KEY (OpenWeather)\n3. WEATHERAPI_KEY (legacy name)'
       });
     }
 

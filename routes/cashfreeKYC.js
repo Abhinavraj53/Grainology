@@ -322,12 +322,28 @@ router.post('/verify-pan', async (req, res) => {
       );
 
       const data = directResponse.data;
-      if (data?.status === 'SUCCESS' || data?.status === 'VALID') {
+
+      // Cashfree PAN response can have multiple success indicators:
+      // - status === 'SUCCESS' or 'VALID'
+      // - valid === true
+      // - pan_status === 'VALID'
+      const isValidPan =
+        data?.status === 'SUCCESS' ||
+        data?.status === 'VALID' ||
+        data?.valid === true ||
+        data?.pan_status === 'VALID';
+
+      if (isValidPan) {
         return res.json({
           success: true,
           verified: true,
           pan: cleanPan,
-          name: data.name || cleanName,
+          // Prefer registered_name / name_pan_card / name if available, else fallback to provided name
+          name:
+            data.registered_name ||
+            data.name_pan_card ||
+            data.name ||
+            cleanName,
           type: data.type || 'Individual',
           details: data,
         });

@@ -1,15 +1,15 @@
-// Weather service using Google Maps Geocoding API and Google Weather API
+// Weather service using Google Maps Geocoding API and Open-Meteo Weather API
 import axios from 'axios';
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-// Google Maps API key for geocoding and weather
+// Google Maps API key for geocoding (Open-Meteo doesn't need an API key)
 const GOOGLE_API_KEY = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || process.env.WEATHER_API_KEY || '').trim();
 
-// Google Weather API base URL
-const GOOGLE_WEATHER_BASE_URL = 'https://weather.googleapis.com/v1';
+// Open-Meteo Weather API base URL (free, no API key required)
+const OPEN_METEO_BASE_URL = 'https://api.open-meteo.com/v1';
 
 // Fallback coordinates for major Indian cities (when Geocoding API fails)
 const INDIAN_CITY_COORDINATES = {
@@ -214,137 +214,194 @@ export const geocodeLocation = async (location, state = '', country = 'India') =
   }
 };
 
-// Get current weather for a location using Google Weather API
-// Uses forecastDaily endpoint (which works) and extracts today's data
+// Get current weather for a location using Open-Meteo API
 export const getCurrentWeather = async (location, state = '') => {
   try {
     if (!GOOGLE_API_KEY) {
-      throw new Error('Google API key not configured');
+      throw new Error('Google API key not configured for geocoding');
     }
 
-    // Get coordinates first using Google Geocoding
+    // Get coordinates first using Google Geocoding (this works!)
     const coords = await geocodeLocation(location, state);
     
-    // Use daily forecast endpoint (which works) and get today's data
-    // This is a workaround since currentConditions:lookup endpoint returns 404
-    const forecastUrl = `${GOOGLE_WEATHER_BASE_URL}/forecastDaily:lookup?key=${GOOGLE_API_KEY}`;
-    const response = await axios.post(forecastUrl, {
-      location: {
-        latitude: coords.lat,
-        longitude: coords.lon
-      },
-      days: 1 // Just get today
-    });
-
-    // Get today's forecast (first day)
-    const dailyForecast = response.data.dailyForecast;
-    if (!dailyForecast || !dailyForecast.days || dailyForecast.days.length === 0) {
-      throw new Error('No weather data available for today');
-    }
+    // Use Open-Meteo API for current weather (free, no API key required)
+    const weatherUrl = `${OPEN_METEO_BASE_URL}/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation&timezone=auto`;
     
-    const today = dailyForecast.days[0];
-    
-    return {
-      location: coords.name,
-      state: coords.state,
-      latitude: coords.lat,
-      longitude: coords.lon,
-      country: coords.country,
-      formatted_address: coords.formatted_address,
-      date: new Date(),
-      temperature_min: today.temperatureMin?.value || today.temperatureMin || 0,
-      temperature_max: today.temperatureMax?.value || today.temperatureMax || 0,
-      humidity: today.humidityAvg?.value || today.humidityAvg || 0,
-      rainfall: today.precipitationAmount?.value || today.precipitationAmount || 0,
-      wind_speed: today.windSpeedAvg?.value || today.windSpeedAvg || 0,
-      weather_condition: today.condition || 'Unknown',
-      weather_description: today.condition || '',
-      weather_icon: today.icon || '',
-      pressure: null, // Not available in daily forecast
-      visibility: null, // Not available in daily forecast
-      forecast_data: {
-        feels_like: today.temperatureAvg?.value || today.temperatureAvg || 0,
-        temp_min: today.temperatureMin?.value || today.temperatureMin || 0,
-        temp_max: today.temperatureMax?.value || today.temperatureMax || 0,
-        weather_icon: today.icon || '',
-        weather_description: today.condition || ''
+    try {
+      const response = await axios.get(weatherUrl);
+      const data = response.data;
+      
+      if (!data.current) {
+        throw new Error('No current weather data available');
       }
-    };
+      
+      const current = data.current;
+      const hourly = data.hourly;
+      
+      // Get today's min/max from hourly data
+      const todayTemps = hourly?.temperature_2m?.slice(0, 24) || [];
+      const todayHumidity = hourly?.relative_humidity_2m?.slice(0, 24) || [];
+      const todayWind = hourly?.wind_speed_10m?.slice(0, 24) || [];
+      const todayPrecip = hourly?.precipitation?.slice(0, 24) || [];
+      
+      const tempMin = todayTemps.length > 0 ? Math.min(...todayTemps) : current.temperature_2m;
+      const tempMax = todayTemps.length > 0 ? Math.max(...todayTemps) : current.temperature_2m;
+      const avgHumidity = todayHumidity.length > 0 ? Math.round(todayHumidity.reduce((a, b) => a + b, 0) / todayHumidity.length) : current.relative_humidity_2m;
+      const avgWind = todayWind.length > 0 ? (todayWind.reduce((a, b) => a + b, 0) / todayWind.length).toFixed(1) : current.wind_speed_10m;
+      const totalPrecip = todayPrecip.length > 0 ? todayPrecip.reduce((a, b) => a + b, 0).toFixed(1) : (current.precipitation || 0);
+      
+      // Map weather code to condition (WMO Weather interpretation codes)
+      const weatherCondition = getWeatherConditionFromCode(current.weather_code);
+      
+      return {
+        location: coords.name,
+        state: coords.state,
+        latitude: coords.lat,
+        longitude: coords.lon,
+        country: coords.country,
+        formatted_address: coords.formatted_address,
+        date: new Date(),
+        temperature_min: tempMin,
+        temperature_max: tempMax,
+        humidity: avgHumidity,
+        rainfall: parseFloat(totalPrecip),
+        wind_speed: parseFloat(avgWind),
+        weather_condition: weatherCondition,
+        weather_description: weatherCondition,
+        weather_icon: getWeatherIconFromCode(current.weather_code),
+        pressure: null, // Not available in free tier
+        visibility: null, // Not available in free tier
+        forecast_data: {
+          feels_like: current.temperature_2m,
+          temp_min: tempMin,
+          temp_max: tempMax,
+          weather_icon: getWeatherIconFromCode(current.weather_code),
+          weather_description: weatherCondition
+        }
+      };
+    } catch (weatherError) {
+      console.error('Open-Meteo API error:', weatherError.message);
+      if (weatherError.response) {
+        console.error('Open-Meteo API response:', weatherError.response.data);
+      }
+      throw new Error(`Failed to fetch weather data: ${weatherError.message}`);
+    }
   } catch (error) {
     console.error('Get current weather error:', error.message);
-    if (error.response) {
-      console.error('Google Weather API error:', error.response.data);
-    }
     throw error;
   }
 };
 
-// Get weather forecast using Google Weather API
+// Get weather forecast using Open-Meteo API
 export const getWeatherForecast = async (location, state = '', days = 5) => {
   try {
     if (!GOOGLE_API_KEY) {
-      throw new Error('Google API key not configured');
+      throw new Error('Google API key not configured for geocoding');
     }
 
-    // Get coordinates first using Google Geocoding
+    // Get coordinates first using Google Geocoding (this works!)
     const coords = await geocodeLocation(location, state);
     
-    // Use Google Weather API for daily forecast (supports up to 10 days)
-    const forecastDays = Math.min(days, 10);
-    const forecastUrl = `${GOOGLE_WEATHER_BASE_URL}/forecastDaily:lookup?key=${GOOGLE_API_KEY}`;
-    const response = await axios.post(forecastUrl, {
-      location: {
-        latitude: coords.lat,
-        longitude: coords.lon
-      },
-      days: forecastDays
-    });
-
-    // Transform Google Weather API response to match existing format
-    const dailyForecast = response.data.dailyForecast;
-    const forecasts = dailyForecast.days.map((day) => {
-      // Extract date from timestamp or date string
-      const date = day.date ? new Date(day.date) : new Date();
-      const dateKey = date.toISOString().split('T')[0];
+    // Use Open-Meteo API for daily forecast (supports up to 16 days, free, no API key required)
+    const forecastDays = Math.min(days, 16);
+    const weatherUrl = `${OPEN_METEO_BASE_URL}/forecast?latitude=${coords.lat}&longitude=${coords.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_max,weather_code&timezone=auto&forecast_days=${forecastDays}`;
+    
+    try {
+      const response = await axios.get(weatherUrl);
+      const data = response.data;
+      
+      if (!data.daily || !data.daily.time) {
+        throw new Error('Invalid weather data format received from API');
+      }
+      
+      const daily = data.daily;
+      const forecasts = daily.time.map((dateStr, index) => {
+        const date = new Date(dateStr);
+        const dateKey = date.toISOString().split('T')[0];
+        
+        // Calculate average temperature
+        const tempMin = daily.temperature_2m_min[index] || 0;
+        const tempMax = daily.temperature_2m_max[index] || 0;
+        const tempAvg = ((tempMin + tempMax) / 2).toFixed(1);
+        
+        // Map weather code to condition
+        const weatherCode = daily.weather_code[index] || 0;
+        const weatherCondition = getWeatherConditionFromCode(weatherCode);
+        
+        return {
+          date: dateKey,
+          date_obj: date,
+          temperature_min: tempMin,
+          temperature_max: tempMax,
+          temperature_avg: parseFloat(tempAvg),
+          humidity: daily.relative_humidity_2m_max[index] || 0,
+          rainfall: daily.precipitation_sum[index] || 0,
+          wind_speed: daily.wind_speed_10m_max[index] || 0,
+          weather_condition: weatherCondition,
+          forecast_data: {
+            hourly_forecasts: [], // Can be populated with hourly data if needed
+            weather_icon: getWeatherIconFromCode(weatherCode),
+            weather_description: weatherCondition,
+            formatted_address: coords.formatted_address
+          }
+        };
+      });
       
       return {
-        date: dateKey,
-        date_obj: date,
-        temperature_min: day.temperatureMin?.value || day.temperatureMin || 0,
-        temperature_max: day.temperatureMax?.value || day.temperatureMax || 0,
-        temperature_avg: day.temperatureAvg?.value || day.temperatureAvg || 0,
-        humidity: day.humidityAvg?.value || day.humidityAvg || 0,
-        rainfall: day.precipitationAmount?.value || day.precipitationAmount || 0,
-        wind_speed: day.windSpeedAvg?.value || day.windSpeedAvg || 0,
-        weather_condition: day.condition || 'Unknown',
-        forecast_data: {
-          hourly_forecasts: [], // Google Weather API doesn't provide hourly in daily forecast
-          weather_icon: day.icon || '',
-          weather_description: day.condition || '',
-          formatted_address: coords.formatted_address
-        }
+        location: coords.name,
+        state: coords.state,
+        latitude: coords.lat,
+        longitude: coords.lon,
+        country: coords.country,
+        formatted_address: coords.formatted_address,
+        forecasts: forecasts
       };
-    });
-    
-    return {
-      location: coords.name,
-      state: coords.state,
-      latitude: coords.lat,
-      longitude: coords.lon,
-      country: coords.country,
-      formatted_address: coords.formatted_address,
-      forecasts: forecasts
-    };
+    } catch (weatherError) {
+      console.error('Open-Meteo API error:', weatherError.message);
+      if (weatherError.response) {
+        console.error('Open-Meteo API response:', weatherError.response.data);
+      }
+      throw new Error(`Failed to fetch weather forecast: ${weatherError.message}`);
+    }
   } catch (error) {
     console.error('Get weather forecast error:', error.message);
-    if (error.response) {
-      console.error('Google Weather API error:', error.response.data);
-    }
     throw error;
   }
 };
 
-// Transform OpenWeatherMap data to our format
+// Helper function to convert Open-Meteo weather code to readable condition
+// Based on WMO Weather interpretation codes (WW)
+const getWeatherConditionFromCode = (code) => {
+  if (code === 0) return 'Clear sky';
+  if (code >= 1 && code <= 3) return 'Partly cloudy';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 51 && code <= 55) return 'Drizzle';
+  if (code === 56 || code === 57) return 'Freezing drizzle';
+  if (code >= 61 && code <= 65) return 'Rain';
+  if (code === 66 || code === 67) return 'Freezing rain';
+  if (code >= 71 && code <= 75) return 'Snow';
+  if (code === 77) return 'Snow grains';
+  if (code >= 80 && code <= 82) return 'Rain showers';
+  if (code === 85 || code === 86) return 'Snow showers';
+  if (code === 95) return 'Thunderstorm';
+  if (code === 96 || code === 99) return 'Thunderstorm with hail';
+  return 'Unknown';
+};
+
+// Helper function to get weather icon from Open-Meteo weather code
+const getWeatherIconFromCode = (code) => {
+  if (code === 0) return '☀️'; // Clear sky
+  if (code >= 1 && code <= 3) return '⛅'; // Partly cloudy
+  if (code === 45 || code === 48) return '🌫️'; // Fog
+  if (code >= 51 && code <= 57) return '🌦️'; // Drizzle
+  if (code >= 61 && code <= 67) return '🌧️'; // Rain
+  if (code >= 71 && code <= 77) return '❄️'; // Snow
+  if (code >= 80 && code <= 86) return '🌦️'; // Showers
+  if (code >= 95 && code <= 99) return '⛈️'; // Thunderstorm
+  return '🌤️'; // Default
+};
+
+// Transform OpenWeatherMap data to our format (legacy, kept for reference)
 const transformWeatherData = (data, coords, type) => {
   return {
     location: coords.name,

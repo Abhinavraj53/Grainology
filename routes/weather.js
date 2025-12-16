@@ -6,7 +6,7 @@ import { getCurrentWeather, getWeatherForecast } from '../services/weatherServic
 
 const router = express.Router();
 
-// Get weather forecast for a location (fetches from OpenWeatherMap API)
+// Get weather forecast for a location (uses Open-Meteo API for weather, Google Geocoding for location)
 router.get('/forecast', authenticate, async (req, res) => {
   try {
     const { location, state, days = 5 } = req.query;
@@ -15,11 +15,11 @@ router.get('/forecast', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Location parameter is required' });
     }
 
-    // Check if Google API key is configured
+    // Check if Google API key is configured (needed for geocoding only, Open-Meteo doesn't need API key)
     if (!process.env.GOOGLE_MAPS_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.WEATHER_API_KEY) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Google Maps API key is required. Please add one of these to your .env file:\n1. GOOGLE_MAPS_API_KEY (Recommended)\n2. GOOGLE_API_KEY\n3. WEATHER_API_KEY (fallback)'
+        message: 'Google Maps API key is required for geocoding. Please add one of these to your .env file:\n1. GOOGLE_MAPS_API_KEY (Recommended)\n2. GOOGLE_API_KEY\n3. WEATHER_API_KEY (fallback)\n\nNote: Open-Meteo weather API is free and doesn\'t require an API key.'
       });
     }
 
@@ -70,7 +70,7 @@ router.get('/forecast', authenticate, async (req, res) => {
     if (error.message.includes('API key') || error.message.includes('not configured')) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Google Maps API key is required. Please add GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY to your .env file. Make sure the Weather API is enabled in your Google Cloud project.'
+        message: 'Google Maps API key is required for geocoding. Please add GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY to your .env file. Open-Meteo weather API is free and doesn\'t require an API key.'
       });
     }
     
@@ -81,7 +81,7 @@ router.get('/forecast', authenticate, async (req, res) => {
   }
 });
 
-// Get current weather for a location
+// Get current weather for a location (uses Open-Meteo API)
 router.get('/current', authenticate, async (req, res) => {
   try {
     const { location, state } = req.query;
@@ -90,11 +90,11 @@ router.get('/current', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Location parameter is required' });
     }
 
-    // Check if Google API key is configured
+    // Check if Google API key is configured (needed for geocoding only, Open-Meteo doesn't need API key)
     if (!process.env.GOOGLE_MAPS_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.WEATHER_API_KEY) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Google Maps API key is required. Please add one of these to your .env file:\n1. GOOGLE_MAPS_API_KEY (Recommended)\n2. GOOGLE_API_KEY\n3. WEATHER_API_KEY (fallback)'
+        message: 'Google Maps API key is required for geocoding. Please add one of these to your .env file:\n1. GOOGLE_MAPS_API_KEY (Recommended)\n2. GOOGLE_API_KEY\n3. WEATHER_API_KEY (fallback)\n\nNote: Open-Meteo weather API is free and doesn\'t require an API key.'
       });
     }
 
@@ -107,7 +107,7 @@ router.get('/current', authenticate, async (req, res) => {
     if (error.message.includes('API key') || error.message.includes('not configured')) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Google Maps API key is required. Please add GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY to your .env file. Make sure the Weather API is enabled in your Google Cloud project.'
+        message: 'Google Maps API key is required for geocoding. Please add GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY to your .env file. Open-Meteo weather API is free and doesn\'t require an API key.'
       });
     }
     

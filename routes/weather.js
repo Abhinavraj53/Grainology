@@ -15,11 +15,11 @@ router.get('/forecast', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Location parameter is required' });
     }
 
-    // Check if any weather API key is configured
-    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
+    // Check if Google API key is configured
+    if (!process.env.GOOGLE_MAPS_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.WEATHER_API_KEY) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHER_API_KEY (Recommended - WeatherAPI.com)\n2. OPENWEATHER_API_KEY (OpenWeather)\n3. WEATHERAPI_KEY (legacy name)'
+        message: 'Google Maps API key is required. Please add one of these to your .env file:\n1. GOOGLE_MAPS_API_KEY (Recommended)\n2. GOOGLE_API_KEY\n3. WEATHER_API_KEY (fallback)'
       });
     }
 
@@ -70,7 +70,7 @@ router.get('/forecast', authenticate, async (req, res) => {
     if (error.message.includes('API key') || error.message.includes('not configured')) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+        message: 'Google Maps API key is required. Please add GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY to your .env file. Make sure the Weather API is enabled in your Google Cloud project.'
       });
     }
     
@@ -90,11 +90,11 @@ router.get('/current', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Location parameter is required' });
     }
 
-    // Check if any weather API key is configured
-    if (!process.env.OPENWEATHER_API_KEY && !process.env.WEATHER_API_KEY && !process.env.WEATHERAPI_KEY) {
+    // Check if Google API key is configured
+    if (!process.env.GOOGLE_MAPS_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.WEATHER_API_KEY) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHER_API_KEY (Recommended - WeatherAPI.com)\n2. OPENWEATHER_API_KEY (OpenWeather)\n3. WEATHERAPI_KEY (legacy name)'
+        message: 'Google Maps API key is required. Please add one of these to your .env file:\n1. GOOGLE_MAPS_API_KEY (Recommended)\n2. GOOGLE_API_KEY\n3. WEATHER_API_KEY (fallback)'
       });
     }
 
@@ -107,7 +107,7 @@ router.get('/current', authenticate, async (req, res) => {
     if (error.message.includes('API key') || error.message.includes('not configured')) {
       return res.status(503).json({ 
         error: 'Weather service not configured',
-        message: 'Weather API key is required. Please add one of these to your .env file:\n1. WEATHERAPI_KEY (Recommended - get at https://www.weatherapi.com/signup.aspx)\n2. OPENWEATHER_API_KEY (get at https://openweathermap.org/api)'
+        message: 'Google Maps API key is required. Please add GOOGLE_MAPS_API_KEY or GOOGLE_API_KEY to your .env file. Make sure the Weather API is enabled in your Google Cloud project.'
       });
     }
     

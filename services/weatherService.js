@@ -1,18 +1,15 @@
-// Weather service using Google Maps Geocoding API and external weather providers
+// Weather service using Google Maps Geocoding API and Google Weather API
 import axios from 'axios';
 import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-// Google Maps API key for geocoding
-const GOOGLE_API_KEY = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || '').trim();
+// Google Maps API key for geocoding and weather
+const GOOGLE_API_KEY = (process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_API_KEY || process.env.WEATHER_API_KEY || '').trim();
 
-// Weather provider keys (WeatherAPI preferred for India, OpenWeather as fallback)
-const OPENWEATHER_API_KEY = (process.env.OPENWEATHER_API_KEY || '').trim();
-const WEATHERAPI_KEY = (process.env.WEATHER_API_KEY || process.env.WEATHERAPI_KEY || '').trim();
-const OPENWEATHER_BASE_URL = 'https://api.openweathermap.org/data/2.5';
-const WEATHERAPI_BASE_URL = 'https://api.weatherapi.com/v1';
+// Google Weather API base URL
+const GOOGLE_WEATHER_BASE_URL = 'https://weather.googleapis.com/v1';
 
 // Get coordinates (lat/lon) from location name using Google Geocoding API
 export const geocodeLocation = async (location, state = '', country = 'India') => {
@@ -62,93 +59,26 @@ export const geocodeLocation = async (location, state = '', country = 'India') =
   }
 };
 
-// Get current weather for a location
+// Get current weather for a location using Google Weather API
 export const getCurrentWeather = async (location, state = '') => {
   try {
-    if (!OPENWEATHER_API_KEY) {
-      throw new Error('OpenWeatherMap API key not configured');
+    if (!GOOGLE_API_KEY) {
+      throw new Error('Google API key not configured');
     }
 
     // Get coordinates first using Google Geocoding
     const coords = await geocodeLocation(location, state);
     
-    // Get current weather
-    const weatherUrl = `${OPENWEATHER_BASE_URL}/weather?lat=${coords.lat}&lon=${coords.lon}&appid=${OPENWEATHER_API_KEY}&units=metric`;
-    const response = await axios.get(weatherUrl);
-    
-    return transformWeatherData(response.data, coords, 'current');
-  } catch (error) {
-    console.error('Get current weather error:', error.message);
-    throw error;
-  }
-};
-
-// Get weather forecast (5 days, 3-hour intervals)
-export const getWeatherForecast = async (location, state = '', days = 5) => {
-  try {
-    // Try WeatherAPI first if key is available (more accurate for India)
-    if (WEATHERAPI_KEY) {
-      try {
-        const locationQuery = state ? `${location}, ${state}, India` : `${location}, India`;
-        const weatherApiUrl = `${WEATHERAPI_BASE_URL}/forecast.json?key=${WEATHERAPI_KEY}&q=${encodeURIComponent(locationQuery)}&days=${days}&aqi=no&alerts=no`;
-        const response = await axios.get(weatherApiUrl);
-        
-        const forecasts = response.data.forecast.forecastday.map(day => ({
-          date: day.date,
-          date_obj: new Date(day.date),
-          temperature_min: day.day.mintemp_c,
-          temperature_max: day.day.maxtemp_c,
-          temperature_avg: day.day.avgtemp_c,
-          humidity: day.day.avghumidity,
-          rainfall: day.day.totalprecip_mm,
-          wind_speed: day.day.maxwind_kph,
-          weather_condition: day.day.condition.text,
-          forecast_data: {
-            hourly_forecasts: day.hour.map(h => ({
-              time: h.time,
-              temp: h.temp_c,
-              condition: h.condition.text,
-              humidity: h.humidity,
-              wind_speed: h.wind_kph,
-              rainfall: h.precip_mm
-            })),
-            weather_icon: day.day.condition.icon,
-            weather_description: day.day.condition.text
-          }
-        }));
-        
-        return {
-          location: response.data.location.name,
-          state: response.data.location.region,
-          latitude: response.data.location.lat,
-          longitude: response.data.location.lon,
-          country: response.data.location.country,
-          formatted_address: `${response.data.location.name}, ${response.data.location.region}, ${response.data.location.country}`,
-          forecasts: forecasts
-        };
-      } catch (weatherApiError) {
-        console.log('WeatherAPI failed, trying OpenWeatherMap...', weatherApiError.message);
+    // Use Google Weather API for current conditions
+    const currentConditionsUrl = `${GOOGLE_WEATHER_BASE_URL}/currentConditions:lookup?key=${GOOGLE_API_KEY}`;
+    const response = await axios.post(currentConditionsUrl, {
+      location: {
+        latitude: coords.lat,
+        longitude: coords.lon
       }
-    }
-    
-    // Fallback to OpenWeatherMap
-    if (!OPENWEATHER_API_KEY && !WEATHERAPI_KEY) {
-      throw new Error('No weather API key configured. Please add OPENWEATHER_API_KEY or WEATHERAPI_KEY to your .env file');
-    }
-    
-    if (!OPENWEATHER_API_KEY) {
-      throw new Error('OpenWeatherMap API key is required when WeatherAPI fails. Please add OPENWEATHER_API_KEY to your .env file or fix WeatherAPI configuration');
-    }
+    });
 
-    // Get coordinates first using Google Geocoding
-    const coords = await geocodeLocation(location, state);
-    
-    // Get forecast (5 days, 3-hour intervals)
-    const forecastUrl = `${OPENWEATHER_BASE_URL}/forecast?lat=${coords.lat}&lon=${coords.lon}&appid=${OPENWEATHER_API_KEY}&units=metric`;
-    const response = await axios.get(forecastUrl);
-    
-    // Transform and group by day
-    const dailyForecasts = groupForecastsByDay(response.data.list, days);
+    const data = response.data.currentConditions;
     
     return {
       location: coords.name,
@@ -157,10 +87,95 @@ export const getWeatherForecast = async (location, state = '', days = 5) => {
       longitude: coords.lon,
       country: coords.country,
       formatted_address: coords.formatted_address,
-      forecasts: dailyForecasts
+      date: new Date(),
+      temperature_min: data.temperature?.value || data.temperature || 0,
+      temperature_max: data.temperature?.value || data.temperature || 0,
+      humidity: data.humidity?.value || data.humidity || 0,
+      rainfall: data.precipitation?.value || 0,
+      wind_speed: data.windSpeed?.value || data.windSpeed || 0,
+      weather_condition: data.condition || 'Unknown',
+      weather_description: data.condition || '',
+      weather_icon: data.icon || '',
+      pressure: data.pressure?.value || null,
+      visibility: data.visibility?.value || null,
+      forecast_data: {
+        feels_like: data.temperature?.value || data.temperature || 0,
+        temp_min: data.temperature?.value || data.temperature || 0,
+        temp_max: data.temperature?.value || data.temperature || 0,
+        weather_icon: data.icon || '',
+        weather_description: data.condition || ''
+      }
+    };
+  } catch (error) {
+    console.error('Get current weather error:', error.message);
+    if (error.response) {
+      console.error('Google Weather API error:', error.response.data);
+    }
+    throw error;
+  }
+};
+
+// Get weather forecast using Google Weather API
+export const getWeatherForecast = async (location, state = '', days = 5) => {
+  try {
+    if (!GOOGLE_API_KEY) {
+      throw new Error('Google API key not configured');
+    }
+
+    // Get coordinates first using Google Geocoding
+    const coords = await geocodeLocation(location, state);
+    
+    // Use Google Weather API for daily forecast (supports up to 10 days)
+    const forecastDays = Math.min(days, 10);
+    const forecastUrl = `${GOOGLE_WEATHER_BASE_URL}/forecastDaily:lookup?key=${GOOGLE_API_KEY}`;
+    const response = await axios.post(forecastUrl, {
+      location: {
+        latitude: coords.lat,
+        longitude: coords.lon
+      },
+      days: forecastDays
+    });
+
+    // Transform Google Weather API response to match existing format
+    const dailyForecast = response.data.dailyForecast;
+    const forecasts = dailyForecast.days.map((day) => {
+      // Extract date from timestamp or date string
+      const date = day.date ? new Date(day.date) : new Date();
+      const dateKey = date.toISOString().split('T')[0];
+      
+      return {
+        date: dateKey,
+        date_obj: date,
+        temperature_min: day.temperatureMin?.value || day.temperatureMin || 0,
+        temperature_max: day.temperatureMax?.value || day.temperatureMax || 0,
+        temperature_avg: day.temperatureAvg?.value || day.temperatureAvg || 0,
+        humidity: day.humidityAvg?.value || day.humidityAvg || 0,
+        rainfall: day.precipitationAmount?.value || day.precipitationAmount || 0,
+        wind_speed: day.windSpeedAvg?.value || day.windSpeedAvg || 0,
+        weather_condition: day.condition || 'Unknown',
+        forecast_data: {
+          hourly_forecasts: [], // Google Weather API doesn't provide hourly in daily forecast
+          weather_icon: day.icon || '',
+          weather_description: day.condition || '',
+          formatted_address: coords.formatted_address
+        }
+      };
+    });
+    
+    return {
+      location: coords.name,
+      state: coords.state,
+      latitude: coords.lat,
+      longitude: coords.lon,
+      country: coords.country,
+      formatted_address: coords.formatted_address,
+      forecasts: forecasts
     };
   } catch (error) {
     console.error('Get weather forecast error:', error.message);
+    if (error.response) {
+      console.error('Google Weather API error:', error.response.data);
+    }
     throw error;
   }
 };

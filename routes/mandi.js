@@ -12,6 +12,232 @@ const MANDI_API_KEY = process.env.MANDI_API_KEY || '';
 // Default to variety-wise daily market prices resource if env not provided
 const MANDI_RESOURCE_ID = process.env.MANDI_RESOURCE_ID || '35985678-0d79-46b4-9ed6-6f13308a1d24';
 
+// MSP (Minimum Support Price) data for 2025-26 season
+const MSP_DATA = {
+  'Bajra': 2775.00,
+  'Pearl Millet': 2775.00,
+  'Cumbu': 2775.00,
+  'Barley': 1980.00,
+  'Jau': 1980.00,
+  'Jowar': 3699.00,
+  'Sorghum': 3699.00,
+  'Maize': 2400.00,
+  'Paddy': 2369.00,
+  'Common Paddy': 2369.00,
+  'Ragi': 4886.00,
+  'Finger Millet': 4886.00,
+  'Wheat': 2425.00,
+  'Cotton': 7710.00,
+  'Copra': 12100.00,
+  'Groundnut': 7263.00,
+  'Soybean': 4600.00,
+  'Sunflower': 7200.00,
+  'Tomato': 0, // No MSP for vegetables
+  'Onion': 0,
+  'Potato': 0,
+};
+
+// Commodity groups mapping
+const COMMODITY_GROUPS = {
+  'Cereals': ['Bajra', 'Pearl Millet', 'Cumbu', 'Barley', 'Jau', 'Jowar', 'Sorghum', 'Maize', 'Paddy', 'Common Paddy', 'Ragi', 'Finger Millet', 'Wheat'],
+  'Fibre Crops': ['Cotton'],
+  'Oil Seeds': ['Copra', 'Groundnut', 'Soybean', 'Sunflower'],
+  'Vegetables': ['Tomato', 'Onion', 'Potato'],
+  'Others': []
+};
+
+// Helper to get commodity group
+const getCommodityGroup = (commodity) => {
+  if (!commodity) return 'Others';
+  const commodityUpper = commodity.trim();
+  for (const [group, commodities] of Object.entries(COMMODITY_GROUPS)) {
+    if (commodities.some(c => commodityUpper.includes(c) || c.includes(commodityUpper))) {
+      return group;
+    }
+  }
+  return 'Others';
+};
+
+// Helper to get MSP for a commodity
+const getMSP = (commodity) => {
+  if (!commodity) return 0;
+  const commodityUpper = commodity.trim();
+  for (const [key, value] of Object.entries(MSP_DATA)) {
+    if (commodityUpper.includes(key) || key.includes(commodityUpper)) {
+      return value;
+    }
+  }
+  return 0;
+};
+
+// Helper to extract arrival quantity
+const extractArrival = (record) => {
+  const possibleKeys = [
+    'Arrival', 'arrival', 'Arrival_Qty', 'arrival_qty',
+    'Arrival_Metric_Tonnes', 'arrival_metric_tonnes',
+    'Arrival_MT', 'arrival_mt', 'Quantity', 'quantity'
+  ];
+  
+  for (const key of possibleKeys) {
+    const value = record[key];
+    if (value !== undefined && value !== null && value !== '') {
+      const cleaned = String(value).replace(/,/g, '').trim();
+      const num = Number(cleaned);
+      if (!isNaN(num) && num >= 0) {
+        return num;
+      }
+    }
+  }
+  return 0;
+};
+
+// AgMarkNet-style endpoint: Grouped data by commodity with date columns
+router.get('/agmarknet', async (req, res) => {
+  try {
+    if (!MANDI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'MANDI_API_KEY is not configured on the server'
+      });
+    }
+
+    const {
+      state = 'all',
+      district = 'all',
+      market = 'all',
+      commodity_group = 'all',
+      commodity = 'all',
+      variety = 'all',
+      grade = 'FAQ',
+      limit = 1000,
+      offset = 0,
+    } = req.query;
+
+    const params = new URLSearchParams({
+      'api-key': MANDI_API_KEY,
+      format: 'json',
+      limit: Math.min(Number(limit) || 1000, 5000).toString(),
+      offset: (Number(offset) || 0).toString(),
+    });
+
+    // Apply filters
+    if (state && state !== 'all') params.append('filters[state.keyword]', state);
+    if (district && district !== 'all') params.append('filters[district]', district);
+    if (market && market !== 'all') params.append('filters[market]', market);
+    if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
+    if (variety && variety !== 'all') params.append('filters[variety]', variety);
+
+    const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
+    const response = await axios.get(url, { timeout: 15000 });
+
+    const records = response.data?.records || [];
+
+    // Helper to extract price
+    const extractPrice = (record) => {
+      const possibleKeys = [
+        'Modal_Price', 'modal_price', 'ModalPrice', 'modalprice',
+        'modal_price_rs_quintal', 'modal_price_rs_per_quintal',
+        'Price', 'price', 'Avg_Price', 'avg_price'
+      ];
+      
+      for (const key of possibleKeys) {
+        const value = record[key];
+        if (value !== undefined && value !== null && value !== '') {
+          const cleaned = String(value).replace(/,/g, '').trim();
+          const num = Number(cleaned);
+          if (!isNaN(num) && num > 0) {
+            return num;
+          }
+        }
+      }
+      return 0;
+    };
+
+    // Group data by commodity and date
+    const grouped = {};
+    
+    records.forEach(record => {
+      const commodityName = record.Commodity || record.commodity || record.commodity_name || '';
+      const varietyName = record.Variety || record.variety || record.variety_name || '';
+      const dateStr = record.Arrival_Date || record.arrival_date || record.date || '';
+      
+      if (!commodityName) return;
+      
+      // Create a unique key for commodity + variety combination
+      const key = varietyName ? `${commodityName} - ${varietyName}` : commodityName;
+      
+      if (!grouped[key]) {
+        grouped[key] = {
+          commodity_group: getCommodityGroup(commodityName),
+          commodity: commodityName,
+          variety: varietyName || '',
+          msp: getMSP(commodityName),
+          dates: {}
+        };
+      }
+      
+      if (dateStr) {
+        const dateKey = dateStr.split('T')[0]; // Get YYYY-MM-DD format
+        if (!grouped[key].dates[dateKey]) {
+          grouped[key].dates[dateKey] = {
+            price: extractPrice(record),
+            arrival: extractArrival(record)
+          };
+        } else {
+          // If multiple records for same date, average the price and sum arrivals
+          const existing = grouped[key].dates[dateKey];
+          const newPrice = extractPrice(record);
+          const newArrival = extractArrival(record);
+          
+          if (newPrice > 0) {
+            existing.price = existing.price > 0 
+              ? (existing.price + newPrice) / 2 
+              : newPrice;
+          }
+          existing.arrival += newArrival;
+        }
+      }
+    });
+
+    // Convert to array and filter by commodity group if specified
+    let result = Object.values(grouped);
+    
+    if (commodity_group && commodity_group !== 'all') {
+      result = result.filter(item => item.commodity_group === commodity_group);
+    }
+
+    // Sort by commodity group and commodity name
+    result.sort((a, b) => {
+      if (a.commodity_group !== b.commodity_group) {
+        return a.commodity_group.localeCompare(b.commodity_group);
+      }
+      return a.commodity.localeCompare(b.commodity);
+    });
+
+    // Get unique dates from all records (last 3 days)
+    const allDates = new Set();
+    result.forEach(item => {
+      Object.keys(item.dates).forEach(date => allDates.add(date));
+    });
+    const sortedDates = Array.from(allDates).sort().reverse().slice(0, 3);
+
+    return res.json({
+      success: true,
+      data: result,
+      dates: sortedDates,
+      filters: { state, district, market, commodity_group, commodity, variety, grade },
+      count: result.length
+    });
+  } catch (error) {
+    console.error('AgMarkNet API error:', error);
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      error: 'Failed to fetch AgMarkNet-style data',
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
 // Public: live mandi prices from data.gov.in (no auth required)
 router.get('/live', async (req, res) => {
   try {
@@ -188,6 +414,71 @@ router.get('/live', async (req, res) => {
       success: false,
       error: 'Failed to fetch live mandi prices',
       details: error.response?.data || error.message,
+    });
+  }
+});
+
+// Get filter options (states, districts, markets, commodities, varieties)
+router.get('/filters', async (req, res) => {
+  try {
+    if (!MANDI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'MANDI_API_KEY is not configured on the server'
+      });
+    }
+
+    // Fetch a large sample to get all unique values
+    const params = new URLSearchParams({
+      'api-key': MANDI_API_KEY,
+      format: 'json',
+      limit: '5000',
+      offset: '0',
+    });
+
+    const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
+    const response = await axios.get(url, { timeout: 15000 });
+    const records = response.data?.records || [];
+
+    const states = new Set();
+    const districts = new Set();
+    const markets = new Set();
+    const commodities = new Set();
+    const varieties = new Set();
+    const commodityGroups = new Set();
+
+    records.forEach(record => {
+      const state = record.State || record.state || record.state_name;
+      const district = record.District || record.district || record.district_name;
+      const market = record.Market || record.market || record.market_name;
+      const commodity = record.Commodity || record.commodity || record.commodity_name;
+      const variety = record.Variety || record.variety || record.variety_name;
+
+      if (state) states.add(state);
+      if (district) districts.add(district);
+      if (market) markets.add(market);
+      if (commodity) {
+        commodities.add(commodity);
+        commodityGroups.add(getCommodityGroup(commodity));
+      }
+      if (variety) varieties.add(variety);
+    });
+
+    return res.json({
+      success: true,
+      states: Array.from(states).sort(),
+      districts: Array.from(districts).sort(),
+      markets: Array.from(markets).sort(),
+      commodities: Array.from(commodities).sort(),
+      varieties: Array.from(varieties).sort(),
+      commodity_groups: Array.from(commodityGroups).sort(),
+    });
+  } catch (error) {
+    console.error('Get filters error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch filter options',
+      details: error.message,
     });
   }
 });

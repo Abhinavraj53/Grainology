@@ -3,12 +3,6 @@ import { supabase, WeatherData } from '../lib/supabase';
 import { Cloud, Droplets, Wind, Thermometer, MapPin, Calendar, RefreshCw } from 'lucide-react';
 import CSVUpload from './CSVUpload';
 
-interface Profile {
-  id: string;
-  state?: string;
-  district?: string;
-}
-
 export default function WeatherForecast() {
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
   const [selectedState, setSelectedState] = useState<string>('');
@@ -25,6 +19,14 @@ export default function WeatherForecast() {
     loadStates();
   }, []);
 
+  // Set Bihar as default if no customer state
+  useEffect(() => {
+    if (states.length > 0 && !selectedState && !customerState) {
+      setSelectedState('Bihar');
+      loadDistricts('Bihar');
+    }
+  }, [states, selectedState, customerState]);
+
   // Load weather when district is selected
   useEffect(() => {
     if (selectedDistrict && selectedState) {
@@ -35,7 +37,10 @@ export default function WeatherForecast() {
   const loadCustomerProfile = async () => {
     try {
       const session = await supabase.auth.getSession();
-      if (!session.data.session) return;
+      if (!session.data.session) {
+        // If no session, set Bihar as default
+        return;
+      }
 
       const { data, error } = await supabase
         .from('profiles')
@@ -48,9 +53,13 @@ export default function WeatherForecast() {
         setSelectedState(data.state);
         // Load districts for customer's state
         loadDistricts(data.state);
+      } else {
+        // No customer state found, will default to Bihar
+        setCustomerState('');
       }
     } catch (error) {
       console.error('Error loading customer profile:', error);
+      // On error, will default to Bihar
     }
   };
 
@@ -115,6 +124,9 @@ export default function WeatherForecast() {
             // Select first district as default
             setSelectedDistrict(districtsData[0]);
           }
+        } else if (state === 'Bihar' && districtsData.includes('Patna')) {
+          // Default to Patna for Bihar
+          setSelectedDistrict('Patna');
         } else if (districtsData.length > 0) {
           setSelectedDistrict(districtsData[0]);
         }
@@ -362,7 +374,7 @@ export default function WeatherForecast() {
               <div className="flex items-center gap-2 mb-2">
                 <MapPin className="w-5 h-5 text-blue-600" />
                 <h3 className="font-semibold text-gray-800">
-                  {weatherData[0]?.location || selectedDistrict}, {weatherData[0]?.state || selectedState}
+                  {weatherData[0]?.location || selectedDistrict}, {selectedState}
                 </h3>
               </div>
               {weatherData[0]?.forecast_data?.formatted_address && (
@@ -417,7 +429,7 @@ export default function WeatherForecast() {
                       </div>
                     )}
 
-                    {weather.rainfall !== undefined && parseFloat(weather.rainfall) > 0 && (
+                    {weather.rainfall !== undefined && (typeof weather.rainfall === 'number' ? weather.rainfall : parseFloat(String(weather.rainfall || '0'))) > 0 && (
                       <div className="bg-blue-50 rounded-lg p-3">
                         <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
                           <Droplets className="w-3 h-3" />

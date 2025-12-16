@@ -1,299 +1,333 @@
 import { useState, useEffect } from 'react';
-import { supabase, MandiPrice } from '../lib/supabase';
-import { TrendingUp, Search, MapPin, Calendar, IndianRupee } from 'lucide-react';
-import CSVUpload from './CSVUpload';
+import { TrendingUp, Download, Printer } from 'lucide-react';
 
-// Helper to fetch live mandi data from backend
-async function fetchLiveMandi() {
-  const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/live`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || err.message || 'Failed to fetch live mandi prices');
-  }
-  return response.json();
+interface AgMarkNetData {
+  commodity_group: string;
+  commodity: string;
+  variety: string;
+  msp: number;
+  dates: Record<string, { price: number; arrival: number }>;
 }
 
-// Helper to normalize commodity names (optional - can be used for grouping similar commodities)
-const normalizeCommodity = (commodity: string): string => {
-  if (!commodity) return '';
-  // Return as-is, but can normalize if needed
-  return commodity.trim();
-};
+interface FilterOptions {
+  states: string[];
+  districts: string[];
+  markets: string[];
+  commodities: string[];
+  varieties: string[];
+  commodity_groups: string[];
+}
 
 export default function MandiBhaav() {
-  const [prices, setPrices] = useState<MandiPrice[]>([]);
-  const [filteredPrices, setFilteredPrices] = useState<MandiPrice[]>([]);
-  const [commodityFilter, setCommodityFilter] = useState('all');
-  const [varietyFilter, setVarietyFilter] = useState('all');
-  const [stateFilter, setStateFilter] = useState('all');
-  const [districtFilter, setDistrictFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [data, setData] = useState<AgMarkNetData[]>([]);
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+    states: [],
+    districts: [],
+    markets: [],
+    commodities: [],
+    varieties: [],
+    commodity_groups: []
+  });
+  const [dates, setDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    state: 'all',
+    district: 'all',
+    market: 'all',
+    commodity_group: 'all',
+    commodity: 'all',
+    variety: 'all',
+    grade: 'FAQ'
+  });
 
   useEffect(() => {
-    loadPrices();
+    loadFilterOptions();
   }, []);
 
   useEffect(() => {
-    filterPrices();
-  }, [prices, commodityFilter, varietyFilter, stateFilter, districtFilter, searchTerm]);
+    if (filterOptions.states.length > 0) {
+      loadData();
+    }
+  }, [filters, filterOptions.states.length]);
 
-  const loadPrices = async () => {
+  const loadFilterOptions = async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/filters`);
+      if (response.ok) {
+        const options = await response.json();
+        setFilterOptions(options);
+      }
+    } catch (error) {
+      console.error('Error loading filter options:', error);
+    }
+  };
+
+  const loadData = async () => {
     try {
       setLoading(true);
-      // Try live data.gov.in feed via backend proxy
-      const live = await fetchLiveMandi();
-      if (live?.records?.length) {
-        console.log('Fetched records:', live.records.length);
-        // Show all records, normalize commodity names
-        const processed = live.records
-          .map((record: any) => {
-            const normalized = normalizeCommodity(record.commodity);
-            if (normalized && record.modal_price > 0) {
-              return {
-                ...record,
-                commodity: normalized,
-              };
-            }
-            return null;
-          })
-          .filter((record): record is MandiPrice => record !== null);
-        
-        console.log('Processed records:', processed.length);
-        setPrices(processed);
-        setLoading(false);
-        return;
-      }
+      const params = new URLSearchParams();
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value !== 'all') {
+          params.append(key, value);
+        }
+      });
 
-      // Fallback to stored data if live fetch fails or returns empty
-      const { data, error } = await supabase
-        .from('mandi_prices')
-        .select('*')
-        .order('price_date', { ascending: false })
-        .limit(100);
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/agmarknet?${params.toString()}`
+      );
 
-      if (!error && data) {
-        const processed = data
-          .map((record: any) => {
-            const normalized = normalizeCommodity(record.commodity);
-            if (normalized) {
-              return {
-                ...record,
-                commodity: normalized,
-              };
-            }
-            return null;
-          })
-          .filter((record): record is MandiPrice => record !== null);
-        setPrices(processed);
+      if (response.ok) {
+        const result = await response.json();
+        setData(result.data || []);
+        setDates(result.dates || []);
+      } else {
+        console.error('Failed to fetch data');
       }
-    } catch (err) {
-      console.error('Mandi live fetch error:', err);
-      // Optionally keep prices as-is; fallback to existing data only if available
+    } catch (error) {
+      console.error('Error loading data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterPrices = () => {
-    let filtered = [...prices];
-
-    if (commodityFilter !== 'all') {
-      filtered = filtered.filter(p => p.commodity === commodityFilter);
-    }
-
-    if (varietyFilter !== 'all') {
-      filtered = filtered.filter(p => p.variety === varietyFilter);
-    }
-
-    if (stateFilter !== 'all') {
-      filtered = filtered.filter(p => p.state === stateFilter);
-    }
-
-    if (districtFilter !== 'all') {
-      filtered = filtered.filter(p => p.district === districtFilter);
-    }
-
-    if (searchTerm) {
-      filtered = filtered.filter(p =>
-        p.market?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.district?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.commodity?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    setFilteredPrices(filtered);
+  const resetFilters = () => {
+    setFilters({
+      state: 'all',
+      district: 'all',
+      market: 'all',
+      commodity_group: 'all',
+      commodity: 'all',
+      variety: 'all',
+      grade: 'FAQ'
+    });
   };
 
-  // Get all unique commodities from API data
-  const uniqueCommodities = [...new Set(prices.map(p => p.commodity).filter(Boolean))].sort();
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      const day = date.getDate();
+      const month = date.toLocaleString('en-US', { month: 'short' });
+      const year = date.getFullYear();
+      return `${day} ${month}, ${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
 
-  // Get varieties for the selected commodity
-  const availableVarieties = commodityFilter !== 'all'
-    ? [...new Set(
-        prices
-          .filter(p => p.commodity === commodityFilter && p.variety)
-          .map(p => p.variety)
-      )].sort()
-    : [];
+  const formatPrice = (price: number) => {
+    if (!price || price === 0) return '-';
+    return price.toFixed(2);
+  };
 
-  // Get all unique states
-  const uniqueStates = [...new Set(prices.map(p => p.state).filter(Boolean))].sort();
+  const formatArrival = (arrival: number) => {
+    if (!arrival || arrival === 0) return '-';
+    return arrival.toFixed(2);
+  };
 
-  // Get districts for the selected state
-  const availableDistricts = stateFilter !== 'all'
-    ? [...new Set(
-        prices
-          .filter(p => p.state === stateFilter && p.district)
-          .map(p => p.district)
-      )].sort()
-    : [];
+  // Get filtered districts based on selected state
+  const getFilteredDistricts = () => {
+    if (filters.state === 'all') return filterOptions.districts;
+    // In a real implementation, you'd filter districts by state from the API
+    return filterOptions.districts;
+  };
+
+  // Get filtered markets based on selected district
+  const getFilteredMarkets = () => {
+    if (filters.district === 'all') return filterOptions.markets;
+    // In a real implementation, you'd filter markets by district from the API
+    return filterOptions.markets;
+  };
+
+  // Get filtered commodities based on selected commodity group
+  const getFilteredCommodities = () => {
+    if (filters.commodity_group === 'all') return filterOptions.commodities;
+    // Filter commodities by group (simplified - in real app, maintain this mapping)
+    return filterOptions.commodities;
+  };
 
   return (
     <div className="space-y-6">
-      <CSVUpload type="mandi" onUploadSuccess={loadPrices} />
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-          <TrendingUp className="w-6 h-6 text-green-600" />
-          Mandi Bhaav - Market Prices
-        </h2>
-        <p className="text-gray-600 mb-6">Real-time agricultural commodity prices from various mandis across India</p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by market, district, or commodity..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
+      <div className="bg-white rounded-lg shadow-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">Market Wise Price & Arrival</h1>
+            <p className="text-gray-600">MSP (Minimum Support Price) Commodities - Tomato, Onion, Potato</p>
           </div>
+          <div className="flex gap-2">
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+              <Printer className="w-4 h-4" />
+              Print
+            </button>
+            <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Download
+            </button>
+          </div>
+        </div>
 
+        {/* Filters */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-4">
           <select
-            value={commodityFilter}
-            onChange={(e) => {
-              setCommodityFilter(e.target.value);
-              setVarietyFilter('all'); // Reset variety when commodity changes
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          >
-            <option value="all">All Commodities</option>
-            {uniqueCommodities.map(commodity => (
-              <option key={commodity} value={commodity}>{commodity}</option>
-            ))}
-          </select>
-
-          {commodityFilter !== 'all' && availableVarieties.length > 0 && (
-            <select
-              value={varietyFilter}
-              onChange={(e) => setVarietyFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="all">All Varieties</option>
-              {availableVarieties.map(variety => (
-                <option key={variety} value={variety}>{variety}</option>
-              ))}
-            </select>
-          )}
-
-          <select
-            value={stateFilter}
-            onChange={(e) => {
-              setStateFilter(e.target.value);
-              setDistrictFilter('all'); // Reset district when state changes
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            value={filters.state}
+            onChange={(e) => setFilters({ ...filters, state: e.target.value, district: 'all', market: 'all' })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">All States</option>
-            {uniqueStates.map(state => (
+            {filterOptions.states.map(state => (
               <option key={state} value={state}>{state}</option>
             ))}
           </select>
 
-          {stateFilter !== 'all' && availableDistricts.length > 0 && (
-            <select
-              value={districtFilter}
-              onChange={(e) => setDistrictFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="all">All Districts</option>
-              {availableDistricts.map(district => (
-                <option key={district} value={district}>{district}</option>
-              ))}
-            </select>
-          )}
+          <select
+            value={filters.district}
+            onChange={(e) => setFilters({ ...filters, district: e.target.value, market: 'all' })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Districts</option>
+            {getFilteredDistricts().map(district => (
+              <option key={district} value={district}>{district}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.market}
+            onChange={(e) => setFilters({ ...filters, market: e.target.value })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Markets</option>
+            {getFilteredMarkets().map(market => (
+              <option key={market} value={market}>{market}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.commodity_group}
+            onChange={(e) => setFilters({ ...filters, commodity_group: e.target.value, commodity: 'all' })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Commodity Groups</option>
+            {filterOptions.commodity_groups.map(group => (
+              <option key={group} value={group}>{group}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.commodity}
+            onChange={(e) => setFilters({ ...filters, commodity: e.target.value, variety: 'all' })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Commodities</option>
+            {getFilteredCommodities().map(commodity => (
+              <option key={commodity} value={commodity}>{commodity}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.variety}
+            onChange={(e) => setFilters({ ...filters, variety: e.target.value })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Varieties</option>
+            {filterOptions.varieties.map(variety => (
+              <option key={variety} value={variety}>{variety}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.grade}
+            onChange={(e) => setFilters({ ...filters, grade: e.target.value })}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="FAQ">FAQ</option>
+            <option value="Grade A">Grade A</option>
+            <option value="Grade B">Grade B</option>
+          </select>
         </div>
 
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={loadData}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Go
+          </button>
+          <button
+            onClick={resetFilters}
+            className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Info Bar */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-gray-700">
+            <span className="font-semibold">All States</span> | Data Freeze Up to {dates[0] ? formatDate(dates[0]) : new Date().toLocaleDateString()}
+          </p>
+        </div>
+
+        {/* Table */}
         {loading ? (
-          <div className="text-center py-12 text-gray-500">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-            <p className="mt-4">Loading market prices...</p>
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading market data...</p>
           </div>
-        ) : filteredPrices.length === 0 ? (
+        ) : data.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <TrendingUp className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            <p>No market prices available</p>
-            <p className="text-sm mt-2">Try adjusting your filters or check back later</p>
+            <p>No market data available</p>
+            <p className="text-sm mt-2">Try adjusting your filters</p>
           </div>
         ) : (
-          <div className="grid gap-4">
-            {filteredPrices.map((price) => (
-              <div key={price.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-lg font-bold text-gray-800">{price.commodity}</p>
-                    {price.variety && (
-                      <p className="text-sm text-gray-600">{price.variety}</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <MapPin className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
-                    <div>
-                      <p className="font-semibold text-gray-800">{price.market}</p>
-                      <p className="text-sm text-gray-600">{price.district}, {price.state}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2">
-                    <Calendar className="w-4 h-4 text-gray-400 mt-1 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm text-gray-600">Price Date</p>
-                      <p className="font-medium text-gray-800">
-                        {new Date(price.price_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-green-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-600">Min</span>
-                      <span className="text-sm font-medium text-gray-800 flex items-center">
-                        <IndianRupee className="w-3 h-3" />
-                        {price.min_price}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-green-700">Modal</span>
-                      <span className="text-lg font-bold text-green-800 flex items-center">
-                        <IndianRupee className="w-4 h-4" />
-                        {price.modal_price}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">Max</span>
-                      <span className="text-sm font-medium text-gray-800 flex items-center">
-                        <IndianRupee className="w-3 h-3" />
-                        {price.max_price}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-300">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th rowSpan={2} className="border border-gray-300 px-4 py-2 text-left font-semibold">Commodity Group</th>
+                  <th rowSpan={2} className="border border-gray-300 px-4 py-2 text-left font-semibold">Commodity</th>
+                  <th rowSpan={2} className="border border-gray-300 px-4 py-2 text-left font-semibold">MSP (Rs./Quintal) 2025-26</th>
+                  <th colSpan={dates.length} className="border border-gray-300 px-4 py-2 text-center font-semibold">Price (Rs./Quintal)</th>
+                  <th colSpan={dates.length} className="border border-gray-300 px-4 py-2 text-center font-semibold">Arrival (Metric Tonnes)</th>
+                </tr>
+                <tr className="bg-gray-50">
+                  {dates.map(date => (
+                    <th key={date} className="border border-gray-300 px-4 py-2 text-center text-sm font-medium">
+                      {formatDate(date)}
+                    </th>
+                  ))}
+                  {dates.map(date => (
+                    <th key={`arrival-${date}`} className="border border-gray-300 px-4 py-2 text-center text-sm font-medium">
+                      {formatDate(date)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50">
+                    <td className="border border-gray-300 px-4 py-2">{item.commodity_group}</td>
+                    <td className="border border-gray-300 px-4 py-2 font-medium">
+                      {item.commodity}
+                      {item.variety && <span className="text-gray-600 text-sm"> ({item.variety})</span>}
+                    </td>
+                    <td className="border border-gray-300 px-4 py-2 text-right">
+                      {item.msp > 0 ? item.msp.toFixed(2) : '-'}
+                    </td>
+                    {dates.map(date => (
+                      <td key={`price-${date}-${idx}`} className="border border-gray-300 px-4 py-2 text-right">
+                        {formatPrice(item.dates[date]?.price || 0)}
+                      </td>
+                    ))}
+                    {dates.map(date => (
+                      <td key={`arrival-${date}-${idx}`} className="border border-gray-300 px-4 py-2 text-right">
+                        {formatArrival(item.dates[date]?.arrival || 0)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

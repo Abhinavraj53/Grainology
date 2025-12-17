@@ -120,12 +120,18 @@ router.get('/agmarknet', async (req, res) => {
       offset: (Number(offset) || 0).toString(),
     });
 
-    // Apply filters
+    // Apply filters - handle 'all' values properly
     if (state && state !== 'all') params.append('filters[state.keyword]', state);
     if (district && district !== 'all') params.append('filters[district]', district);
     if (market && market !== 'all') params.append('filters[market]', market);
     if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
     if (variety && variety !== 'all') params.append('filters[variety]', variety);
+    
+    // If commodity_group is 'Cereals' and commodity is 'all', fetch Paddy, Maize, Wheat by default
+    if (commodity_group === 'Cereals' && commodity === 'all') {
+      // Increase limit to get more data for multiple commodities
+      params.set('limit', Math.min(Number(limit) || 5000, 10000).toString());
+    }
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
     const response = await axios.get(url, { timeout: 15000 });

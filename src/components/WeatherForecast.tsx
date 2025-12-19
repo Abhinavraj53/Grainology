@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase, WeatherData } from '../lib/supabase';
 import { Cloud, Droplets, Wind, Thermometer, MapPin, Calendar, RefreshCw } from 'lucide-react';
 import CSVUpload from './CSVUpload';
+import { WeatherCache } from '../lib/sessionStorage';
 
 export default function WeatherForecast() {
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
@@ -143,6 +144,14 @@ export default function WeatherForecast() {
     
     setLoading(true);
     try {
+      // Check cache first
+      const cached = WeatherCache.getForecast(district, state);
+      if (cached) {
+        setWeatherData(cached);
+        setLoading(false);
+        return;
+      }
+
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       
@@ -176,6 +185,8 @@ export default function WeatherForecast() {
           created_at: new Date().toISOString()
         }));
         setWeatherData(transformedData);
+        // Cache the data
+        WeatherCache.setForecast(district, state, transformedData);
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch weather' }));
         console.error('Error fetching weather:', errorData);
@@ -190,6 +201,7 @@ export default function WeatherForecast() {
       }
     } catch (error) {
       console.error('Error loading weather data:', error);
+      setWeatherData([]);
     } finally {
       setLoading(false);
     }

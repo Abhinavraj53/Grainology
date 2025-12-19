@@ -45,8 +45,8 @@ export function useAuth() {
       const data = current || null;
 
       if (data) {
-        setProfile(data);
-      }
+      setProfile(data);
+    }
     } catch (err: any) {
       console.error('Error loading profile:', err);
       // If it's a 401, clear the token
@@ -65,7 +65,7 @@ export function useAuth() {
         }
       }
     } finally {
-      setLoading(false);
+    setLoading(false);
     }
   }
 
@@ -110,8 +110,8 @@ export function useAuth() {
   const signOut = async () => {
     try {
       // Always clear local state first, even if API call fails
-      setUser(null);
-      setProfile(null);
+    setUser(null);
+    setProfile(null);
       setLoading(false);
 
       // Clear stored token proactively

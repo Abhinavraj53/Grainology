@@ -44,6 +44,28 @@ function Dashboard() {
   return <CustomerPanel profile={profile} onSignOut={signOut} />;
 }
 
+function AuthRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is already logged in, redirect to dashboard
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Router>
@@ -80,8 +102,16 @@ export default function App() {
             <Contact />
           </>
         } />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route path="/login" element={
+          <AuthRoute>
+            <Login />
+          </AuthRoute>
+        } />
+        <Route path="/register" element={
+          <AuthRoute>
+            <Register />
+          </AuthRoute>
+        } />
         <Route path="/kyc-callback" element={<KYCCallback />} />
 
         {/* Protected Routes */}

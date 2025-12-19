@@ -6,9 +6,10 @@ interface CreateTradeProps {
   qualityParams: QualityParameter[];
   onCreateOffer: (offerData: any) => Promise<{ error: any }>;
   userRole: 'farmer' | 'trader';
+  userId: string;
 }
 
-export default function CreateTrade({ qualityParams, onCreateOffer, userRole }: CreateTradeProps) {
+export default function CreateTrade({ qualityParams, onCreateOffer, userRole, userId }: CreateTradeProps) {
   const [tradeType, setTradeType] = useState<'sell' | 'buy'>('sell');
   const [commodity, setCommodity] = useState('Paddy');
   const [variety, setVariety] = useState('');
@@ -66,40 +67,70 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole }: 
     setError('');
     setLoading(true);
 
-    const offerData = {
-      commodity,
-      variety,
-      quantity_mt: quantityUnit === 'MT' ? quantityMt : quantityMt / 10,
-      price_per_quintal: pricePerQuintal,
-      location,
-      quality_report: qualityReport,
-      status: 'Active',
-      min_trade_quantity_mt: minTradeQuantity,
-      payment_terms: paymentTerms,
-      offer_validity_days: offerValidityDays,
-      delivery_location: deliveryLocation,
-      logistics_option: logisticsOption,
-      delivery_timeline_days: deliveryTimelineDays,
-    };
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
 
-    const { error: submitError } = await onCreateOffer(offerData);
+      if (!token) {
+        setError('Authentication token not found. Please sign in again.');
+        setLoading(false);
+        return;
+      }
 
-    setLoading(false);
+      let endpoint = '';
+      let data: any = {
+        commodity,
+        variety,
+        quantity_mt: quantityUnit === 'MT' ? quantityMt : quantityMt / 10,
+        delivery_location: deliveryLocation || location,
+        delivery_timeline_days: deliveryTimelineDays,
+        payment_terms: paymentTerms,
+        notes: qualityTerms,
+      };
 
-    if (submitError) {
-      setError(submitError.message);
-    } else {
-      setCommodity('Paddy');
-      setVariety('');
-      setQuantityMt(0);
-      setPricePerQuintal(0);
-      setLocation('');
-      setStartDate('');
-      setEndDate('');
-      setQualityTerms('');
-      setQualityReport({});
-      setUploadedDocs([]);
-      setAgreeToTerms(false);
+      if (tradeType === 'sell') {
+        endpoint = `${apiUrl}/sale-orders`;
+        data.price_per_quintal = pricePerQuintal;
+        data.quality_report = qualityReport;
+        data.seller_id = userId;
+      } else {
+        endpoint = `${apiUrl}/purchase-orders`;
+        data.expected_price_per_quintal = pricePerQuintal;
+        data.quality_requirements = qualityReport;
+        data.buyer_id = userId;
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        setError(errorData.error || `Failed to create ${tradeType} order`);
+      } else {
+        // Reset form
+        setCommodity('Paddy');
+        setVariety('');
+        setQuantityMt(0);
+        setPricePerQuintal(0);
+        setLocation('');
+        setStartDate('');
+        setEndDate('');
+        setQualityTerms('');
+        setQualityReport({});
+        setUploadedDocs([]);
+        setAgreeToTerms(false);
+        setError('');
+      }
+    } catch (err: any) {
+      setError(err.message || `Failed to create ${tradeType} order`);
+    } finally {
+      setLoading(false);
     }
   };
 

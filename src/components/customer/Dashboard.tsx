@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Profile, Order, Offer, supabase } from '../../lib/supabase';
-import { TrendingUp, Cloud, Package, ShoppingCart, AlertCircle } from 'lucide-react';
-import KYCVerification from '../KYCVerification';
+import { Profile, Order, Offer } from '../../lib/supabase';
+import { Cloud, Package, ShoppingCart, AlertCircle } from 'lucide-react';
+import MandiBhaav from '../MandiBhaav';
+import { WeatherCache } from '../../lib/sessionStorage';
 
 interface DashboardProps {
   profile: Profile | null;
@@ -9,106 +10,130 @@ interface DashboardProps {
   offers: Offer[];
 }
 
-// Helper to normalize commodity names
-const normalizeCommodity = (commodity: string): string | null => {
-  if (!commodity) return null;
-  const lower = commodity.toLowerCase();
-  if (lower.includes('maize') || lower.includes('corn')) return 'Maize';
-  if (lower.includes('paddy') || lower.includes('rice')) return 'Paddy';
-  if (lower.includes('wheat')) return 'Wheat';
-  return null;
-};
-
-// Fetch live Mandi data
-async function fetchLiveMandi() {
-  const url = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/live?limit=1000`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error('Failed to fetch live mandi prices');
-  }
-  return response.json();
-}
 
 export default function Dashboard({ profile, orders, offers }: DashboardProps) {
-  const [marketRates, setMarketRates] = useState([
-    { commodity: 'Paddy', rate: '₹0/quintal', change: '0%', trend: 'neutral' as 'up' | 'down' | 'neutral' },
-    { commodity: 'Maize', rate: '₹0/quintal', change: '0%', trend: 'neutral' as 'up' | 'down' | 'neutral' },
-    { commodity: 'Wheat', rate: '₹0/quintal', change: '0%', trend: 'neutral' as 'up' | 'down' | 'neutral' },
-  ]);
+
+  const [weather, setWeather] = useState<{
+    location: string;
+    state: string;
+    temperature_min: number;
+    temperature_max: number;
+    humidity: number;
+    rainfall: number;
+    weather_condition: string;
+  } | null>(null);
+
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   useEffect(() => {
-    loadMarketRates();
-  }, []);
+    loadWeather(); // Load weather even without profile (uses default Patna, Bihar)
+  }, [profile]);
 
-  const loadMarketRates = async () => {
+
+  const loadWeather = async () => {
     try {
-      const live = await fetchLiveMandi();
-      if (live?.records?.length) {
-        const records = live.records.map((r: any) => {
-          const normalized = normalizeCommodity(r.commodity);
-          return normalized ? { ...r, commodity: normalized } : null;
-        }).filter(Boolean);
+      setWeatherLoading(true);
+      // Prefer user's district/state; fallback to Patna, Bihar
+      const location = profile?.district || 'Patna';
+      const state = profile?.state || 'Bihar';
 
-        // Calculate average prices for each commodity
-        const commodityData: Record<string, { prices: number[], yesterdayPrices: number[] }> = {
-          Maize: { prices: [], yesterdayPrices: [] },
-          Paddy: { prices: [], yesterdayPrices: [] },
-          Wheat: { prices: [], yesterdayPrices: [] },
-        };
-
-        // Get most recent date from records
-        const allDates = records.map((r: any) => new Date(r.price_date).getTime()).filter(Boolean);
-        const mostRecentDate = allDates.length > 0 ? new Date(Math.max(...allDates)) : new Date();
-        mostRecentDate.setHours(0, 0, 0, 0);
-        
-        const yesterday = new Date(mostRecentDate);
-        yesterday.setDate(yesterday.getDate() - 1);
-        yesterday.setHours(0, 0, 0, 0);
-
-        // Use most recent data (within last 7 days) for today, and day before for yesterday
-        records.forEach((record: any) => {
-          if (commodityData[record.commodity] && record.modal_price > 0) {
-            const priceDate = new Date(record.price_date);
-            priceDate.setHours(0, 0, 0, 0);
-            const daysDiff = Math.floor((mostRecentDate.getTime() - priceDate.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (daysDiff === 0) {
-              commodityData[record.commodity].prices.push(record.modal_price);
-            } else if (daysDiff === 1) {
-              commodityData[record.commodity].yesterdayPrices.push(record.modal_price);
-            } else if (daysDiff <= 7 && commodityData[record.commodity].prices.length === 0) {
-              // If no today's data, use recent data
-              commodityData[record.commodity].prices.push(record.modal_price);
-            }
-          }
-        });
-
-        const rates = ['Maize', 'Paddy', 'Wheat'].map(commodity => {
-          const data = commodityData[commodity];
-          const avgPrice = data.prices.length > 0
-            ? Math.round(data.prices.reduce((a, b) => a + b, 0) / data.prices.length)
-            : 0;
-          const avgYesterday = data.yesterdayPrices.length > 0
-            ? Math.round(data.yesterdayPrices.reduce((a, b) => a + b, 0) / data.yesterdayPrices.length)
-            : avgPrice;
-
-          const change = avgYesterday > 0 && avgPrice > 0
-            ? ((avgPrice - avgYesterday) / avgYesterday * 100).toFixed(1)
-            : '0';
-          const trend = parseFloat(change) > 0 ? 'up' : parseFloat(change) < 0 ? 'down' : 'neutral';
-
-          return {
-            commodity,
-            rate: avgPrice > 0 ? `₹${avgPrice.toLocaleString()}/quintal` : 'No data available',
-            change: avgPrice > 0 ? `${change.startsWith('-') ? '' : '+'}${change}%` : '0%',
-            trend,
-          };
-        });
-
-        setMarketRates(rates);
+      // Check cache first
+      const cached = WeatherCache.get(location, state) as {
+        location: string;
+        state: string;
+        temperature_min: number;
+        temperature_max: number;
+        humidity: number;
+        rainfall: number;
+        weather_condition: string;
+      } | null;
+      if (cached) {
+        setWeather(cached);
+        setWeatherLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error('Error loading market rates:', err);
+
+      // Fetch from API
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const params = new URLSearchParams({
+        location,
+        state,
+      });
+
+      const token = localStorage.getItem('auth_token') || '';
+
+      const response = await fetch(`${baseUrl}/weather/current?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch' }));
+        console.error('Failed to fetch weather data:', errorData);
+        // Set default weather data if API fails
+        const defaultWeather = {
+          location,
+          state,
+          temperature_min: 0,
+          temperature_max: 0,
+          humidity: 0,
+          rainfall: 0,
+          weather_condition: 'Data not available',
+        };
+        setWeather(defaultWeather);
+        WeatherCache.set(location, state, defaultWeather);
+        return;
+      }
+
+      const data = await response.json();
+      if (data.error) {
+        console.error('Weather API error:', data.error);
+        const defaultWeather = {
+          location,
+          state,
+          temperature_min: 0,
+          temperature_max: 0,
+          humidity: 0,
+          rainfall: 0,
+          weather_condition: 'Data not available',
+        };
+        setWeather(defaultWeather);
+        WeatherCache.set(location, state, defaultWeather);
+        return;
+      }
+
+      const weatherData = {
+        location: data.location || location,
+        state: data.state || state,
+        temperature_min: data.temperature_min || 0,
+        temperature_max: data.temperature_max || 0,
+        humidity: data.humidity || 0,
+        rainfall: data.rainfall || 0,
+        weather_condition: data.weather_condition || data.weather_description || 'Unknown',
+      };
+      setWeather(weatherData);
+      // Cache the data
+      WeatherCache.set(location, state, weatherData);
+    } catch (error) {
+      console.error('Error loading weather:', error);
+      // Set default on error
+      const location = profile?.district || 'Patna';
+      const state = profile?.state || 'Bihar';
+      const defaultWeather = {
+        location,
+        state,
+        temperature_min: 0,
+        temperature_max: 0,
+        humidity: 0,
+        rainfall: 0,
+        weather_condition: 'Data not available',
+      };
+      setWeather(defaultWeather);
+      WeatherCache.set(location, state, defaultWeather);
+    } finally {
+      setWeatherLoading(false);
     }
   };
 
@@ -124,10 +149,6 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
 
   const myOffers = offers.filter(o => o.seller_id === profile.id);
   const pendingOrders = orders.filter(o => o.status === 'Pending Approval');
-
-  const handleKYCComplete = async () => {
-    window.location.reload();
-  };
 
   return (
     <div className="space-y-6">
@@ -177,34 +198,7 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-green-600" />
-              <h3 className="text-lg font-semibold text-gray-800">Market Rates (Mandi Bhav)</h3>
-            </div>
-          </div>
-          <div className="p-6 space-y-4">
-            {marketRates.map((rate) => (
-              <div key={rate.commodity} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="font-medium text-gray-800">{rate.commodity}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{rate.rate}</p>
-                </div>
-                <div className={`text-right ${
-                  rate.trend === 'up' ? 'text-green-600' : 
-                  rate.trend === 'down' ? 'text-red-600' : 
-                  'text-gray-600'
-                }`}>
-                  <p className="text-sm font-medium">{rate.change}</p>
-                  <p className="text-xs mt-1">vs yesterday</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
+      <div className="grid grid-cols-1 gap-6">
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center gap-2">
@@ -215,10 +209,32 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
           <div className="p-6 space-y-4">
             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-600">Today's Weather</p>
-                <p className="text-2xl font-bold text-gray-800">28°C</p>
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Today's Weather</p>
+                  <p className="text-xs text-gray-500">
+                    {weather
+                      ? `${weather.location}, ${weather.state}`
+                      : profile?.district && profile?.state
+                        ? `${profile.district}, ${profile.state}`
+                        : 'Location'}
+                  </p>
+                </div>
+                <p className="text-2xl font-bold text-gray-800">
+                  {weather
+                    ? `${Math.round((weather.temperature_min + weather.temperature_max) / 2)}°C`
+                    : weatherLoading
+                      ? '...'
+                      : '--'}
+                </p>
               </div>
-              <p className="text-sm text-gray-600">Partly cloudy with chance of rain</p>
+              <p className="text-sm text-gray-600">
+                {weather
+                  ? `${weather.weather_condition}. Humidity ${Math.round(weather.humidity || 0)}%.` +
+                    (weather.rainfall && weather.rainfall > 0 ? ` Rainfall ${weather.rainfall} mm.` : '')
+                  : weatherLoading
+                    ? 'Loading latest weather from Open-Meteo...'
+                    : 'Weather data not available.'}
+              </p>
             </div>
 
             <div className="p-4 bg-green-50 rounded-lg border border-green-200">
@@ -237,6 +253,9 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
           </div>
         </div>
       </div>
+
+      {/* Mandi Bhav Component with all filters */}
+      <MandiBhaav />
 
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">

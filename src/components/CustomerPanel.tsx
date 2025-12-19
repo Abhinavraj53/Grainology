@@ -8,8 +8,9 @@ import ActiveTrades from './customer/ActiveTrades';
 import MandiBhaav from './MandiBhaav';
 import WeatherForecast from './WeatherForecast';
 import OrderTracking from './customer/OrderTracking';
-import PurchaseOrder from './customer/PurchaseOrder';
-import SaleOrder from './customer/SaleOrder';
+import PurchaseOrderHistory from './customer/PurchaseOrderHistory';
+import SaleOrderHistory from './customer/SaleOrderHistory';
+import { DashboardCache } from '../lib/sessionStorage';
 
 type View = 'dashboard' | 'marketplace' | 'create-trade' | 'active-trades' | 'mandi' | 'weather' | 'tracking' | 'purchase-order' | 'sale-order';
 
@@ -28,10 +29,23 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
 
   useEffect(() => {
     if (profile) {
-      loadOffers();
-      loadMyOrders();
-      loadQualityParams();
-      setLoading(false);
+      // Check cache first
+      const cached = DashboardCache.getCustomerData(profile.id) as { offers: Offer[]; orders: Order[]; qualityParams: QualityParameter[] } | null;
+      if (cached && cached.offers && cached.orders && cached.qualityParams) {
+        setOffers(cached.offers || []);
+        setMyOrders(cached.orders || []);
+        setQualityParams(cached.qualityParams || []);
+        setLoading(false);
+        // Still load fresh data in background
+        loadOffers();
+        loadMyOrders();
+        loadQualityParams();
+      } else {
+        loadOffers();
+        loadMyOrders();
+        loadQualityParams();
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }
@@ -46,11 +60,22 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
 
     if (!error && data) {
       setOffers(data as any);
+      // Cache the data
+      if (profile) {
+        const cached = DashboardCache.getCustomerData(profile.id) as { offers: Offer[]; orders: Order[]; qualityParams: QualityParameter[] } | null;
+        DashboardCache.setCustomerData(profile.id, {
+          offers: data as any,
+          orders: cached?.orders || [],
+          qualityParams: cached?.qualityParams || []
+        });
+      }
     }
   };
 
   const loadMyOrders = async () => {
     if (!profile) return;
+    
+    let ordersData: any[] = [];
     
     if (profile.role === 'farmer') {
       const { data: farmerOffers } = await supabase
@@ -60,10 +85,17 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
 
       if (!farmerOffers || farmerOffers.length === 0) {
         setMyOrders([]);
+        // Cache empty orders
+        const cached = DashboardCache.getCustomerData(profile.id) as { offers: Offer[]; orders: Order[]; qualityParams: QualityParameter[] } | null;
+        DashboardCache.setCustomerData(profile.id, {
+          offers: cached?.offers || [],
+          orders: [],
+          qualityParams: cached?.qualityParams || []
+        });
         return;
       }
 
-      const offerIds = farmerOffers.map(o => o.id);
+      const offerIds = farmerOffers.map((o: { id: string }) => o.id);
 
       const { data, error } = await supabase
         .from('orders')
@@ -72,7 +104,8 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        setMyOrders(data as any);
+        ordersData = data as any;
+        setMyOrders(ordersData);
       }
     } else {
       const { data, error } = await supabase
@@ -82,8 +115,19 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
         .order('created_at', { ascending: false });
 
       if (!error && data) {
-        setMyOrders(data as any);
+        ordersData = data as any;
+        setMyOrders(ordersData);
       }
+    }
+    
+    // Cache the orders
+    if (ordersData.length >= 0 && profile) {
+      const cached = DashboardCache.getCustomerData(profile.id) as { offers: Offer[]; orders: Order[]; qualityParams: QualityParameter[] } | null;
+      DashboardCache.setCustomerData(profile.id, {
+        offers: cached?.offers || [],
+        orders: ordersData,
+        qualityParams: cached?.qualityParams || []
+      });
     }
   };
 
@@ -95,6 +139,15 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
 
     if (!error && data) {
       setQualityParams(data);
+      // Cache the data
+      if (profile) {
+        const cached = DashboardCache.getCustomerData(profile.id) as { offers: Offer[]; orders: Order[]; qualityParams: QualityParameter[] } | null;
+        DashboardCache.setCustomerData(profile.id, {
+          offers: cached?.offers || [],
+          orders: cached?.orders || [],
+          qualityParams: data
+        });
+      }
     }
   };
 
@@ -334,24 +387,25 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
         </header>
 
         <div className="p-4 md:p-6">
-          {currentView === 'dashboard' && (
+          {currentView === 'dashboard' && profile && (
             <Dashboard profile={profile} orders={myOrders} offers={offers} />
           )}
-          {currentView === 'marketplace' && (
+          {currentView === 'marketplace' && profile && (
             <Marketplace
               offers={offers}
               profile={profile}
               onPlaceOrder={handlePlaceOrder}
             />
           )}
-          {currentView === 'create-trade' && (
+          {currentView === 'create-trade' && profile && (
             <CreateTrade
               qualityParams={qualityParams}
               onCreateOffer={handleCreateOffer}
-              userRole={profile?.role || 'customer'}
+              userRole={profile?.role as 'farmer' | 'trader'}
+              userId={profile.id}
             />
           )}
-          {currentView === 'active-trades' && (
+          {currentView === 'active-trades' && profile && (
             <ActiveTrades offers={offers} profile={profile} />
           )}
           {currentView === 'mandi' && (
@@ -363,11 +417,11 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
           {currentView === 'tracking' && (
             <OrderTracking profileId={profile?.id || ''} />
           )}
-          {currentView === 'purchase-order' && (
-            <PurchaseOrder userId={profile?.id || ''} userName={profile?.name || 'User'} />
+          {currentView === 'purchase-order' && profile && (
+            <PurchaseOrderHistory userId={profile.id} userName={profile.name || 'User'} />
           )}
-          {currentView === 'sale-order' && (
-            <SaleOrder userId={profile?.id || ''} userName={profile?.name || 'User'} />
+          {currentView === 'sale-order' && profile && (
+            <SaleOrderHistory userId={profile.id} userName={profile.name || 'User'} />
           )}
         </div>
       </main>

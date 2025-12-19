@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Profile, supabase, Order, Offer } from '../lib/supabase';
-import { LayoutDashboard, ClipboardCheck, LogOut, Users, Package, Calculator, Truck, TrendingUp, Cloud, FileText, ShoppingCart, Store, PackageCheck, ShoppingBag, TruckIcon, Menu, X } from 'lucide-react';
+import { LayoutDashboard, ClipboardCheck, LogOut, Users, Package, Calculator, Truck, TrendingUp, Cloud, FileText, PackageCheck, ShoppingBag, Menu, X } from 'lucide-react';
 import EnhancedDashboard from './admin/EnhancedDashboard';
 import OrderManagementEnhanced from './admin/OrderManagementEnhanced';
 import UserManagement from './admin/UserManagement';
@@ -10,14 +10,15 @@ import LogisticsManagement from './admin/LogisticsManagement';
 import MandiBhaav from './MandiBhaav';
 import WeatherForecast from './WeatherForecast';
 import Reports from './admin/Reports';
-import PurchaseOrderManagement from './admin/PurchaseOrderManagement';
-import SaleOrderManagement from './admin/SaleOrderManagement';
 import SupplierCommodityManagement from './admin/SupplierCommodityManagement';
 import CustomerCommoditySales from './admin/CustomerCommoditySales';
 import LogisticsProviderManagement from './admin/LogisticsProviderManagement';
 import SupplyTransactionsView from './admin/SupplyTransactionsView';
+import AllPurchaseOrders from './admin/AllPurchaseOrders';
+import AllSaleOrders from './admin/AllSaleOrders';
+import { DashboardCache } from '../lib/sessionStorage';
 
-type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'purchase-orders' | 'sale-orders' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions';
+type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders';
 
 interface AdminPanelProps {
   profile: Profile;
@@ -55,7 +56,15 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
   });
 
   useEffect(() => {
-    loadData();
+    // Check cache first
+    const cached = DashboardCache.getAdminData(profile.id);
+    if (cached) {
+      // Note: Admin dashboard data (shipments, vendorPerformance) is loaded in EnhancedDashboard
+      // We'll still load stats, orders, offers, users from API
+      loadData();
+    } else {
+      loadData();
+    }
   }, []);
 
   const loadData = async () => {
@@ -268,30 +277,6 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           </button>
 
           <button
-            onClick={() => handleViewChange('purchase-orders')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'purchase-orders'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <ShoppingCart className="w-5 h-5" />
-            <span className="font-medium">Purchase Orders</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('sale-orders')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'sale-orders'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <Store className="w-5 h-5" />
-            <span className="font-medium">Sale Orders</span>
-          </button>
-
-          <button
             onClick={() => handleViewChange('supplier-commodity')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
               currentView === 'supplier-commodity'
@@ -313,6 +298,30 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           >
             <FileText className="w-5 h-5" />
             <span className="font-medium">Supply Transactions</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('all-purchase-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'all-purchase-orders'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            <span className="font-medium">All Purchase Orders</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('all-sale-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'all-sale-orders'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            <span className="font-medium">All Sale Orders</span>
           </button>
 
           <button
@@ -388,10 +397,10 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             {currentView === 'logistics' && 'Logistics Management'}
             {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
             {currentView === 'weather' && 'Weather Forecast'}
-            {currentView === 'purchase-orders' && 'Purchase Orders Management'}
-            {currentView === 'sale-orders' && 'Sale Orders Management'}
             {currentView === 'supplier-commodity' && 'Supplier Commodity Management'}
             {currentView === 'supply-transactions' && 'Supply Transactions (Demo Data)'}
+            {currentView === 'all-purchase-orders' && 'All Purchase Orders'}
+            {currentView === 'all-sale-orders' && 'All Sale Orders'}
             {currentView === 'customer-sales' && 'Customer Commodity Sales'}
             {currentView === 'logistics-providers' && 'Logistics Provider Management'}
             {currentView === 'reports' && 'Reports & Analytics'}
@@ -434,17 +443,17 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           {currentView === 'weather' && (
             <WeatherForecast />
           )}
-          {currentView === 'purchase-orders' && (
-            <PurchaseOrderManagement />
-          )}
-          {currentView === 'sale-orders' && (
-            <SaleOrderManagement />
-          )}
           {currentView === 'supplier-commodity' && (
             <SupplierCommodityManagement />
           )}
           {currentView === 'supply-transactions' && (
             <SupplyTransactionsView />
+          )}
+          {currentView === 'all-purchase-orders' && (
+            <AllPurchaseOrders />
+          )}
+          {currentView === 'all-sale-orders' && (
+            <AllSaleOrders />
           )}
           {currentView === 'customer-sales' && (
             <CustomerCommoditySales />

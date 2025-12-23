@@ -12,6 +12,7 @@ import Contact from './pages/Contact';
 import CustomerPanel from './components/CustomerPanel';
 import AdminPanel from './components/AdminPanel';
 import KYCCallback from './pages/KYCCallback';
+import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './contexts/ToastContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,7 @@ export default function App() {
   return (
     <ToastProvider>
       <Router>
+        <ScrollToTop />
         <Routes>
         {/* Public Routes */}
         <Route path="/" element={

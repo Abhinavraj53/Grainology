@@ -41,20 +41,17 @@ export default function Navigation() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-6">
+              <Link to="/" className="text-gray-700 hover:text-green-600 font-medium transition-colors">
+                Home
+              </Link>
               <Link to="/about" className="text-gray-700 hover:text-green-600 font-medium transition-colors">
-                About Grainology
+                About
               </Link>
               <Link to="/services" className="text-gray-700 hover:text-green-600 font-medium transition-colors">
-                Our Products
-              </Link>
-              <Link to="/services" className="text-gray-700 hover:text-green-600 font-medium transition-colors">
-                Our Services
-              </Link>
-              <Link to="/features" className="text-gray-700 hover:text-green-600 font-medium transition-colors">
-                Insights
+                Services
               </Link>
               <Link to="/contact" className="text-gray-700 hover:text-green-600 font-medium transition-colors">
-                Contact us
+                Contact
               </Link>
               
               {user ? (
@@ -97,39 +94,32 @@ export default function Navigation() {
           <div className="md:hidden bg-white border-t">
             <div className="px-4 py-4 space-y-3">
               <Link
+                to="/"
+                className="block text-gray-700 hover:text-green-600 font-medium"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Home
+              </Link>
+              <Link
                 to="/about"
                 className="block text-gray-700 hover:text-green-600 font-medium"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                About Grainology
+                About
               </Link>
               <Link
                 to="/services"
                 className="block text-gray-700 hover:text-green-600 font-medium"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Our Products
-              </Link>
-              <Link
-                to="/services"
-                className="block text-gray-700 hover:text-green-600 font-medium"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Our Services
-              </Link>
-              <Link
-                to="/features"
-                className="block text-gray-700 hover:text-green-600 font-medium"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Insights
+                Services
               </Link>
               <Link
                 to="/contact"
                 className="block text-gray-700 hover:text-green-600 font-medium"
                 onClick={() => setMobileMenuOpen(false)}
               >
-                Contact us
+                Contact
               </Link>
               {user ? (
                 <>

@@ -19,6 +19,61 @@ const checkDB = (req, res) => {
 
 // Note: KYC verification is now handled by Cashfree routes at /api/cashfree/kyc/*
 
+// Check if user exists (email or mobile number)
+router.post('/check-user', async (req, res) => {
+  try {
+    // Check database connection
+    const dbError = checkDB(req, res);
+    if (dbError) return;
+
+    const { email, mobile_number } = req.body;
+
+    if (!email && !mobile_number) {
+      return res.status(400).json({ 
+        error: 'Email or mobile number is required',
+        exists: false 
+      });
+    }
+
+    const query = {};
+    if (email) {
+      query.email = email.toLowerCase().trim();
+    }
+    if (mobile_number) {
+      query.mobile_number = mobile_number.trim();
+    }
+
+    const existingUser = await User.findOne(query);
+
+    if (existingUser) {
+      let message = 'An account already exists';
+      if (existingUser.email === email?.toLowerCase().trim() && existingUser.mobile_number === mobile_number?.trim()) {
+        message = 'An account with this email and mobile number already exists';
+      } else if (existingUser.email === email?.toLowerCase().trim()) {
+        message = 'An account with this email already exists';
+      } else if (existingUser.mobile_number === mobile_number?.trim()) {
+        message = 'An account with this mobile number already exists';
+      }
+
+      return res.status(200).json({ 
+        exists: true,
+        message: message
+      });
+    }
+
+    return res.status(200).json({ 
+      exists: false,
+      message: 'Email and mobile number are available'
+    });
+  } catch (error) {
+    console.error('Check user error:', error);
+    res.status(500).json({ 
+      error: 'Failed to check user',
+      exists: false
+    });
+  }
+});
+
 // Sign up
 router.post('/signup', async (req, res) => {
   try {

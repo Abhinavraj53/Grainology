@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Save, X, CheckCircle } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
+import { useToastContext } from '../../contexts/ToastContext';
 
 interface User {
   id: string;
@@ -9,7 +10,7 @@ interface User {
 }
 
 export default function ConfirmSalesOrderForm() {
-  const { showSuccess, showError } = useToast();
+  const { showSuccess, showError } = useToastContext();
   const [customers, setCustomers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);

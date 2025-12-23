@@ -96,21 +96,72 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         setStep(2);
         return;
       } else if (step === 2) {
-        // Step 2: Validate verification method selection
+        // Step 2: Validate Name, Number, Email, Password and check if account exists
+        if (!name || !name.trim()) {
+          setError('Name is required');
+          return;
+        }
+        if (!mobileNumber || mobileNumber.length !== 10) {
+          setError('Please enter a valid 10-digit mobile number');
+          return;
+        }
+        if (!email || !email.trim()) {
+          setError('Email is required');
+          return;
+        }
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+          setError('Please enter a valid email address');
+          return;
+        }
+        if (!password || password.length < 6) {
+          setError('Password is required and must be at least 6 characters');
+          return;
+        }
+
+        // Check if account already exists
+        setLoading(true);
+        setError('');
+        try {
+          const checkResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-user`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              email: email.trim(),
+              mobile_number: mobileNumber.trim()
+            }),
+          });
+
+          const checkResult = await checkResponse.json();
+
+          if (checkResult.exists) {
+            setError(checkResult.message || 'An account with this email or mobile number already exists. Please use a different email or mobile number.');
+            setLoading(false);
+            return;
+          }
+
+          // Account doesn't exist, proceed to next step
+          setStep(3);
+          setLoading(false);
+          return;
+        } catch (err: any) {
+          console.error('Check user error:', err);
+          setError('Failed to verify account availability. Please try again.');
+          setLoading(false);
+          return;
+        }
+      } else if (step === 3) {
+        // Step 3: Validate verification method selection
         if (!verificationMethod) {
           setError('Please select a verification method to continue');
           return;
         }
-        setStep(3);
-        return;
-      } else if (step === 3) {
-        // Step 3: Validate document details before verification
-        // Validation will be done in the verification function
-        // Just proceed to next step after verification is complete
+                              setStep(5);
         return;
       } else if (step === 4) {
-        // Step 4: Auto-filled details - just proceed to review
-        setStep(5);
+        // Step 4: Document verification - validation will be done in the verification function
+        // Just proceed to next step after verification is complete
         return;
       }
       return;
@@ -437,9 +488,84 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
             {!isLogin && step === 2 && (
               <>
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
+                  <p className="text-base font-semibold text-blue-900 mb-1">Step 2: Personal Information</p>
+                  <p className="text-sm text-blue-700">Enter your name, mobile number, email, and password</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Full Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    placeholder="Enter your full name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Mobile Number <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    placeholder="Enter 10-digit mobile number"
+                    maxLength={10}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Email <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    placeholder="Enter your email"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Password <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    placeholder="Create a password (min. 6 characters)"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-all duration-200"
+                >
+                  Back
+                </button>
+              </>
+            )}
+
+            {!isLogin && step === 3 && (
+              <>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    <p className="text-base font-semibold text-blue-900">Step 2: Choose Verification Method</p>
+                    <p className="text-base font-semibold text-blue-900">Step 3: Choose Verification Method</p>
                   </div>
                   <p className="text-sm text-blue-700">Select how you want to verify your identity</p>
                 </div>
@@ -516,7 +642,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-all duration-200"
                 >
                   Back
@@ -524,12 +650,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </>
             )}
 
-            {!isLogin && step === 3 && (
+            {!isLogin && step === 4 && (
               <>
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    <p className="text-base font-semibold text-blue-900">Step 3: Document Verification</p>
+                    <p className="text-base font-semibold text-blue-900">Step 4: Document Verification</p>
                   </div>
                   <p className="text-sm text-blue-700">Enter your document details and verify via Cashfree</p>
                 </div>
@@ -597,7 +723,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               documentType: 'PAN',
                               verifiedDetails: result,
                             });
-                            setStep(4);
+                            setStep(5);
                           } else {
                             const errorMessage = result.message || result.error || 'PAN verification failed. Please check your PAN number and name.';
                             setError(errorMessage);
@@ -827,7 +953,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                       console.log('✅ Aadhaar verification successful!', aadhaarData);
                                       
                                       // Proceed to next step (review and account creation)
-                                    setStep(4);
+                                    setStep(5);
                                       return;
                                     } else if (statusResult.error === 'eaadhaar_not_available') {
                                       // Aadhaar document not available in DigiLocker
@@ -975,7 +1101,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                 verifiedDetails: result,
                               });
                               setKycVerifying(false);
-                              setStep(4);
+                              setStep(5);
                             } else {
                               // Format validation only - NOT verified
                               setError(result.error || result.message || 'Aadhaar format validated, but full verification is required. Please complete DigiLocker verification to fetch your details.');
@@ -1109,7 +1235,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               documentType: 'GSTIN',
                               verifiedDetails: result,
                             });
-                            setStep(4);
+                            setStep(5);
                           } else {
                             const errorMessage =
                               result.message ||
@@ -1203,7 +1329,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               documentType: 'CIN',
                               verifiedDetails: result,
                             });
-                            setStep(4);
+                            setStep(5);
                           } else {
                             const errorMessage =
                               result.message ||
@@ -1232,7 +1358,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                 <button
                   type="button"
                   onClick={() => {
-                    setStep(2);
+                    setStep(3);
                     setKycVerified(false);
                     setKycVerificationData(null);
                     setAutoFilledData(null);
@@ -1244,18 +1370,18 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </>
             )}
 
-            {!isLogin && step === 4 && (
+            {!isLogin && step === 5 && (
               <>
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle className="w-5 h-5 text-blue-600" />
-                    <p className="text-base font-semibold text-blue-900">Step 4: Verified Details</p>
+                    <p className="text-base font-semibold text-blue-900">Step 5: Review & Create Account</p>
                   </div>
-                  <p className="text-sm text-blue-700">Review the details extracted from your verified document (read-only)</p>
+                  <p className="text-sm text-blue-700">Review all your information before creating your account</p>
                 </div>
 
                 {autoFilledData && (
-                  <div className="space-y-4">
+                  <div className="space-y-4 mb-6">
                     {autoFilledData.name ? (
                       <>
                         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-500 rounded-xl p-5 mb-6 shadow-md">
@@ -1265,9 +1391,6 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           </div>
                           <p className="text-sm text-green-700 mb-2">
                             Your document has been successfully verified. Your details have been automatically extracted and will be saved when you create your account.
-                          </p>
-                          <p className="text-xs text-green-600">
-                            Please review the details below and proceed to create your account.
                           </p>
                         </div>
 
@@ -1295,22 +1418,6 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         <p className="text-xs text-yellow-600">
                           Please go back and complete DigiLocker verification to auto-fill your details.
                         </p>
-                      </div>
-                    )}
-                    
-                    {!autoFilledData.name && (
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Full Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                          placeholder="Enter your full name"
-                          required
-                        />
                       </div>
                     )}
 
@@ -1367,67 +1474,6 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     </div>
                   </div>
                 )}
-
-                <div className="mt-6 space-y-3">
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                      Mobile Number <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="tel"
-                      value={mobileNumber}
-                      onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                      placeholder="Enter 10-digit mobile number"
-                      maxLength={10}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                      Email <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                      placeholder="Enter your email"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                      Password <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                      placeholder="Create a password"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setStep(3)}
-                  className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors mt-4"
-                >
-                  Back
-                </button>
-              </>
-            )}
-
-            {!isLogin && step === 5 && (
-              <>
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
-                  <p className="text-base font-semibold text-blue-900 mb-1">Step 5: Review & Create Account</p>
-                  <p className="text-sm text-blue-700">Review all your information before creating your account</p>
-                </div>
 
                 <div className="space-y-4">
                   <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-5 shadow-sm">
@@ -1512,8 +1558,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </div>
             )}
 
-            {/* Continue buttons for steps 1, 2, and 4 */}
-            {!isLogin && (step === 1 || step === 2 || step === 4) && (
+            {/* Continue buttons for steps 1, 2, and 3 */}
+            {!isLogin && (step === 1 || step === 2 || step === 3) && (
               <button
                 type="submit"
                 disabled={loading}

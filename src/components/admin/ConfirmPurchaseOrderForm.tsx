@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Save, X, CheckCircle } from 'lucide-react';
+import { FileText, Save, Upload, FileSpreadsheet } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 import { useToastContext } from '../../contexts/ToastContext';
 
@@ -14,6 +14,9 @@ export default function ConfirmPurchaseOrderForm() {
   const [customers, setCustomers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
@@ -264,7 +267,199 @@ export default function ConfirmPurchaseOrderForm() {
         <p className="text-gray-600">Fill in all the details to confirm a purchase order</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-8 space-y-8">
+      {/* Upload Mode Toggle */}
+      <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Entry Mode</h3>
+            <p className="text-sm text-gray-600">Choose to enter data manually or upload CSV/Excel file</p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setUploadMode('manual')}
+              className={`px-6 py-3 rounded-lg font-medium transition-all ${
+                uploadMode === 'manual'
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Manual Entry
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadMode('upload')}
+              className={`px-6 py-3 rounded-lg font-medium transition-all flex items-center gap-2 ${
+                uploadMode === 'upload'
+                  ? 'bg-green-600 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <Upload className="w-4 h-4" />
+              CSV/Excel Upload
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {uploadMode === 'upload' ? (
+        <div className="bg-white rounded-lg shadow-lg p-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 mb-2 flex items-center gap-2">
+              <FileSpreadsheet className="w-6 h-6 text-green-600" />
+              Bulk Upload Confirmed Purchase Orders
+            </h2>
+            <p className="text-gray-600">Upload a CSV or Excel file to create multiple confirmed purchase orders at once</p>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Customer <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="">Select Customer</option>
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.id}>
+                    {customer.name} ({customer.email})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Upload File (CSV or Excel) <span className="text-red-500">*</span>
+              </label>
+              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-400 transition-colors">
+                <div className="space-y-1 text-center">
+                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="flex text-sm text-gray-600">
+                    <label htmlFor="file-upload-purchase" className="relative cursor-pointer bg-white rounded-md font-medium text-green-600 hover:text-green-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-green-500">
+                      <span>Upload a file</span>
+                      <input
+                        id="file-upload-purchase"
+                        name="file-upload-purchase"
+                        type="file"
+                        accept=".csv,.xlsx,.xls"
+                        className="sr-only"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const ext = file.name.split('.').pop()?.toLowerCase();
+                            if (['csv', 'xlsx', 'xls'].includes(ext || '')) {
+                              setUploadFile(file);
+                            } else {
+                              showError('Please select a CSV or Excel file (.csv, .xlsx, .xls)');
+                            }
+                          }
+                        }}
+                      />
+                    </label>
+                    <p className="pl-1">or drag and drop</p>
+                  </div>
+                  <p className="text-xs text-gray-500">CSV, XLSX, XLS up to 10MB</p>
+                  {uploadFile && (
+                    <p className="text-sm text-green-600 mt-2">
+                      Selected: {uploadFile.name}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-900 mb-2">File Format Requirements:</h4>
+              <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                <li>First row should contain column headers</li>
+                <li>Required columns: Vehicle No, Net Weight (MT), Rate per MT</li>
+                <li>Optional columns: Invoice Number, Transaction Date, Commodity, Variety, Gross Weight (MT), Tare Weight (MT), No of Bags, Gross Amount, and all quality parameters</li>
+                <li>Each row represents one confirmed purchase order</li>
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              onClick={async () => {
+                if (!customerId) {
+                  showError('Please select a customer first');
+                  return;
+                }
+                if (!uploadFile) {
+                  showError('Please select a file to upload');
+                  return;
+                }
+
+                setUploading(true);
+                try {
+                  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+                  const token = localStorage.getItem('auth_token');
+
+                  if (!token) {
+                    showError('Authentication required. Please sign in again.');
+                    setUploading(false);
+                    return;
+                  }
+
+                  const formData = new FormData();
+                  formData.append('file', uploadFile);
+                  formData.append('customer_id', customerId);
+
+                  const response = await fetch(`${apiUrl}/confirmed-purchase-orders/bulk-upload`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                    },
+                    body: formData,
+                  });
+
+                  const result = await response.json();
+
+                  if (!response.ok) {
+                    throw new Error(result.error || result.message || 'Upload failed');
+                  }
+
+                  if (result.errors && result.errors.length > 0) {
+                    showError(`Upload completed with ${result.count} orders. Some errors: ${result.errors.slice(0, 3).join(', ')}`);
+                  } else {
+                    showSuccess(`Successfully uploaded ${result.count} confirmed purchase orders!`);
+                  }
+
+                  // Reset form
+                  setUploadFile(null);
+                  setCustomerId('');
+                  const fileInput = document.getElementById('file-upload-purchase') as HTMLInputElement;
+                  if (fileInput) fileInput.value = '';
+                } catch (err: any) {
+                  showError(err.message || 'Failed to upload file. Please try again.');
+                } finally {
+                  setUploading(false);
+                }
+              }}
+              disabled={uploading || !customerId || !uploadFile}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {uploading ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5" />
+                  Upload & Submit
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-8 space-y-8">
         {/* Customer & Basic Info */}
         <div className="border-b border-gray-200 pb-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Customer & Basic Information</h2>
@@ -805,6 +1000,7 @@ export default function ConfirmPurchaseOrderForm() {
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Profile, supabase, Offer, Order, QualityParameter } from '../lib/supabase';
-import { Home, ShoppingBag, PlusCircle, LogOut, Cloud, TrendingUp, List, Package, ShoppingCart, Store, Menu, X } from 'lucide-react';
+import { Home, ShoppingBag, PlusCircle, LogOut, Cloud, TrendingUp, List, Package, ShoppingCart, Store, Menu, X, FileText } from 'lucide-react';
 import Dashboard from './customer/Dashboard';
 import Marketplace from './customer/Marketplace';
 import CreateTrade from './customer/CreateTrade';
@@ -10,9 +10,11 @@ import WeatherForecast from './WeatherForecast';
 import OrderTracking from './customer/OrderTracking';
 import PurchaseOrderHistory from './customer/PurchaseOrderHistory';
 import SaleOrderHistory from './customer/SaleOrderHistory';
+import ConfirmedSalesOrderHistory from './customer/ConfirmedSalesOrderHistory';
+import ConfirmedPurchaseOrderHistory from './customer/ConfirmedPurchaseOrderHistory';
 import { DashboardCache } from '../lib/sessionStorage';
 
-type View = 'dashboard' | 'marketplace' | 'create-trade' | 'active-trades' | 'mandi' | 'weather' | 'tracking' | 'purchase-order' | 'sale-order';
+type View = 'dashboard' | 'marketplace' | 'create-trade' | 'active-trades' | 'mandi' | 'weather' | 'tracking' | 'purchase-order' | 'sale-order' | 'confirmed-sales-orders' | 'confirmed-purchase-orders';
 
 interface CustomerPanelProps {
   profile: Profile | null; // Allow profile to be null
@@ -343,6 +345,30 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <Store className="w-5 h-5" />
             <span className="font-medium">Sale Order</span>
           </button>
+
+          <button
+            onClick={() => handleViewChange('confirmed-sales-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'confirmed-sales-orders'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="font-medium">Confirmed Sales Orders</span>
+          </button>
+
+          <button
+            onClick={() => handleViewChange('confirmed-purchase-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'confirmed-purchase-orders'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="font-medium">Confirmed Purchase Orders</span>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-200 flex-shrink-0">
@@ -380,8 +406,10 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
             {currentView === 'weather' && 'Weather Forecast'}
             {currentView === 'tracking' && 'Track Your Orders'}
-            {currentView === 'purchase-order' && 'Create Purchase Order'}
-            {currentView === 'sale-order' && 'Create Sale Order'}
+            {currentView === 'purchase-order' && 'Purchase Order History'}
+            {currentView === 'sale-order' && 'Sale Order History'}
+            {currentView === 'confirmed-sales-orders' && 'Confirmed Sales Orders'}
+            {currentView === 'confirmed-purchase-orders' && 'Confirmed Purchase Orders'}
             </h2>
           </div>
         </header>
@@ -422,6 +450,12 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
           )}
           {currentView === 'sale-order' && profile && (
             <SaleOrderHistory userId={profile.id} userName={profile.name || 'User'} />
+          )}
+          {currentView === 'confirmed-sales-orders' && profile && (
+            <ConfirmedSalesOrderHistory userId={profile.id} />
+          )}
+          {currentView === 'confirmed-purchase-orders' && profile && (
+            <ConfirmedPurchaseOrderHistory userId={profile.id} userName={profile.name || 'User'} />
           )}
         </div>
       </main>

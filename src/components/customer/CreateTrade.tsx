@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { QualityParameter } from '../../lib/supabase';
-import { Upload, FileText, Award, Info } from 'lucide-react';
+import { Upload, FileText, Award, Info, Package, Calendar, DollarSign, ClipboardCheck } from 'lucide-react';
+import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
+import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 
 interface CreateTradeProps {
   qualityParams: QualityParameter[];
@@ -14,25 +16,47 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
   const [commodity, setCommodity] = useState('Paddy');
   const [variety, setVariety] = useState('');
   const [quantityMt, setQuantityMt] = useState<number>(0);
-  const [quantityUnit, setQuantityUnit] = useState<'QTL' | 'MT'>('QTL');
+  const [quantityUnit, setQuantityUnit] = useState<'QTL' | 'MT'>('MT');
   const [pricePerQuintal, setPricePerQuintal] = useState<number>(0);
   const [priceUnit, setPriceUnit] = useState<'INR' | 'USD'>('INR');
   const [location, setLocation] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [saudaDate, setSaudaDate] = useState('');
   const [qualityTerms, setQualityTerms] = useState('');
   const [qualityReport, setQualityReport] = useState<Record<string, string>>({});
+  const [qualityParameters, setQualityParameters] = useState<any[]>([]);
   const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const [minTradeQuantity, setMinTradeQuantity] = useState<number>(1);
-  const [paymentTerms, setPaymentTerms] = useState<'Advance' | 'T+3 Days' | 'Against Delivery'>('Against Delivery');
-  const [offerValidityDays, setOfferValidityDays] = useState<number>(30);
   const [deliveryLocation, setDeliveryLocation] = useState('');
-  const [logisticsOption, setLogisticsOption] = useState<'Seller Arranged' | 'Buyer Arranged' | 'Platform Arranged'>('Buyer Arranged');
-  const [deliveryTimelineDays, setDeliveryTimelineDays] = useState<number>(7);
+
+  // Update Quality Parameters based on Commodity selection
+  useEffect(() => {
+    if (commodity && QUALITY_STRUCTURE[commodity]) {
+      const params = QUALITY_STRUCTURE[commodity].map((p, index) => ({
+        id: `${commodity}-${index}`,
+        s_no: index + 1,
+        parameter_name: p.name,
+        unit_of_measurement: p.unit,
+        standard_value: p.standard,
+        actual_value: p.options[0], // Default to first option
+        remarks: p.remarks,
+        options: p.options
+      }));
+      setQualityParameters(params);
+      
+      // Initialize quality report with default values
+      const initialReport: Record<string, string> = {};
+      params.forEach(p => {
+        initialReport[p.parameter_name] = p.actual_value;
+      });
+      setQualityReport(initialReport);
+    } else {
+      setQualityParameters([]);
+      setQualityReport({});
+    }
+  }, [commodity]);
 
   const currentParams = useMemo(() => {
     return qualityParams.filter(param => param.commodity === commodity);
@@ -43,6 +67,11 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
       ...prev,
       [paramName]: value,
     }));
+    
+    // Also update the qualityParameters state to keep UI in sync
+    setQualityParameters(prev =>
+      prev.map(p => p.parameter_name === paramName ? { ...p, actual_value: value } : p)
+    );
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,21 +110,20 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
       let data: any = {
         commodity,
         variety,
-        quantity_mt: quantityUnit === 'MT' ? quantityMt : quantityMt / 10,
+        quantity_mt: quantityMt,
         delivery_location: deliveryLocation || location,
-        delivery_timeline_days: deliveryTimelineDays,
-        payment_terms: paymentTerms,
+        sauda_confirmation_date: saudaDate || null,
         notes: qualityTerms,
       };
 
       if (tradeType === 'sell') {
         endpoint = `${apiUrl}/sale-orders`;
-        data.price_per_quintal = pricePerQuintal;
+        data.price_per_quintal = pricePerQuintal / 10;
         data.quality_report = qualityReport;
         data.seller_id = userId;
       } else {
         endpoint = `${apiUrl}/purchase-orders`;
-        data.expected_price_per_quintal = pricePerQuintal;
+        data.expected_price_per_quintal = pricePerQuintal / 10;
         data.quality_requirements = qualityReport;
         data.buyer_id = userId;
       }
@@ -119,8 +147,7 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
         setQuantityMt(0);
         setPricePerQuintal(0);
         setLocation('');
-        setStartDate('');
-        setEndDate('');
+        setSaudaDate('');
         setQualityTerms('');
         setQualityReport({});
         setUploadedDocs([]);
@@ -177,245 +204,250 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 1. Commodity Selection First */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Commodity*
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="text-gray-900">1. Commodity: (Drop Down)</span>
+                  </label>
+                  <div className="relative">
+                    <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <select
+                      value={commodity}
+                      onChange={(e) => setCommodity(e.target.value)}
+                      required
+                      className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg appearance-none"
+                    >
+                      <option value="">Select Commodity</option>
+                      <option value="Paddy">Paddy</option>
+                      <option value="Maize">Maize</option>
+                      <option value="Wheat">Wheat</option>
+                    </select>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">Paddy/Maize/Wheat</p>
+                </div>
+
+                {/* Variety selection */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="text-gray-900">Variety: (Drop Down)</span>
                   </label>
                   <select
-                    value={commodity}
-                    onChange={(e) => {
-                      setCommodity(e.target.value);
-                      setQualityReport({});
-                    }}
+                    value={variety}
+                    onChange={(e) => setVariety(e.target.value)}
                     required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    disabled={!commodity}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg appearance-none disabled:bg-gray-100"
                   >
-                    <option value="">Select the commodity - Variety</option>
-                    <option value="Paddy">Paddy</option>
-                    <option value="Maize">Maize</option>
-                    <option value="Wheat">Wheat</option>
+                    <option value="">Select Variety</option>
+                    {commodity && COMMODITY_VARIETIES[commodity]?.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 2. Choose Date */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <span className="text-gray-900">2. Date: DD/MM/YYYY</span>
+                  <span className="text-gray-600 font-normal ml-2">(Date of Sauda confirmation)</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="date"
+                    value={saudaDate}
+                    onChange={(e) => setSaudaDate(e.target.value)}
+                    required
+                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg"
+                  />
+                </div>
+              </div>
+
+              {/* 3, 4, 5. Unit, Rate, Quantity */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="text-gray-900">3. Unit of Measurement</span>
+                  </label>
+                  <select
+                    value="MT"
+                    readOnly
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-semibold appearance-none bg-gray-50"
+                  >
+                    <option value="MT">MT</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Quantity*
-                    <Info className="inline w-3 h-3 ml-1 text-gray-400" />
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="text-gray-900">4. Rate per MT (INR)*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      value={quantityMt || ''}
-                      onChange={(e) => setQuantityMt(Number(e.target.value))}
-                      required
-                      min="0.1"
-                      step="0.1"
-                      placeholder="Enter the quantity"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                    <select
-                      value={quantityUnit}
-                      onChange={(e) => setQuantityUnit(e.target.value as 'QTL' | 'MT')}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      <option value="QTL">QTL</option>
-                      <option value="MT">MT</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Price*
-                    <Info className="inline w-3 h-3 ml-1 text-gray-400" />
-                  </label>
-                  <div className="flex gap-2">
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                       type="number"
                       value={pricePerQuintal || ''}
                       onChange={(e) => setPricePerQuintal(Number(e.target.value))}
                       required
-                      min="1"
-                      placeholder="Enter your expected price"
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      min="0"
+                      step="0.01"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-bold"
+                      placeholder="Enter rate"
                     />
-                    <select
-                      value={priceUnit}
-                      onChange={(e) => setPriceUnit(e.target.value as 'INR' | 'USD')}
-                      className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      <option value="INR">INR</option>
-                      <option value="QTL">QTL</option>
-                    </select>
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <span className="text-gray-900">5. Quantity (MT)*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={quantityMt || ''}
+                    onChange={(e) => setQuantityMt(Number(e.target.value))}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-bold"
+                    placeholder="Enter quantity"
+                  />
                 </div>
               </div>
 
+              {/* 6. Quality Parameters (Particulars Section) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location*
+                <div className="flex items-center gap-2 mb-3">
+                  <ClipboardCheck className="w-6 h-6 text-green-600" />
+                  <label className="text-sm font-semibold text-gray-700">
+                    <span className="text-gray-900">6. Quality Parameters (Particulars Section):</span>
+                  </label>
+                </div>
+
+                {commodity ? (
+                  <div className="bg-gradient-to-r from-green-50 to-blue-50 p-4 rounded-lg border-2 border-green-200 mb-4">
+                    <p className="text-sm font-semibold text-green-800 mb-2">
+                      ✓ Quality parameters auto-populated for {commodity}
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      Select the appropriate value for each parameter from the dropdowns below.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mb-4">
+                    <p className="text-sm text-yellow-800">
+                      Please select a commodity to view quality parameters
+                    </p>
+                  </div>
+                )}
+
+                {qualityParameters.length > 0 && (
+                  <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
+                    {/* Table Header */}
+                    <div className="bg-gray-800 text-white">
+                      <div className="grid grid-cols-12 gap-2 px-4 py-3 font-semibold text-sm">
+                        <div className="col-span-1">S No.</div>
+                        <div className="col-span-3">Particulars</div>
+                        <div className="col-span-2">UOM</div>
+                        <div className="col-span-3">Standard</div>
+                        <div className="col-span-3">Actual Value</div>
+                      </div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="divide-y divide-gray-300">
+                      {qualityParameters.map((param) => (
+                        <div key={param.id} className="grid grid-cols-12 gap-2 px-4 py-3 bg-white hover:bg-gray-50">
+                          <div className="col-span-1 flex items-center">
+                            <span className="font-semibold text-gray-700">{param.s_no}</span>
+                          </div>
+                          <div className="col-span-3 flex items-center">
+                            <span className="font-medium text-gray-900">{param.parameter_name}</span>
+                          </div>
+                          <div className="col-span-2 flex items-center">
+                            <span className="text-gray-700">{param.unit_of_measurement}</span>
+                          </div>
+                          <div className="col-span-3 flex items-center text-xs text-gray-600">
+                            {param.standard_value}
+                          </div>
+                          <div className="col-span-3 flex items-center">
+                            <select
+                              value={qualityReport[param.parameter_name] || ''}
+                              onChange={(e) => handleQualityChange(param.parameter_name, e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-yellow-50 font-medium text-sm"
+                            >
+                              {param.options.map((opt: string) => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 7. Remarks */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <span className="text-gray-900">7. Remarks</span>
                 </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  required
-                  placeholder="Enter the location EXW or FOR (City, State)"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                <textarea
+                  value={qualityTerms}
+                  onChange={(e) => setQualityTerms(e.target.value)}
+                  placeholder="Enter additional information, special instructions, or quality terms..."
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date*
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date*
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-
+              {/* Other Fields (Location) */}
               <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Trade Terms</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Minimum Trade Quantity (MT)*
+                      Location*
                     </label>
                     <input
-                      type="number"
-                      value={minTradeQuantity || ''}
-                      onChange={(e) => setMinTradeQuantity(Number(e.target.value))}
+                      type="text"
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
                       required
-                      min="0.1"
-                      step="0.1"
-                      placeholder="Min quantity for trade"
+                      placeholder="Enter the location EXW or FOR (City, State)"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Payment Terms*
-                    </label>
-                    <select
-                      value={paymentTerms}
-                      onChange={(e) => setPaymentTerms(e.target.value as 'Advance' | 'T+3 Days' | 'Against Delivery')}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      <option value="Advance">Advance</option>
-                      <option value="T+3 Days">T+3 Days</option>
-                      <option value="Against Delivery">Against Delivery</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Offer Validity (Days)*
-                    </label>
-                    <input
-                      type="number"
-                      value={offerValidityDays || ''}
-                      onChange={(e) => setOfferValidityDays(Number(e.target.value))}
-                      required
-                      min="1"
-                      placeholder="Validity period"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Logistics Terms</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Delivery Location*
+                      Delivery Location (if different)
                     </label>
                     <input
                       type="text"
                       value={deliveryLocation}
                       onChange={(e) => setDeliveryLocation(e.target.value)}
-                      required
                       placeholder="Specific delivery location"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Logistics Option*
-                    </label>
-                    <select
-                      value={logisticsOption}
-                      onChange={(e) => setLogisticsOption(e.target.value as 'Seller Arranged' | 'Buyer Arranged' | 'Platform Arranged')}
-                      required
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      <option value="Seller Arranged">Seller Arranged</option>
-                      <option value="Buyer Arranged">Buyer Arranged</option>
-                      <option value="Platform Arranged">Platform Arranged</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Delivery Timeline (Days)*
-                    </label>
-                    <input
-                      type="number"
-                      value={deliveryTimelineDays || ''}
-                      onChange={(e) => setDeliveryTimelineDays(Number(e.target.value))}
-                      required
-                      min="1"
-                      placeholder="Expected delivery time"
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                     />
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Quality Standards & Other Information
-                </label>
-                <textarea
-                  value={qualityTerms}
-                  onChange={(e) => setQualityTerms(e.target.value)}
-                  placeholder="Eg : Enter relevant information such as Quality Parameters and deductions, or other special instructions"
-                  rows={4}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                />
-              </div>
-
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-2 pt-4">
                 <input
                   type="checkbox"
                   id="terms"
                   checked={agreeToTerms}
                   onChange={(e) => setAgreeToTerms(e.target.checked)}
-                  className="mt-1"
+                  className="mt-1 h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
                 />
                 <label htmlFor="terms" className="text-sm text-gray-600">
                   By creating this trade, I agree to share my contact information with the support representative.
                   I have read, understood and agreed to abide by{' '}
-                  <a href="#" className="text-green-600 hover:text-green-700">agribazaar's Terms of Use.</a>
+                  <a href="#" className="text-green-600 hover:text-green-700 font-medium">Grainology's Terms of Use.</a>
                 </label>
               </div>
 

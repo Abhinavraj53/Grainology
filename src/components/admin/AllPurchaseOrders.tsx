@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingCart, RefreshCw } from 'lucide-react';
+import { ShoppingCart, RefreshCw, Eye, X } from 'lucide-react';
 
 interface PurchaseOrder {
   id: string;
@@ -8,8 +8,10 @@ interface PurchaseOrder {
   quantity_mt: number;
   expected_price_per_quintal?: number;
   delivery_location: string;
-  payment_terms: string;
+  sauda_confirmation_date?: string;
   status: string;
+  notes?: string;
+  quality_requirements?: Record<string, string>;
   buyer_id?: {
     id: string;
     name: string;
@@ -23,6 +25,8 @@ export default function AllPurchaseOrders() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   const statuses = ['All', 'Open', 'In Negotiation', 'Confirmed', 'Completed', 'Cancelled'];
 
@@ -66,6 +70,57 @@ export default function AllPurchaseOrders() {
   const filteredOrders = filterStatus === 'All' 
     ? orders 
     : orders.filter(o => o.status === filterStatus);
+
+  const formatDate = (dateStr: string | undefined, fallbackDate?: string) => {
+    const dateToUse = dateStr || fallbackDate;
+    if (!dateToUse) return '-';
+    try {
+      const date = new Date(dateToUse);
+      if (isNaN(date.getTime())) return dateToUse;
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return dateToUse;
+    }
+  };
+
+  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+    setUpdatingStatus(orderId);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
+        setError('Authentication required');
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/purchase-orders/${orderId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update order status');
+      }
+
+      await fetchAllPurchaseOrders();
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, status: newStatus });
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -137,6 +192,7 @@ export default function AllPurchaseOrders() {
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Payment Terms</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Status</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Created</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -169,6 +225,15 @@ export default function AllPurchaseOrders() {
                     <td className="px-6 py-4 text-sm text-gray-600">
                       {new Date(order.createdAt).toLocaleDateString()}
                     </td>
+                    <td className="px-6 py-4 text-sm">
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        className="text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -180,6 +245,103 @@ export default function AllPurchaseOrders() {
       <div className="mt-4 text-sm text-gray-600">
         Showing {filteredOrders.length} of {orders.length} orders
       </div>
+
+      {/* Order Detail Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-gray-50 border-b border-gray-200 p-6 flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-900">Purchase Order Details</h2>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-3 gap-6">
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Buyer</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.buyer_id?.name || 'Unknown'}</p>
+                  <p className="text-sm text-gray-600">{selectedOrder.buyer_id?.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Commodity</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.commodity}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Variety</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.variety || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Quantity</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.quantity_mt} MT</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Rate per MT</p>
+                  <p className="text-lg text-gray-900 font-bold">
+                    ₹{((selectedOrder.expected_price_per_quintal || 0) * 10).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Sauda Date</p>
+                  <p className="text-lg text-gray-900 font-bold">
+                    {formatDate(selectedOrder.sauda_confirmation_date, selectedOrder.createdAt)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Delivery Location</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.delivery_location}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">Status</p>
+                  <select
+                    value={selectedOrder.status}
+                    onChange={(e) => updateOrderStatus(selectedOrder.id, e.target.value)}
+                    disabled={updatingStatus === selectedOrder.id}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white font-bold"
+                  >
+                    <option value="Open">Open</option>
+                    <option value="In Negotiation">In Negotiation</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500 font-medium">System Entry Date</p>
+                  <p className="text-gray-900 font-bold">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+                </div>
+              </div>
+
+              {selectedOrder.quality_requirements && Object.keys(selectedOrder.quality_requirements).length > 0 && (
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-800 mb-4 uppercase tracking-wider">Quality Parameters (Particulars)</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {Object.entries(selectedOrder.quality_requirements).map(([param, value]) => (
+                      <div key={param} className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+                        <p className="text-xs text-yellow-700 font-medium mb-1">{param}</p>
+                        <p className="text-sm text-gray-900 font-bold">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedOrder.notes && (
+                <div className="border-t border-gray-200 pt-6">
+                  <p className="text-sm text-gray-500 font-medium mb-2">Remarks / Notes</p>
+                  <div className="bg-gray-50 p-4 rounded-lg text-gray-900 border border-gray-100 italic">
+                    {selectedOrder.notes}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

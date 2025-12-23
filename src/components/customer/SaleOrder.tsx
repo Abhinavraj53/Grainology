@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Store, Package, DollarSign, MapPin, ClipboardCheck, Calendar, Archive } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import CSVUpload from '../CSVUpload';
+import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
+import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 
 interface Variety {
   commodity_name: string;
@@ -17,14 +19,14 @@ interface QualityParameter {
   standard_value: string;
   remarks: string;
   actual_value?: string;
+  options?: string[]; // Added to support dropdowns
 }
 
 interface SaleOrderProps {
   userId: string;
-  userName: string;
 }
 
-export default function SaleOrder({ userId, userName }: SaleOrderProps) {
+export default function SaleOrder({ userId }: SaleOrderProps) {
   const [commodity, setCommodity] = useState('');
   const [variety, setVariety] = useState('');
   const [quantityMt, setQuantityMt] = useState<number>(0);
@@ -32,10 +34,11 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
   const [supplyAddress, setSupplyAddress] = useState('');
   const [packagingBag, setPackagingBag] = useState('Jute');
   const [paymentTerms, setPaymentTerms] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [saudaExpiryDate, setSaudaExpiryDate] = useState('');
 
   const [varieties, setVarieties] = useState<Variety[]>([]);
-  const [filteredVarieties, setFilteredVarieties] = useState<Variety[]>([]);
+  const [filteredVarieties, setFilteredVarieties] = useState<string[]>([]);
   const [qualityParameters, setQualityParameters] = useState<QualityParameter[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,15 +52,25 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
 
   useEffect(() => {
     if (commodity) {
-      const filtered = varieties.filter(v => v.commodity_name === commodity);
-      setFilteredVarieties(filtered);
+      // Get static varieties
+      const staticVarieties = COMMODITY_VARIETIES[commodity] || [];
+      
+      // Get varieties from database
+      const dbVarieties = varieties
+        .filter(v => v.commodity_name === commodity)
+        .map(v => v.variety_name);
+      
+      // Combine and remove duplicates
+      const allVarieties = Array.from(new Set([...staticVarieties, ...dbVarieties]));
+      
+      setFilteredVarieties(allVarieties);
       setVariety('');
       fetchQualityParameters(commodity);
     }
   }, [commodity, varieties]);
 
   const fetchVarieties = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('variety_master')
       .select('*')
       .eq('is_active', true)
@@ -70,6 +83,23 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
   };
 
   const fetchQualityParameters = async (selectedCommodity: string) => {
+    // First try to load from the static quality structure for standard AgMarkNet parameters
+    if (QUALITY_STRUCTURE[selectedCommodity]) {
+      const params = QUALITY_STRUCTURE[selectedCommodity].map((p, index) => ({
+        id: `${selectedCommodity}-${index}`,
+        s_no: index + 1,
+        parameter_name: p.name,
+        unit_of_measurement: p.unit,
+        standard_value: p.standard,
+        actual_value: p.options[0], // Default to first option
+        remarks: p.remarks,
+        options: p.options
+      }));
+      setQualityParameters(params);
+      return;
+    }
+
+    // Fallback to database if not one of our standard commodities
     const { data, error } = await supabase
       .from('quality_parameters_master')
       .select('*')
@@ -78,7 +108,7 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
       .order('s_no', { ascending: true });
 
     if (data && !error) {
-      setQualityParameters(data.map(param => ({
+      setQualityParameters(data.map((param: any) => ({
         ...param,
         actual_value: param.standard_value
       })));
@@ -87,7 +117,7 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
 
   const updateQualityParameter = (id: string, field: 'actual_value' | 'remarks', value: string) => {
     setQualityParameters(prev =>
-      prev.map(param =>
+      prev.map((param: QualityParameter) =>
         param.id === id ? { ...param, [field]: value } : param
       )
     );
@@ -118,6 +148,7 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
           quality_parameters: { parameters: qualityParameters },
           packaging_bag: packagingBag,
           payment_terms: paymentTerms,
+          remarks,
           sauda_expiry_date: saudaExpiryDate,
           status,
         });
@@ -133,6 +164,7 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
       setRatePerMt(0);
       setSupplyAddress('');
       setPaymentTerms('');
+      setRemarks('');
       setSaudaExpiryDate('');
       setQualityParameters([]);
     } catch (err: any) {
@@ -163,66 +195,80 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
         </div>
 
         <form className="p-6 space-y-6">
-          {/* Commodity */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <span className="text-gray-900">1. Commodity</span>
-            </label>
-            <div className="relative">
-              <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <select
-                value={commodity}
-                onChange={(e) => setCommodity(e.target.value)}
-                required
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg appearance-none"
-              >
-                <option value="">Select Commodity</option>
-                {commodities.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-            <p className="text-sm text-gray-600 mt-1">Example: Paddy</p>
-          </div>
-
-          {/* Variety */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <span className="text-gray-900">2. Variety</span>
-            </label>
-            <select
-              value={variety}
-              onChange={(e) => setVariety(e.target.value)}
-              required
-              disabled={!commodity}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg appearance-none disabled:bg-gray-100"
-            >
-              <option value="">Select Variety</option>
-              {filteredVarieties.map((v) => (
-                <option key={v.variety_name} value={v.variety_name}>
-                  {v.variety_name}
-                </option>
-              ))}
-            </select>
-            <p className="text-sm text-gray-600 mt-1">Example: Katarni</p>
-          </div>
-
-          {/* Quantity and Rate */}
+          {/* 1. Commodity Dropdown First */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                <span className="text-gray-900">3. Quantity (MT)*</span>
+                <span className="text-gray-900">1. Commodity: (Drop Down)</span>
               </label>
-              <input
-                type="number"
-                value={quantityMt || ''}
-                onChange={(e) => setQuantityMt(Number(e.target.value))}
+              <div className="relative">
+                <Package className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <select
+                  value={commodity}
+                  onChange={(e) => setCommodity(e.target.value)}
+                  required
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg appearance-none"
+                >
+                  <option value="">Select Commodity</option>
+                  {commodities.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">Paddy/Maize/Wheat</p>
+            </div>
+
+            {/* Variety Dropdown */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <span className="text-gray-900">Variety: (Drop Down)</span>
+              </label>
+              <select
+                value={variety}
+                onChange={(e) => setVariety(e.target.value)}
                 required
-                min="0"
-                step="0.01"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-                placeholder="100"
+                disabled={!commodity}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg appearance-none disabled:bg-gray-100"
+              >
+                <option value="">Select Variety</option>
+                {filteredVarieties.map((vName) => (
+                  <option key={vName} value={vName}>
+                    {vName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 2. Date */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <span className="text-gray-900">2. Date: DD/MM/YYYY</span>
+            </label>
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="date"
+                value={saudaExpiryDate}
+                onChange={(e) => setSaudaExpiryDate(e.target.value)}
+                required
+                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
               />
+            </div>
+            <p className="text-sm text-gray-600 mt-1">Date of Sauda/Expiry</p>
+          </div>
+
+          {/* 3, 4, 5. Unit, Rate, Quantity */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <span className="text-gray-900">3. Unit of Measurement</span>
+              </label>
+              <select
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-semibold appearance-none"
+              >
+                <option value="MT">MT</option>
+              </select>
             </div>
 
             <div>
@@ -238,48 +284,54 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
                   required
                   min="0"
                   step="0.01"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg text-center font-bold"
                   placeholder="25,250"
                 />
               </div>
             </div>
-          </div>
 
-          {/* Place of Supply */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <span className="text-gray-900">5. Place of Supply*</span>
-            </label>
-            <div className="relative">
-              <MapPin className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
-              <textarea
-                value={supplyAddress}
-                onChange={(e) => setSupplyAddress(e.target.value)}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <span className="text-gray-900">5. Quantity (MT)*</span>
+              </label>
+              <input
+                type="number"
+                value={quantityMt || ''}
+                onChange={(e) => setQuantityMt(Number(e.target.value))}
                 required
-                rows={2}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg resize-none"
-                placeholder="Address of Supply (i.e Vinod Kumar Warehouse, near Banjara Hotel, Village Harpur, Maliabagh, Bihar)"
+                min="0"
+                step="0.01"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg text-center font-bold"
+                placeholder="100"
               />
             </div>
           </div>
 
-          {/* Quality Parameters */}
+          {/* Quality Parameters (Particulars Section) */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <ClipboardCheck className="w-6 h-6 text-blue-600" />
               <label className="text-sm font-semibold text-gray-700">
-                <span className="text-gray-900">6. Quality Parameters:</span>
+                <span className="text-gray-900">6. Quality Parameters (Particulars Section):</span>
               </label>
             </div>
 
-            <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg border-2 border-blue-200 mb-4">
-              <p className="text-sm font-semibold text-blue-900 mb-1">
-                Quality Parameters of {commodity || 'selected commodity'} will be same as provided by customer
-              </p>
-              <p className="text-xs text-gray-700">
-                Same quality parameters will be auto populated as confirmed by customer
-              </p>
-            </div>
+            {commodity ? (
+              <div className="bg-gradient-to-r from-blue-50 to-green-50 p-4 rounded-lg border-2 border-blue-200 mb-4">
+                <p className="text-sm font-semibold text-blue-900 mb-2">
+                  ✓ Quality parameters auto-populated for {commodity}
+                </p>
+                <p className="text-xs text-gray-600">
+                  Select the appropriate value for each parameter from the dropdowns below.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 mb-4">
+                <p className="text-sm text-yellow-800">
+                  Please select a commodity to view quality parameters
+                </p>
+              </div>
+            )}
 
             {qualityParameters.length > 0 && (
               <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
@@ -287,10 +339,10 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
                 <div className="bg-gray-800 text-white">
                   <div className="grid grid-cols-12 gap-2 px-4 py-3 font-semibold text-sm">
                     <div className="col-span-1">S No.</div>
-                    <div className="col-span-2">Particulars</div>
-                    <div className="col-span-2">Unit of Measurement</div>
-                    <div className="col-span-3">Standard Quality Parameter example</div>
-                    <div className="col-span-4">Remarks</div>
+                    <div className="col-span-3">Particulars</div>
+                    <div className="col-span-2">UOM</div>
+                    <div className="col-span-3">Standard</div>
+                    <div className="col-span-3">Actual Value</div>
                   </div>
                 </div>
 
@@ -301,29 +353,35 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
                       <div className="col-span-1 flex items-center">
                         <span className="font-semibold text-gray-700">{param.s_no}</span>
                       </div>
-                      <div className="col-span-2 flex items-center">
+                      <div className="col-span-3 flex items-center">
                         <span className="font-medium text-gray-900">{param.parameter_name}</span>
                       </div>
                       <div className="col-span-2 flex items-center">
                         <span className="text-gray-700">{param.unit_of_measurement}</span>
                       </div>
-                      <div className="col-span-3 flex items-center">
-                        <input
-                          type="text"
-                          value={param.actual_value || ''}
-                          onChange={(e) => updateQualityParameter(param.id, 'actual_value', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-blue-50 font-medium"
-                          placeholder={param.standard_value}
-                        />
+                      <div className="col-span-3 flex items-center text-xs text-gray-600">
+                        {param.standard_value}
                       </div>
-                      <div className="col-span-4 flex items-center">
-                        <input
-                          type="text"
-                          value={param.remarks}
-                          onChange={(e) => updateQualityParameter(param.id, 'remarks', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                          placeholder="Enter remarks"
-                        />
+                      <div className="col-span-3 flex items-center">
+                        {param.options ? (
+                          <select
+                            value={param.actual_value || ''}
+                            onChange={(e) => updateQualityParameter(param.id, 'actual_value', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-blue-50 font-medium text-sm"
+                          >
+                            {param.options.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            value={param.actual_value || ''}
+                            onChange={(e) => updateQualityParameter(param.id, 'actual_value', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-blue-50 font-medium text-sm"
+                            placeholder={param.standard_value}
+                          />
+                        )}
                       </div>
                     </div>
                   ))}
@@ -332,10 +390,56 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
             )}
           </div>
 
+          {/* 7. Remarks */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <span className="text-gray-900">7. Remarks</span>
+            </label>
+            <textarea
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              rows={3}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg resize-none"
+              placeholder="Enter any additional remarks or terms here..."
+            />
+          </div>
+
+          {/* Place of Supply moved to bottom */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <span className="text-gray-900">Place of Supply*</span>
+              </label>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-3 text-gray-400 w-5 h-5" />
+                <textarea
+                  value={supplyAddress}
+                  onChange={(e) => setSupplyAddress(e.target.value)}
+                  required
+                  rows={2}
+                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg resize-none"
+                  placeholder="Address of Supply..."
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <span className="text-gray-900">Payment Terms</span>
+              </label>
+              <input
+                type="text"
+                value={paymentTerms}
+                onChange={(e) => setPaymentTerms(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
+                placeholder="Example - 3rd day..."
+              />
+            </div>
+          </div>
+
           {/* Packaging Bag */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <span className="text-gray-900">7. Packaging Bag*</span>
+              <span className="text-gray-900">Packaging Bag*</span>
             </label>
             <div className="relative">
               <Archive className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -349,40 +453,6 @@ export default function SaleOrder({ userId, userName }: SaleOrderProps) {
                 <option value="Plastic Paper (PP)">Plastic Paper (PP)</option>
               </select>
             </div>
-            <p className="text-sm text-gray-600 mt-1">Select Jute/Plastic Paper (PP)</p>
-          </div>
-
-          {/* Payment Terms */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <span className="text-gray-900">8. Payment Terms*</span>
-            </label>
-            <input
-              type="text"
-              value={paymentTerms}
-              onChange={(e) => setPaymentTerms(e.target.value)}
-              required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-              placeholder="3rd day"
-            />
-          </div>
-
-          {/* Sauda Expiry Date */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <span className="text-gray-900">9. Sauda Expiry Date*</span>
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="date"
-                value={saudaExpiryDate}
-                onChange={(e) => setSaudaExpiryDate(e.target.value)}
-                required
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg"
-              />
-            </div>
-            <p className="text-sm text-gray-600 mt-1">DD/MM/YYYY</p>
           </div>
 
           {/* Error/Success Messages */}

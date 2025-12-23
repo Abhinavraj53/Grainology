@@ -1,24 +1,30 @@
 import { useState, useEffect } from 'react';
 import { Profile, supabase, Order, Offer } from '../lib/supabase';
-import { LayoutDashboard, ClipboardCheck, LogOut, Users, Package, Calculator, Truck, TrendingUp, Cloud, FileText, PackageCheck, ShoppingBag, Menu, X } from 'lucide-react';
+import { LayoutDashboard, LogOut, Users, Package, Truck, TrendingUp, Cloud, FileText, ShoppingBag, Menu, X } from 'lucide-react';
+// Commented out unused imports - can be restored if needed
+// import { ClipboardCheck, Calculator, PackageCheck } from 'lucide-react';
 import EnhancedDashboard from './admin/EnhancedDashboard';
-import OrderManagementEnhanced from './admin/OrderManagementEnhanced';
 import UserManagement from './admin/UserManagement';
-import OfferOversight from './admin/OfferOversight';
-import QualityManagement from './admin/QualityManagement';
-import LogisticsManagement from './admin/LogisticsManagement';
 import MandiBhaav from './MandiBhaav';
 import WeatherForecast from './WeatherForecast';
-import Reports from './admin/Reports';
-import SupplierCommodityManagement from './admin/SupplierCommodityManagement';
-import CustomerCommoditySales from './admin/CustomerCommoditySales';
 import LogisticsProviderManagement from './admin/LogisticsProviderManagement';
-import SupplyTransactionsView from './admin/SupplyTransactionsView';
 import AllPurchaseOrders from './admin/AllPurchaseOrders';
 import AllSaleOrders from './admin/AllSaleOrders';
+import ConfirmSalesOrderForm from './admin/ConfirmSalesOrderForm';
+import ConfirmPurchaseOrderForm from './admin/ConfirmPurchaseOrderForm';
+import AllConfirmedOrders from './admin/AllConfirmedOrders';
 import { DashboardCache } from '../lib/sessionStorage';
+// Commented out unused component imports - can be restored if needed
+// import OrderManagementEnhanced from './admin/OrderManagementEnhanced';
+// import OfferOversight from './admin/OfferOversight';
+// import QualityManagement from './admin/QualityManagement';
+// import LogisticsManagement from './admin/LogisticsManagement';
+// import Reports from './admin/Reports';
+// import SupplierCommodityManagement from './admin/SupplierCommodityManagement';
+// import CustomerCommoditySales from './admin/CustomerCommoditySales';
+// import SupplyTransactionsView from './admin/SupplyTransactionsView';
 
-type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders';
+type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders';
 
 interface AdminPanelProps {
   profile: Profile;
@@ -175,6 +181,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
         </div>
 
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+          {/* 1. Dashboard */}
           <button
             onClick={() => handleViewChange('dashboard')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -187,6 +194,125 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <span className="font-medium">Dashboard</span>
           </button>
 
+          {/* 2. User Management */}
+          <button
+            onClick={() => handleViewChange('users')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'users'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <Users className="w-5 h-5" />
+            <span className="font-medium">User Management</span>
+          </button>
+
+          {/* 3. All Purchase Orders */}
+          <button
+            onClick={() => handleViewChange('all-purchase-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'all-purchase-orders'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            <span className="font-medium">All Purchase Orders</span>
+          </button>
+
+          {/* 4. All Sale Orders */}
+          <button
+            onClick={() => handleViewChange('all-sale-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'all-sale-orders'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <ShoppingBag className="w-5 h-5" />
+            <span className="font-medium">All Sale Orders</span>
+          </button>
+
+          {/* 5. Confirm Sales Order Form */}
+          <button
+            onClick={() => handleViewChange('confirm-sales-order')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'confirm-sales-order'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="font-medium">Confirm Sales Order</span>
+          </button>
+
+          {/* 6. Confirm Purchase Order Form */}
+          <button
+            onClick={() => handleViewChange('confirm-purchase-order')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'confirm-purchase-order'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="font-medium">Confirm Purchase Order</span>
+          </button>
+
+          {/* 7. All Confirmed Orders */}
+          <button
+            onClick={() => handleViewChange('all-confirmed-orders')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'all-confirmed-orders'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <FileText className="w-5 h-5" />
+            <span className="font-medium">All Confirmed Orders</span>
+          </button>
+
+          {/* 8. Mandi Bhav */}
+          <button
+            onClick={() => handleViewChange('mandi')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'mandi'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <TrendingUp className="w-5 h-5" />
+            <span className="font-medium">Mandi Bhaav</span>
+          </button>
+
+          {/* 9. Weather Forecast */}
+          <button
+            onClick={() => handleViewChange('weather')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'weather'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <Cloud className="w-5 h-5" />
+            <span className="font-medium">Weather Forecast</span>
+          </button>
+
+          {/* 10. Logistics Provider Management */}
+          <button
+            onClick={() => handleViewChange('logistics-providers')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'logistics-providers'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <Truck className="w-5 h-5" />
+            <span className="font-medium">Logistics Provider Management</span>
+          </button>
+
+          {/* ========== COMMENTED OUT - NOT IN USE ========== */}
+          {/* 
           <button
             onClick={() => handleViewChange('orders')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -202,18 +328,6 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
                 {stats.pendingOrders}
               </span>
             )}
-          </button>
-
-          <button
-            onClick={() => handleViewChange('users')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'users'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <Users className="w-5 h-5" />
-            <span className="font-medium">User Management</span>
           </button>
 
           <button
@@ -253,30 +367,6 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           </button>
 
           <button
-            onClick={() => handleViewChange('mandi')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'mandi'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <TrendingUp className="w-5 h-5" />
-            <span className="font-medium">Mandi Bhaav</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('weather')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'weather'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <Cloud className="w-5 h-5" />
-            <span className="font-medium">Weather Forecast</span>
-          </button>
-
-          <button
             onClick={() => handleViewChange('supplier-commodity')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
               currentView === 'supplier-commodity'
@@ -301,30 +391,6 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           </button>
 
           <button
-            onClick={() => handleViewChange('all-purchase-orders')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'all-purchase-orders'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <Package className="w-5 h-5" />
-            <span className="font-medium">All Purchase Orders</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('all-sale-orders')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'all-sale-orders'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <ShoppingBag className="w-5 h-5" />
-            <span className="font-medium">All Sale Orders</span>
-          </button>
-
-          <button
             onClick={() => handleViewChange('customer-sales')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
               currentView === 'customer-sales'
@@ -334,18 +400,6 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           >
             <ShoppingBag className="w-5 h-5" />
             <span className="font-medium">Customer Sales</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('logistics-providers')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'logistics-providers'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-300 hover:bg-slate-700/50'
-            }`}
-          >
-            <Truck className="w-5 h-5" />
-            <span className="font-medium">Logistics Providers</span>
           </button>
 
           <button
@@ -359,6 +413,8 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <FileText className="w-5 h-5" />
             <span className="font-medium">Reports</span>
           </button>
+          */}
+          {/* ========== END COMMENTED OUT ========== */}
         </nav>
 
         <div className="p-4 border-t border-slate-700 flex-shrink-0">
@@ -390,20 +446,24 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             </button>
             <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex-1">
             {currentView === 'dashboard' && 'Admin Dashboard'}
-            {currentView === 'orders' && 'Order Management & Quality Control'}
-            {currentView === 'users' && 'User Management & Compliance'}
-            {currentView === 'offers' && 'Offer Oversight & Inventory'}
-            {currentView === 'quality' && 'Quality Management & Deductions'}
-            {currentView === 'logistics' && 'Logistics Management'}
-            {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
-            {currentView === 'weather' && 'Weather Forecast'}
-            {currentView === 'supplier-commodity' && 'Supplier Commodity Management'}
-            {currentView === 'supply-transactions' && 'Supply Transactions (Demo Data)'}
+            {currentView === 'users' && 'User Management'}
             {currentView === 'all-purchase-orders' && 'All Purchase Orders'}
             {currentView === 'all-sale-orders' && 'All Sale Orders'}
-            {currentView === 'customer-sales' && 'Customer Commodity Sales'}
+            {currentView === 'confirm-sales-order' && 'Confirm Sales Order'}
+            {currentView === 'confirm-purchase-order' && 'Confirm Purchase Order'}
+            {currentView === 'all-confirmed-orders' && 'All Confirmed Orders'}
+            {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
+            {currentView === 'weather' && 'Weather Forecast'}
             {currentView === 'logistics-providers' && 'Logistics Provider Management'}
-            {currentView === 'reports' && 'Reports & Analytics'}
+            {/* Commented out header titles for unused views */}
+            {/* {currentView === 'orders' && 'Order Management & Quality Control'} */}
+            {/* {currentView === 'offers' && 'Offer Oversight & Inventory'} */}
+            {/* {currentView === 'quality' && 'Quality Management & Deductions'} */}
+            {/* {currentView === 'logistics' && 'Logistics Management'} */}
+            {/* {currentView === 'supplier-commodity' && 'Supplier Commodity Management'} */}
+            {/* {currentView === 'supply-transactions' && 'Supply Transactions (Demo Data)'} */}
+            {/* {currentView === 'customer-sales' && 'Customer Commodity Sales'} */}
+            {/* {currentView === 'reports' && 'Reports & Analytics'} */}
             </h2>
           </div>
         </header>
@@ -422,11 +482,37 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           {currentView === 'dashboard' && (
             <EnhancedDashboard stats={stats} orders={orders} offers={offers} />
           )}
-          {currentView === 'orders' && (
-            <OrderManagementEnhanced orders={orders} onRefresh={loadData} />
-          )}
           {currentView === 'users' && (
             <UserManagement users={users} onRefresh={loadData} />
+          )}
+          {currentView === 'all-purchase-orders' && (
+            <AllPurchaseOrders />
+          )}
+          {currentView === 'all-sale-orders' && (
+            <AllSaleOrders />
+          )}
+          {currentView === 'confirm-sales-order' && (
+            <ConfirmSalesOrderForm />
+          )}
+          {currentView === 'confirm-purchase-order' && (
+            <ConfirmPurchaseOrderForm />
+          )}
+          {currentView === 'all-confirmed-orders' && (
+            <AllConfirmedOrders />
+          )}
+          {currentView === 'mandi' && (
+            <MandiBhaav />
+          )}
+          {currentView === 'weather' && (
+            <WeatherForecast />
+          )}
+          {currentView === 'logistics-providers' && (
+            <LogisticsProviderManagement />
+          )}
+          {/* ========== COMMENTED OUT - NOT IN USE ========== */}
+          {/* 
+          {currentView === 'orders' && (
+            <OrderManagementEnhanced orders={orders} onRefresh={loadData} />
           )}
           {currentView === 'offers' && (
             <OfferOversight offers={offers} onRefresh={loadData} />
@@ -437,33 +523,20 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           {currentView === 'logistics' && (
             <LogisticsManagement />
           )}
-          {currentView === 'mandi' && (
-            <MandiBhaav />
-          )}
-          {currentView === 'weather' && (
-            <WeatherForecast />
-          )}
           {currentView === 'supplier-commodity' && (
             <SupplierCommodityManagement />
           )}
           {currentView === 'supply-transactions' && (
             <SupplyTransactionsView />
           )}
-          {currentView === 'all-purchase-orders' && (
-            <AllPurchaseOrders />
-          )}
-          {currentView === 'all-sale-orders' && (
-            <AllSaleOrders />
-          )}
           {currentView === 'customer-sales' && (
             <CustomerCommoditySales />
-          )}
-          {currentView === 'logistics-providers' && (
-            <LogisticsProviderManagement />
           )}
           {currentView === 'reports' && (
             <Reports />
           )}
+          */}
+          {/* ========== END COMMENTED OUT ========== */}
         </div>
       </main>
     </div>

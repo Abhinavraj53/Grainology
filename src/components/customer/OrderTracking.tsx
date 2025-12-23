@@ -81,7 +81,13 @@ export default function OrderTracking({ profileId }: OrderTrackingProps) {
 
     timeline.push({
       title: 'Order Placed',
-      date: new Date(order.created_at).toLocaleString(),
+      date: order.sauda_confirmation_date 
+        ? new Date(order.sauda_confirmation_date).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          })
+        : new Date(order.created_at).toLocaleString(),
       status: 'completed',
       icon: Package
     });

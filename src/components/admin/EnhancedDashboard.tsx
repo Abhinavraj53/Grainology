@@ -24,6 +24,21 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
   const [shipments, setShipments] = useState<LogisticsShipment[]>([]);
   const [vendorPerformance, setVendorPerformance] = useState<any[]>([]);
 
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '-';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   useEffect(() => {
     // Get admin user ID from session
     supabase.auth.getSession().then(({ data: { session } }: any) => {
@@ -445,7 +460,7 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(order.created_at).toLocaleDateString()}
+                    {formatDate(order.sauda_confirmation_date || order.created_at)}
                   </td>
                 </tr>
               ))}

@@ -719,7 +719,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                 result.verification_url,
                                 'digilocker_verification',
                                   'width=900,height=700,scrollbars=yes,resizable=yes,menubar=no,toolbar=no,location=yes,status=yes'
-                                );
+                              );
                                 
                                 // Check if popup was blocked (must check immediately)
                                 if (!digilockerWindow || digilockerWindow.closed) {
@@ -912,7 +912,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                     setKycVerifying(false);
                                     if (digilockerWindow && !digilockerWindow.closed) {
                                       digilockerWindow.close();
-                                    }
+                                  }
                                     return;
                                   }
                                   // Otherwise continue polling (status is still PENDING)
@@ -1041,8 +1041,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         GSTIN must be 15 characters (A–Z, 0–9).
-                      </p>
-                    </div>
+                    </p>
+                  </div>
 
                     <div className="mt-3">
                       <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -1543,8 +1543,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               <li>Use any email address (confirmation not required)</li>
             </ol>
           </div>
-          </div>
         </div>
+      </div>
         </div>
       </div>
       <Footer />

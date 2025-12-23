@@ -8,10 +8,11 @@ interface SaleOrder {
   quantity_mt: number;
   price_per_quintal: number;
   delivery_location: string;
-  payment_terms: string;
+  sauda_confirmation_date: string;
   status: string;
   createdAt: string;
   notes?: string;
+  quality_report?: Record<string, string>;
 }
 
 interface SaleOrderHistoryProps {
@@ -61,6 +62,22 @@ export default function SaleOrderHistory({ userId, userName }: SaleOrderHistoryP
     }
   };
 
+  const formatDate = (dateStr: string | undefined, fallbackDate?: string) => {
+    const dateToUse = dateStr || fallbackDate;
+    if (!dateToUse) return '-';
+    try {
+      const date = new Date(dateToUse);
+      if (isNaN(date.getTime())) return dateToUse;
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return dateToUse;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -100,11 +117,11 @@ export default function SaleOrderHistory({ userId, userName }: SaleOrderHistoryP
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Date</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Commodity</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Variety</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Quantity (MT)</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Price</th>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Payment Terms</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Price (MT)</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Status</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Actions</th>
                 </tr>
@@ -112,11 +129,15 @@ export default function SaleOrderHistory({ userId, userName }: SaleOrderHistoryP
               <tbody className="divide-y divide-gray-200">
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-600">
+                      {formatDate(order.sauda_confirmation_date, order.createdAt)}
+                    </td>
                     <td className="px-6 py-4 text-sm text-gray-900">{order.commodity}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{order.variety || '-'}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{order.quantity_mt}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">₹{order.price_per_quintal}/qt</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{order.payment_terms}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900 font-bold">{order.quantity_mt} MT</td>
+                    <td className="px-6 py-4 text-sm text-gray-900 font-bold">
+                      ₹{((order.price_per_quintal || 0) * 10).toLocaleString()}
+                    </td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                         order.status === 'Open' ? 'bg-blue-100 text-blue-800' :
@@ -148,7 +169,7 @@ export default function SaleOrderHistory({ userId, userName }: SaleOrderHistoryP
       {/* Order Detail Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-lg max-w-6xl w-full max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-gray-50 border-b border-gray-200 p-6 flex justify-between items-center">
               <h2 className="text-xl font-semibold text-gray-900">Sale Order Details</h2>
               <button
@@ -159,35 +180,54 @@ export default function SaleOrderHistory({ userId, userName }: SaleOrderHistoryP
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-8 space-y-8">
+              <div className="grid grid-cols-3 gap-6">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Commodity</p>
-                  <p className="text-lg text-gray-900">{selectedOrder.commodity}</p>
+                  <p className="text-sm text-gray-500 font-medium">Commodity</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.commodity}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Variety</p>
-                  <p className="text-lg text-gray-900">{selectedOrder.variety || '-'}</p>
+                  <p className="text-sm text-gray-500 font-medium">Variety</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.variety || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Quantity</p>
-                  <p className="text-lg text-gray-900">{selectedOrder.quantity_mt} MT</p>
+                  <p className="text-sm text-gray-500 font-medium">Quantity</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.quantity_mt} MT</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Price</p>
-                  <p className="text-lg text-gray-900">₹{selectedOrder.price_per_quintal}/quintal</p>
+                  <p className="text-sm text-gray-500 font-medium">Price per MT</p>
+                  <p className="text-lg text-gray-900 font-bold">₹{((selectedOrder.price_per_quintal || 0) * 10).toLocaleString()}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Delivery Location</p>
-                  <p className="text-lg text-gray-900">{selectedOrder.delivery_location}</p>
+                  <p className="text-sm text-gray-500 font-medium">Sauda Date</p>
+                  <p className="text-lg text-gray-900 font-bold">
+                    {formatDate(selectedOrder.sauda_confirmation_date, selectedOrder.createdAt)}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Payment Terms</p>
-                  <p className="text-lg text-gray-900">{selectedOrder.payment_terms}</p>
+                  <p className="text-sm text-gray-500 font-medium">Delivery Location</p>
+                  <p className="text-lg text-gray-900 font-bold">{selectedOrder.delivery_location}</p>
                 </div>
+              </div>
+
+              {selectedOrder.quality_report && Object.keys(selectedOrder.quality_report).length > 0 && (
+                <div className="border-t border-gray-200 pt-6">
+                  <h3 className="text-sm font-bold text-gray-800 mb-4 uppercase tracking-wider">Quality Parameters (Particulars)</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {Object.entries(selectedOrder.quality_report).map(([param, value]) => (
+                      <div key={param} className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <p className="text-xs text-blue-700 font-medium mb-1">{param}</p>
+                        <p className="text-sm text-gray-900 font-bold">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-6 border-t border-gray-200 pt-6">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Status</p>
-                  <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                  <p className="text-sm text-gray-500 font-medium">Status</p>
+                  <span className={`mt-1 inline-block px-3 py-1 rounded-full text-sm font-bold ${
                     selectedOrder.status === 'Open' ? 'bg-blue-100 text-blue-800' :
                     selectedOrder.status === 'In Negotiation' ? 'bg-yellow-100 text-yellow-800' :
                     selectedOrder.status === 'Confirmed' ? 'bg-green-100 text-green-800' :
@@ -198,14 +238,17 @@ export default function SaleOrderHistory({ userId, userName }: SaleOrderHistoryP
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Created At</p>
-                  <p className="text-lg text-gray-900">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
+                  <p className="text-sm text-gray-500 font-medium">System Entry Date</p>
+                  <p className="text-gray-900 font-bold">{new Date(selectedOrder.createdAt).toLocaleDateString()}</p>
                 </div>
               </div>
+
               {selectedOrder.notes && (
-                <div className="border-t border-gray-200 pt-4">
-                  <p className="text-sm text-gray-600 font-medium mb-2">Notes</p>
-                  <p className="text-gray-900">{selectedOrder.notes}</p>
+                <div className="border-t border-gray-200 pt-6">
+                  <p className="text-sm text-gray-500 font-medium mb-2">Remarks / Notes</p>
+                  <div className="bg-gray-50 p-4 rounded-lg text-gray-900 border border-gray-100 italic">
+                    {selectedOrder.notes}
+                  </div>
                 </div>
               )}
             </div>

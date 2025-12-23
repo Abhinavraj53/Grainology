@@ -9,6 +9,21 @@ interface ActiveTradesProps {
 export default function ActiveTrades({ offers, profile }: ActiveTradesProps) {
   const myOffers = offers.filter(o => o.seller_id === profile.id);
 
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '-';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-green-600 to-green-700 rounded-lg shadow-lg p-6 text-white">
@@ -22,6 +37,7 @@ export default function ActiveTrades({ offers, profile }: ActiveTradesProps) {
         <table className="w-full">
           <thead className="bg-slate-800 text-white">
             <tr>
+              <th className="px-6 py-4 text-left text-xs font-medium uppercase">Date</th>
               <th className="px-6 py-4 text-left text-xs font-medium uppercase">Type</th>
               <th className="px-6 py-4 text-left text-xs font-medium uppercase">Trade ID</th>
               <th className="px-6 py-4 text-left text-xs font-medium uppercase">Commodity</th>
@@ -33,6 +49,11 @@ export default function ActiveTrades({ offers, profile }: ActiveTradesProps) {
           <tbody className="divide-y divide-gray-200">
             {myOffers.map((offer) => (
               <tr key={offer.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4">
+                  <span className="text-sm text-gray-600">
+                    {formatDate(offer.sauda_confirmation_date || offer.created_at)}
+                  </span>
+                </td>
                 <td className="px-6 py-4">
                   <span className="px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded uppercase">
                     SELL

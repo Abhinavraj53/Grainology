@@ -111,6 +111,7 @@ export type Offer = {
   delivery_location: string;
   logistics_option: 'Seller Arranged' | 'Buyer Arranged' | 'Platform Arranged';
   delivery_timeline_days: number;
+  sauda_confirmation_date?: string;
   created_at: string;
   seller?: Profile;
 };
@@ -123,6 +124,7 @@ export type Order = {
   status: 'Pending Approval' | 'Approved' | 'Approved - Awaiting Logistics' | 'Completed' | 'Rejected';
   final_price_per_quintal: number;
   deduction_amount: number;
+  sauda_confirmation_date?: string;
   created_at: string;
   offer?: Offer;
   buyer?: Profile;

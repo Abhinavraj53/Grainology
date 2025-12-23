@@ -13,6 +13,21 @@ interface DashboardProps {
 
 export default function Dashboard({ profile, orders, offers }: DashboardProps) {
 
+  const formatDate = (dateStr: string | undefined) => {
+    if (!dateStr) return '-';
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric'
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const [weather, setWeather] = useState<{
     location: string;
     state: string;
@@ -207,7 +222,7 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
             </div>
           </div>
           <div className="p-6 space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200"> 
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Today's Weather</p>
@@ -292,7 +307,7 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date(order.created_at).toLocaleDateString()}
+                    {formatDate(order.sauda_confirmation_date || order.created_at)}
                   </td>
                 </tr>
               ))}

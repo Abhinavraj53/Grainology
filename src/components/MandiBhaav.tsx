@@ -250,7 +250,7 @@ export default function MandiBhaav() {
       setData([]);
       setDates([]);
     } finally {
-      setLoading(false);
+    setLoading(false);
     }
   };
 

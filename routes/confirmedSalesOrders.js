@@ -198,68 +198,93 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
 
       try {
-        // Map CSV/Excel columns to order fields
-        const orderData = {
-          customer_id: customer_id,
-          invoice_number: record.invoice_number || record['Invoice Number'] || record['Invoice No'] || `INV-${Date.now()}-${i}`,
-          transaction_date: record.transaction_date || record['Transaction Date'] || record['Date'] || new Date().toISOString().split('T')[0],
-          state: record.state || record['State'] || '',
-          seller_name: record.seller_name || record['Seller Name'] || record['Seller'] || '',
-          location: record.location || record['Location'] || '',
-          warehouse_name: record.warehouse_name || record['Warehouse Name'] || record['Warehouse'] || '',
-          chamber_no: record.chamber_no || record['Chamber No'] || record['Chamber'] || '',
-          commodity: record.commodity || record['Commodity'] || 'Paddy',
-          variety: record.variety || record['Variety'] || '',
-          gate_pass_no: record.gate_pass_no || record['Gate Pass No'] || record['Gate Pass'] || '',
-          vehicle_no: record.vehicle_no || record['Vehicle No'] || record['Vehicle Number'] || record['Truck No'] || '',
-          weight_slip_no: record.weight_slip_no || record['Weight Slip No'] || record['Weight Slip'] || '',
-          gross_weight_mt: parseFloat(record.gross_weight_mt || record['Gross Weight (MT)'] || record['Gross Weight'] || 0),
-          tare_weight_mt: parseFloat(record.tare_weight_mt || record['Tare Weight (MT)'] || record['Tare Weight'] || 0),
-          no_of_bags: parseInt(record.no_of_bags || record['No of Bags'] || record['Bags'] || 0),
-          net_weight_mt: parseFloat(record.net_weight_mt || record['Net Weight (MT)'] || record['Net Weight'] || 0),
-          rate_per_mt: parseFloat(record.rate_per_mt || record['Rate per MT'] || record['Rate'] || 0),
-          gross_amount: parseFloat(record.gross_amount || record['Gross Amount'] || 0),
-          // Quality parameters
-          hlw_wheat: parseFloat(record.hlw_wheat || record['HLW'] || record['Hectolitre Weight'] || 0),
-          excess_hlw: parseFloat(record.excess_hlw || record['Excess HLW'] || 0),
-          deduction_amount_hlw: parseFloat(record.deduction_amount_hlw || record['Deduction Amount HLW'] || 0),
-          moisture_moi: parseFloat(record.moisture_moi || record['Moisture'] || 0),
-          excess_moisture: parseFloat(record.excess_moisture || record['Excess Moisture'] || 0),
-          bdoi: parseFloat(record.bdoi || record['BDOI'] || 0),
-          excess_bdoi: parseFloat(record.excess_bdoi || record['Excess BDOI'] || 0),
-          moi_bdoi: parseFloat(record.moi_bdoi || record['MOI+BDOI'] || 0),
-          weight_deduction_kg: parseFloat(record.weight_deduction_kg || record['Weight Deduction (KG)'] || 0),
-          deduction_amount_moi_bdoi: parseFloat(record.deduction_amount_moi_bdoi || record['Deduction Amount MOI+BDOI'] || 0),
-          other_deductions: [],
-          quality_report: {},
-          delivery_location: record.delivery_location || record['Delivery Location'] || '',
-          remarks: record.remarks || record['Remarks'] || '',
-          created_by: req.userId
-        };
+        // Map CSV/Excel columns to order fields - ALL FIELDS MANUAL, NO AUTO-CALCULATION
+        // Parse date - handle DD/MM/YY format
+        let transactionDate = record['Date of Transaction'] || record.transaction_date || record['Transaction Date'] || record['Date'] || '';
+        if (transactionDate && transactionDate.includes('/')) {
+          // Convert DD/MM/YY to YYYY-MM-DD
+          const parts = transactionDate.split('/');
+          if (parts.length === 3) {
+            const day = parts[0].padStart(2, '0');
+            const month = parts[1].padStart(2, '0');
+            const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+            transactionDate = `${year}-${month}-${day}`;
+          }
+        }
+        if (!transactionDate) {
+          transactionDate = new Date().toISOString().split('T')[0];
+        }
 
-        // Parse other deductions if provided
-        if (record.other_deductions || record['Other Deductions']) {
-          try {
-            const deductions = typeof record.other_deductions === 'string' 
-              ? JSON.parse(record.other_deductions) 
-              : record.other_deductions;
-            if (Array.isArray(deductions)) {
-              orderData.other_deductions = deductions;
+        // Parse other deductions from columns Other Deduction 1-9 with remarks
+        const otherDeductions = [];
+        for (let j = 1; j <= 9; j++) {
+          const dedAmount = record[`Other Deduction ${j}`] || record[`other_deduction_${j}`] || '';
+          const dedRemarks = record[`Other Deduction ${j} Remarks`] || record[`other_deduction_${j}_remarks`] || '';
+          
+          if (dedAmount && dedAmount !== '-' && dedAmount !== 'Not Available' && dedAmount.trim() !== '') {
+            const amount = parseFloat(dedAmount) || 0;
+            if (amount > 0) {
+              otherDeductions.push({
+                amount: amount,
+                remarks: dedRemarks || ''
+              });
             }
-          } catch (e) {
-            // If parsing fails, leave as empty array
           }
         }
 
-        // Calculate total deduction
-        const otherDeductionsTotal = (orderData.other_deductions || []).reduce((sum, ded) => sum + (ded.amount || 0), 0);
-        orderData.total_deduction = 
-          (orderData.deduction_amount_hlw || 0) +
-          (orderData.deduction_amount_moi_bdoi || 0) +
-          otherDeductionsTotal;
+        // Helper function to parse numeric values, handling "Not Available", "-", etc.
+        const parseNumeric = (value, defaultValue = 0) => {
+          if (!value || value === '-' || value === 'Not Available' || value === 'Not Applicable' || String(value).trim() === '') {
+            return defaultValue;
+          }
+          const parsed = parseFloat(value);
+          return isNaN(parsed) ? defaultValue : parsed;
+        };
 
-        // Calculate net amount
-        orderData.net_amount = (orderData.gross_amount || 0) - orderData.total_deduction;
+        const orderData = {
+          customer_id: customer_id,
+          invoice_number: record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}`,
+          transaction_date: transactionDate,
+          state: record['State'] || record.state || '',
+          seller_name: record['Seller Name'] || record.seller_name || record['Seller'] || '',
+          location: record['Location'] || record.location || '',
+          warehouse_name: record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '',
+          chamber_no: record['Chamber No.'] || record['Chamber No'] || record.chamber_no || record['Chamber'] || '',
+          commodity: record['Commodity'] || record.commodity || 'Paddy',
+          variety: record['Variety'] || record.variety || '',
+          gate_pass_no: record['Gate Pass No.'] || record['Gate Pass No'] || record.gate_pass_no || record['Gate Pass'] || '',
+          vehicle_no: record['Vehicle No.'] || record['Vehicle No'] || record.vehicle_no || record['Vehicle Number'] || record['Truck No'] || '',
+          weight_slip_no: record['Weight Slip No.'] || record['Weight Slip No'] || record.weight_slip_no || record['Weight Slip'] || '',
+          gross_weight_mt: parseNumeric(record['Gross Weight in MT (Vehicle + Goods)'] || record['Gross Weight (MT)'] || record.gross_weight_mt || record['Gross Weight']),
+          tare_weight_mt: parseNumeric(record['Tare Weight of Vehicle'] || record['Tare Weight (MT)'] || record.tare_weight_mt || record['Tare Weight']),
+          no_of_bags: parseInt(record['No. of Bags'] || record['No of Bags'] || record.no_of_bags || record['Bags'] || 0),
+          net_weight_mt: parseNumeric(record['Net Weight in MT'] || record['Net Weight (MT)'] || record.net_weight_mt || record['Net Weight']),
+          rate_per_mt: parseNumeric(record['Rate Per MT'] || record['Rate per MT'] || record.rate_per_mt || record['Rate']),
+          gross_amount: parseNumeric(record['Gross Amount'] || record.gross_amount),
+          // Quality parameters - all manual
+          hlw_wheat: parseNumeric(record['HLW (Hectolitre Weight) in Wheat'] || record['HLW'] || record.hlw_wheat || record['Hectolitre Weight']),
+          excess_hlw: parseNumeric(record['Excess HLW'] || record.excess_hlw),
+          deduction_amount_hlw: parseNumeric(record['Deduction Amount Rs. (HLW)'] || record['Deduction Amount HLW'] || record.deduction_amount_hlw),
+          moisture_moi: parseNumeric(record['Moisture (MOI)'] || record['Moisture'] || record.moisture_moi),
+          excess_moisture: parseNumeric(record['Excess Moisture'] || record.excess_moisture),
+          bdoi: parseNumeric(record['Broken, Damage, Discolour, Immature (BDOI)'] || record['BDOI'] || record.bdoi),
+          excess_bdoi: parseNumeric(record['Excess BDOI'] || record.excess_bdoi),
+          moi_bdoi: parseNumeric(record['MOI+BDOI'] || record.moi_bdoi),
+          weight_deduction_kg: parseNumeric(record['Weight Deduction in KG (MOI+BDOI)'] || record['Weight Deduction (KG)'] || record.weight_deduction_kg),
+          deduction_amount_moi_bdoi: parseNumeric(record['Deduction Amount Rs. (MOI+BDOI)'] || record['Deduction Amount MOI+BDOI'] || record.deduction_amount_moi_bdoi),
+          other_deductions: otherDeductions,
+          quality_report: {},
+          delivery_location: record['Delivery Location'] || record.delivery_location || '',
+          remarks: record['Remarks'] || record.remarks || '',
+          // Net Amount and Total Deduction - take from CSV, do not calculate
+          net_amount: parseNumeric(record['Net Amount'] || record.net_amount),
+          total_deduction: parseNumeric(record['Total Deduction'] || record.total_deduction, 
+            parseNumeric(record['Deduction Amount Rs. (HLW)'] || record.deduction_amount_hlw) +
+            parseNumeric(record['Deduction Amount Rs. (MOI+BDOI)'] || record.deduction_amount_moi_bdoi) +
+            otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0)
+          ),
+          created_by: req.userId
+        };
 
         // Validate required fields
         if (!orderData.vehicle_no) {

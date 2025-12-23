@@ -379,13 +379,158 @@ export default function ConfirmPurchaseOrderForm() {
                 <button
                   type="button"
                   onClick={() => {
-                    // Create sample CSV
-                    const sampleData = [
-                      ['Invoice Number', 'Transaction Date', 'State', 'Supplier Name', 'Location', 'Warehouse Name', 'Chamber No', 'Commodity', 'Variety', 'Gate Pass No', 'Vehicle No', 'Weight Slip No', 'Gross Weight (MT)', 'Tare Weight (MT)', 'No of Bags', 'Net Weight (MT)', 'Rate per MT', 'Gross Amount', 'HLW', 'Excess HLW', 'Deduction Amount HLW', 'Moisture', 'Excess Moisture', 'BDDI', 'Excess BDDI', 'MOI+BDDI', 'Weight Deduction (KG)', 'Deduction Amount MOI+BDDI', 'Delivery Location', 'Remarks'],
-                      ['INV-001', '2024-01-15', 'Bihar', 'ABC Suppliers', 'Patna', 'Warehouse 1', 'CH-01', 'Paddy', 'Katarni', 'GP-123', 'BR-01-AB-1234', 'WS-456', '10.5', '0.5', '100', '10.0', '2500', '25000', '78.5', '0', '0', '14', '0', '2', '0', '0', '0', '0', 'Patna', 'Sample order'],
-                      ['INV-002', '2024-01-16', 'Bihar', 'XYZ Traders', 'Patna', 'Warehouse 2', 'CH-02', 'Wheat', 'Milling Quality', 'GP-124', 'BR-01-CD-5678', 'WS-457', '15.0', '0.5', '150', '14.5', '2800', '40600', '80.0', '0', '0', '12', '0', '1.5', '0', '0', '0', '0', 'Patna', 'Sample order 2']
+                    // Create sample CSV matching Excel format exactly (with Supplier Name instead of Seller Name)
+                    const headers = [
+                      'Invoice Number',
+                      'Date of Transaction',
+                      'State',
+                      'Supplier Name',
+                      'Location',
+                      'Warehouse Name',
+                      'Chamber No.',
+                      'Commodity',
+                      'Variety',
+                      'Gate Pass No.',
+                      'Vehicle No.',
+                      'Weight Slip No.',
+                      'Gross Weight in MT (Vehicle + Goods)',
+                      'Tare Weight of Vehicle',
+                      'No. of Bags',
+                      'Net Weight in MT',
+                      'Rate Per MT',
+                      'Gross Amount',
+                      'HLW (Hectolitre Weight) in Wheat',
+                      'Excess HLW',
+                      'Deduction Amount Rs. (HLW)',
+                      'Moisture (MOI)',
+                      'Excess Moisture',
+                      'Broken, Damage, Discolour, Immature (BDDI)',
+                      'Excess BDDI',
+                      'MOI+BDDI',
+                      'Weight Deduction in KG (MOI+BDDI)',
+                      'Deduction Amount Rs. (MOI+BDDI)',
+                      'Other Deduction 1',
+                      'Other Deduction 1 Remarks',
+                      'Other Deduction 2',
+                      'Other Deduction 2 Remarks',
+                      'Other Deduction 3',
+                      'Other Deduction 3 Remarks',
+                      'Other Deduction 4',
+                      'Other Deduction 4 Remarks',
+                      'Other Deduction 5',
+                      'Other Deduction 5 Remarks',
+                      'Other Deduction 6',
+                      'Other Deduction 6 Remarks',
+                      'Other Deduction 7',
+                      'Other Deduction 7 Remarks',
+                      'Other Deduction 8',
+                      'Other Deduction 8 Remarks',
+                      'Other Deduction 9',
+                      'Other Deduction 9 Remarks',
+                      'Net Amount',
+                      'Remarks'
                     ];
-                    const csvContent = sampleData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+                    
+                    const sampleRow1 = [
+                      'INV-001',
+                      '01/05/25',
+                      'Bihar',
+                      'FARMKEN VENTURES',
+                      'GULABBAGH',
+                      'SATISH KUMAR WAREHOUSE',
+                      '16',
+                      'Maize',
+                      'Hybrid',
+                      '754201',
+                      'BR11GD-8172',
+                      '1300',
+                      '12.690',
+                      '6.790',
+                      '93',
+                      '5.900',
+                      '22310.00',
+                      '131629.00',
+                      'Not Applicable',
+                      'Not Applicable',
+                      '0.00',
+                      '14.80',
+                      '0.80',
+                      '4.95',
+                      '0.00',
+                      '0.80',
+                      '47.20',
+                      '1053.03',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '130575.97',
+                      ''
+                    ];
+                    
+                    const sampleRow2 = [
+                      'INV-002',
+                      '09/04/25',
+                      'Bihar',
+                      'Agro Valley Trading',
+                      'BUXAR',
+                      'SIDDHASHRAM WAREHOUSE',
+                      '2',
+                      'Wheat',
+                      'Dara',
+                      'Not Available',
+                      'Not Available',
+                      'Not Available',
+                      'Not Available',
+                      'Not Available',
+                      '105',
+                      '5.970',
+                      '25900.00',
+                      '154623.00',
+                      '74.00',
+                      '0.00',
+                      '0.00',
+                      '9.20',
+                      '0.00',
+                      '0.00',
+                      '0.00',
+                      '0.00',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '-',
+                      '154623.00',
+                      ''
+                    ];
+                    
+                    const sampleData = [headers, sampleRow1, sampleRow2];
+                    const csvContent = sampleData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
                     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                     const link = document.createElement('a');
                     const url = URL.createObjectURL(blob);
@@ -395,6 +540,7 @@ export default function ConfirmPurchaseOrderForm() {
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
                   }}
                   className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center gap-1"
                 >

@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { QualityParameter } from '../../lib/supabase';
-import { FileText, Info, Package, Calendar, DollarSign, ClipboardCheck } from 'lucide-react';
+import { FileText, Info, Package, Calendar, DollarSign, ClipboardCheck, PlusCircle } from 'lucide-react';
 import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
+import { useToast } from '../Toast';
 
 interface CreateTradeProps {
   qualityParams: QualityParameter[];
@@ -12,6 +13,7 @@ interface CreateTradeProps {
 }
 
 export default function CreateTrade({ qualityParams, onCreateOffer, userRole, userId }: CreateTradeProps) {
+  const { showSuccess, showError } = useToast();
   const [tradeType, setTradeType] = useState<'sell' | 'buy'>('sell');
   const [commodity, setCommodity] = useState('Paddy');
   const [variety, setVariety] = useState('');
@@ -26,7 +28,6 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
   const [qualityParameters, setQualityParameters] = useState<any[]>([]);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const [deliveryLocation, setDeliveryLocation] = useState('');
 
@@ -78,11 +79,9 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
     e.preventDefault();
 
     if (!agreeToTerms) {
-      setError('Please agree to the terms and conditions');
+      showError('Please agree to the terms and conditions to continue');
       return;
     }
-
-    setError('');
     setLoading(true);
 
     try {
@@ -90,7 +89,7 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
-        setError('Authentication token not found. Please sign in again.');
+        showError('Authentication token not found. Please sign in again.');
         setLoading(false);
         return;
       }
@@ -128,8 +127,11 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
 
       if (!response.ok) {
         const errorData = await response.json();
-        setError(errorData.error || `Failed to create ${tradeType} order`);
+        showError(errorData.error || `Failed to create ${tradeType} order. Please try again.`);
       } else {
+        // Success message
+        showSuccess(`${tradeType === 'sell' ? 'Sale' : 'Purchase'} order created successfully!`);
+        
         // Reset form
         setCommodity('Paddy');
         setVariety('');
@@ -140,10 +142,9 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
         setQualityTerms('');
         setQualityReport({});
         setAgreeToTerms(false);
-        setError('');
       }
     } catch (err: any) {
-      setError(err.message || `Failed to create ${tradeType} order`);
+      showError(err.message || `Failed to create ${tradeType} order. Please check your connection and try again.`);
     } finally {
       setLoading(false);
     }
@@ -152,9 +153,12 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Create your own Negotiable Trade</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-3">
+          <PlusCircle className="w-8 h-8 text-green-600" />
+          Create Trade
+        </h1>
         <p className="text-gray-600">
-          Sell or buy commodities at your convenience and price.
+          Create your own negotiable trade. Sell or buy commodities at your convenience and price.
           <a href="#" className="text-green-600 hover:text-green-700 ml-1 font-medium">Learn How</a>
         </p>
       </div>
@@ -438,12 +442,6 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
                   <a href="#" className="text-green-600 hover:text-green-700 font-medium">Grainology's Terms of Use.</a>
                 </label>
               </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                  {error}
-                </div>
-              )}
 
               <div className="flex gap-4">
                 <button

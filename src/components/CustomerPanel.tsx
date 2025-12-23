@@ -8,6 +8,7 @@ import WeatherForecast from './WeatherForecast';
 import PurchaseOrderHistory from './customer/PurchaseOrderHistory';
 import SaleOrderHistory from './customer/SaleOrderHistory';
 import ConfirmedOrders from './customer/ConfirmedOrders';
+import { ToastContainer, useToast } from './Toast';
 // Commented out - not in use
 // import Marketplace from './customer/Marketplace';
 // import ActiveTrades from './customer/ActiveTrades';
@@ -357,15 +358,6 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             >
               <Menu className="w-6 h-6" />
             </button>
-            <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex-1">
-            {currentView === 'dashboard' && 'Dashboard'}
-            {currentView === 'create-trade' && 'Create Trade'}
-            {currentView === 'purchase-order' && 'Purchase Order History'}
-            {currentView === 'sale-order' && 'Sale Order History'}
-            {currentView === 'confirmed-orders' && 'All Confirmed Orders'}
-            {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
-            {currentView === 'weather' && 'Weather Forecast'}
-            </h2>
           </div>
         </header>
 

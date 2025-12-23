@@ -12,6 +12,7 @@ import Contact from './pages/Contact';
 import CustomerPanel from './components/CustomerPanel';
 import AdminPanel from './components/AdminPanel';
 import KYCCallback from './pages/KYCCallback';
+import { ToastProvider } from './contexts/ToastContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -68,8 +69,9 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
+    <ToastProvider>
+      <Router>
+        <Routes>
         {/* Public Routes */}
         <Route path="/" element={
           <>
@@ -126,7 +128,8 @@ export default function App() {
 
         {/* Redirect unknown routes to home */}
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </ToastProvider>
   );
 }

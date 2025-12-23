@@ -9,11 +9,10 @@ interface User {
 }
 
 export default function ConfirmPurchaseOrderForm() {
+  const { showSuccess, showError } = useToast();
   const [customers, setCustomers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
@@ -90,7 +89,8 @@ export default function ConfirmPurchaseOrderForm() {
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
-        setError('Authentication required');
+        showError('Authentication required. Please sign in again.');
+        setLoading(false);
         return;
       }
 
@@ -110,7 +110,7 @@ export default function ConfirmPurchaseOrderForm() {
       const customerList = data.filter((user: any) => user.role !== 'admin');
       setCustomers(customerList);
     } catch (err: any) {
-      setError(err.message);
+      showError(err.message || 'Failed to fetch customers. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -118,8 +118,6 @@ export default function ConfirmPurchaseOrderForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess(false);
     setSubmitting(true);
 
     try {
@@ -127,14 +125,15 @@ export default function ConfirmPurchaseOrderForm() {
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
-        setError('Authentication required');
+        showError('Authentication required. Please sign in again.');
+        setSubmitting(false);
         return;
       }
 
       // Validate other deductions - if amount is filled, remarks is required
       for (const ded of otherDeductions) {
         if (ded.amount > 0 && !ded.remarks.trim()) {
-          setError('Remarks are required for all deductions with amount');
+          showError('Remarks are required for all deductions with an amount greater than 0');
           setSubmitting(false);
           return;
         }
@@ -204,14 +203,13 @@ export default function ConfirmPurchaseOrderForm() {
         throw new Error(errorData.error || 'Failed to create confirmed purchase order');
       }
 
-      setSuccess(true);
-      // Reset form
+      showSuccess('Confirmed purchase order created successfully!');
+      // Reset form after a short delay
       setTimeout(() => {
         resetForm();
-        setSuccess(false);
-      }, 2000);
+      }, 1000);
     } catch (err: any) {
-      setError(err.message);
+      showError(err.message || 'Failed to create confirmed purchase order. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -264,19 +262,6 @@ export default function ConfirmPurchaseOrderForm() {
         </h1>
         <p className="text-gray-600">Fill in all the details to confirm a purchase order</p>
       </div>
-
-      {error && (
-        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 text-red-800 p-4">
-          {error}
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-6 rounded-lg border border-green-200 bg-green-50 text-green-800 p-4 flex items-center gap-2">
-          <CheckCircle className="w-5 h-5" />
-          Confirmed purchase order created successfully!
-        </div>
-      )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-8 space-y-8">
         {/* Customer & Basic Info */}

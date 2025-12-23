@@ -136,7 +136,19 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
           const checkResult = await checkResponse.json();
 
           if (checkResult.exists) {
-            setError(checkResult.message || 'An account with this email or mobile number already exists. Please use a different email or mobile number.');
+            // Show specific error message based on what exists
+            let errorMessage = '';
+            if (checkResult.emailExists && checkResult.mobileExists) {
+              errorMessage = 'This email is already used and This number is already used';
+            } else if (checkResult.emailExists) {
+              errorMessage = 'This email is already used';
+            } else if (checkResult.mobileExists) {
+              errorMessage = 'This number is already used';
+            } else {
+              errorMessage = checkResult.message || 'An account with this email or mobile number already exists. Please use a different email or mobile number.';
+            }
+            
+            setError(errorMessage);
             setLoading(false);
             return;
           }
@@ -157,7 +169,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
           setError('Please select a verification method to continue');
           return;
         }
-                              setStep(5);
+        setStep(4);
         return;
       } else if (step === 4) {
         // Step 4: Document verification - validation will be done in the verification function

@@ -35,34 +35,56 @@ router.post('/check-user', async (req, res) => {
       });
     }
 
-    const query = {};
+    const errors = [];
+    let emailExists = false;
+    let mobileExists = false;
+
+    // Check email separately
     if (email) {
-      query.email = email.toLowerCase().trim();
-    }
-    if (mobile_number) {
-      query.mobile_number = mobile_number.trim();
-    }
-
-    const existingUser = await User.findOne(query);
-
-    if (existingUser) {
-      let message = 'An account already exists';
-      if (existingUser.email === email?.toLowerCase().trim() && existingUser.mobile_number === mobile_number?.trim()) {
-        message = 'An account with this email and mobile number already exists';
-      } else if (existingUser.email === email?.toLowerCase().trim()) {
-        message = 'An account with this email already exists';
-      } else if (existingUser.mobile_number === mobile_number?.trim()) {
-        message = 'An account with this mobile number already exists';
+      const emailUser = await User.findOne({ email: email.toLowerCase().trim() });
+      if (emailUser) {
+        emailExists = true;
+        errors.push('email');
       }
+    }
 
+    // Check mobile number separately
+    if (mobile_number) {
+      const mobileUser = await User.findOne({ mobile_number: mobile_number.trim() });
+      if (mobileUser) {
+        mobileExists = true;
+        errors.push('mobile');
+      }
+    }
+
+    // Return specific error messages
+    if (emailExists && mobileExists) {
       return res.status(200).json({ 
         exists: true,
-        message: message
+        emailExists: true,
+        mobileExists: true,
+        message: 'This email is already used and This number is already used'
+      });
+    } else if (emailExists) {
+      return res.status(200).json({ 
+        exists: true,
+        emailExists: true,
+        mobileExists: false,
+        message: 'This email is already used'
+      });
+    } else if (mobileExists) {
+      return res.status(200).json({ 
+        exists: true,
+        emailExists: false,
+        mobileExists: true,
+        message: 'This number is already used'
       });
     }
 
     return res.status(200).json({ 
       exists: false,
+      emailExists: false,
+      mobileExists: false,
       message: 'Email and mobile number are available'
     });
   } catch (error) {

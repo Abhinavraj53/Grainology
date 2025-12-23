@@ -351,9 +351,9 @@ export const geocodeLocation = async (location, state = '', country = 'India') =
 
     // If fallback not found and Google API key is available, try Google Geocoding
     if (GOOGLE_API_KEY) {
-      // Build location query with state if provided
-      const locationQuery = state ? `${location}, ${state}, ${country}` : `${location}, ${country}`;
-      
+    // Build location query with state if provided
+    const locationQuery = state ? `${location}, ${state}, ${country}` : `${location}, ${country}`;
+    
       // Try multiple query formats for better results
       const queries = [
         locationQuery, // Full query with state
@@ -371,7 +371,7 @@ export const geocodeLocation = async (location, state = '', country = 'India') =
           response = await axios.get(geocodeUrl);
           
           // If we got results, break out of loop
-          if (response.data && response.data.results && response.data.results.length > 0) {
+    if (response.data && response.data.results && response.data.results.length > 0) {
             break;
           }
         } catch (err) {
@@ -389,30 +389,30 @@ export const geocodeLocation = async (location, state = '', country = 'India') =
         } else if (response.data.status === 'ZERO_RESULTS') {
           console.warn(`Location not found in Google Geocoding: ${locationQuery}`);
         } else if (response.data.results && response.data.results.length > 0) {
-          const result = response.data.results[0];
-          const location_data = result.geometry.location;
-          
-          // Extract city and state from address components
-          let city = location;
-          let state_name = state;
-          
-          result.address_components.forEach(component => {
-            if (component.types.includes('locality') || component.types.includes('administrative_area_level_2')) {
-              city = component.long_name;
-            }
-            if (component.types.includes('administrative_area_level_1')) {
-              state_name = component.long_name;
-            }
-          });
-          
-          return {
-            lat: location_data.lat,
-            lon: location_data.lng,
-            name: city,
-            state: state_name,
-            country: country,
-            formatted_address: result.formatted_address
-          };
+      const result = response.data.results[0];
+      const location_data = result.geometry.location;
+      
+      // Extract city and state from address components
+      let city = location;
+      let state_name = state;
+      
+      result.address_components.forEach(component => {
+        if (component.types.includes('locality') || component.types.includes('administrative_area_level_2')) {
+          city = component.long_name;
+        }
+        if (component.types.includes('administrative_area_level_1')) {
+          state_name = component.long_name;
+        }
+      });
+      
+      return {
+        lat: location_data.lat,
+        lon: location_data.lng,
+        name: city,
+        state: state_name,
+        country: country,
+        formatted_address: result.formatted_address
+      };
         }
       }
     }
@@ -568,14 +568,14 @@ export const getWeatherForecast = async (location, state = '', days = 5) => {
           }
         };
       });
-      
-      return {
-        location: coords.name,
-        state: coords.state,
-        latitude: coords.lat,
-        longitude: coords.lon,
-        country: coords.country,
-        formatted_address: coords.formatted_address,
+    
+    return {
+      location: coords.name,
+      state: coords.state,
+      latitude: coords.lat,
+      longitude: coords.lon,
+      country: coords.country,
+      formatted_address: coords.formatted_address,
         forecasts: forecasts
       };
     } catch (weatherError) {

@@ -446,16 +446,16 @@ router.post('/verify-pan', async (req, res) => {
       const directResponse = await axios.post(
         `${CASHFREE_BASE_URL}/verification/pan`,
         { pan: cleanPan, name: cleanName },
-        {
-          headers: {
+      {
+        headers: {
             'x-client-id': CASHFREE_CLIENT_ID,
             'x-client-secret': CASHFREE_CLIENT_SECRET,
             'x-api-version': '2023-12-18',
-            'Content-Type': 'application/json',
+          'Content-Type': 'application/json',
           },
           timeout: 10000,
-        }
-      );
+      }
+    );
 
       const data = directResponse.data;
 
@@ -470,9 +470,9 @@ router.post('/verify-pan', async (req, res) => {
         data?.pan_status === 'VALID';
 
       if (isValidPan) {
-        return res.json({
-          success: true,
-          verified: true,
+      return res.json({
+        success: true,
+        verified: true,
           pan: cleanPan,
           // Prefer registered_name / name_pan_card / name if available, else fallback to provided name
           name:
@@ -482,8 +482,8 @@ router.post('/verify-pan', async (req, res) => {
             cleanName,
           type: data.type || 'Individual',
           details: data,
-        });
-      } else {
+      });
+    } else {
         console.log('Direct verification API returned non-success:', data);
       }
     } catch (directError) {
@@ -491,12 +491,12 @@ router.post('/verify-pan', async (req, res) => {
     }
 
     // If SDK and direct API did not verify, return a clear failure (avoid payout fallback)
-    return res.status(400).json({
-      success: false,
-      verified: false,
-      error: 'PAN verification failed',
+      return res.status(400).json({
+        success: false,
+        verified: false,
+        error: 'PAN verification failed',
       message: 'The PAN number or name does not match. Please check and try again.',
-    });
+      });
   } catch (error) {
     console.error('PAN verification error:', {
       message: error.message,
@@ -776,8 +776,8 @@ router.post('/verify-aadhaar-number', async (req, res) => {
               'x-api-version': '2023-12-18',
             },
             timeout: 10000,
-          }
-        );
+        }
+      );
 
         if (verifyAccountResponse.data?.status === 'ACCOUNT_EXISTS') {
           accountExists = true;
@@ -915,7 +915,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
       for (const endpoint of endpoints) {
         try {
           console.log(`Trying endpoint: ${endpoint}`);
-          
+      
           // Adjust request body and headers based on endpoint type
           let apiRequestBody = requestBody;
           let apiHeaders = {
@@ -994,7 +994,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
             console.log(`Endpoint ${endpoint} worked but no verification_url in response:`, responseData);
             // Continue to next endpoint
             continue;
-          }
+        }
         } catch (endpointError) {
           console.log(`❌ Endpoint ${endpoint} failed:`, {
             status: endpointError.response?.status,
@@ -1296,8 +1296,8 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
               'x-api-version': '2023-12-18',
             },
             timeout: 15000,
-          }
-        );
+        }
+      );
 
         const fallbackData = fallbackResponse.data?.data || fallbackResponse.data;
         const fallbackStatus = fallbackData?.verification_status || fallbackData?.status || 'PENDING';
@@ -1396,8 +1396,8 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
           }
           } catch (oldEndpointError) {
             console.error('Old endpoint error:', oldEndpointError.response?.data || oldEndpointError.message);
-          }
         }
+      }
       }
       
       // If all methods fail, return error

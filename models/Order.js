@@ -27,7 +27,8 @@ const orderSchema = new mongoose.Schema({
   deduction_amount: {
     type: Number,
     default: 0
-  }
+  },
+  sauda_confirmation_date: String
 }, {
   timestamps: true,
   toJSON: {

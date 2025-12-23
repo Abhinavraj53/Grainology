@@ -199,13 +199,20 @@ router.post('/', authenticate, async (req, res) => {
 
     const { offer_id, quantity_mt, final_price_per_quintal } = req.body;
 
+    // Get the offer to copy the sauda date if it exists
+    const offer = await Offer.findById(offer_id);
+    if (!offer) {
+      return res.status(404).json({ error: 'Offer not found' });
+    }
+
     const order = new Order({
       offer_id,
       buyer_id: req.userId,
       quantity_mt,
       final_price_per_quintal,
       status: 'Pending Approval',
-      deduction_amount: 0
+      deduction_amount: 0,
+      sauda_confirmation_date: offer.sauda_confirmation_date
     });
 
     await order.save();

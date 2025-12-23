@@ -52,6 +52,7 @@ const offerSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  sauda_confirmation_date: String,
   logistics_option: {
     type: String,
     enum: ['Seller Arranged', 'Buyer Arranged', 'Platform Arranged'],

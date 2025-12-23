@@ -24,6 +24,7 @@ const purchaseOrderSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  sauda_confirmation_date: String,
   delivery_timeline_days: Number,
   payment_terms: {
     type: String,

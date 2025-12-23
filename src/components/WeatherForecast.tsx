@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, WeatherData } from '../lib/supabase';
 import { Cloud, Droplets, Wind, Thermometer, MapPin, Calendar, RefreshCw } from 'lucide-react';
-import CSVUpload from './CSVUpload';
 import { WeatherCache } from '../lib/sessionStorage';
 
 export default function WeatherForecast() {
@@ -146,7 +145,7 @@ export default function WeatherForecast() {
     try {
       // Check cache first
       const cached = WeatherCache.getForecast(district, state);
-      if (cached) {
+      if (cached && Array.isArray(cached) && cached.length > 0) {
         setWeatherData(cached);
         setLoading(false);
         return;
@@ -227,56 +226,6 @@ export default function WeatherForecast() {
     }
   };
 
-  // Load weather data from database after CSV upload (fallback)
-  const loadFromDatabase = async () => {
-    try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const params = new URLSearchParams();
-      if (selectedDistrict) {
-        params.append('location', selectedDistrict);
-      }
-      // Load from today onwards
-      const today = new Date().toISOString().split('T')[0];
-      params.append('date__gte', today);
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/weather?${params.toString()}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token || ''}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        const transformedData = data.map((w: any) => ({
-          id: w.id || w._id || `${w.location}-${w.date}`,
-          location: w.location,
-          state: w.forecast_data?.state || w.state,
-          latitude: w.latitude,
-          longitude: w.longitude,
-          date: w.date,
-          temperature_min: w.temperature_min,
-          temperature_max: w.temperature_max,
-          humidity: w.humidity,
-          rainfall: w.rainfall,
-          wind_speed: w.wind_speed,
-          weather_condition: w.weather_condition,
-          forecast_data: w.forecast_data,
-          created_at: w.createdAt,
-        }));
-        setWeatherData(transformedData);
-      } else {
-        console.error('Failed to load weather data from database');
-      }
-    } catch (error) {
-      console.error('Error loading weather data from database:', error);
-    }
-  };
 
   const getWeatherIcon = (condition?: string) => {
     if (!condition) return <Cloud className="w-8 h-8 text-gray-400" />;
@@ -292,7 +241,6 @@ export default function WeatherForecast() {
 
   return (
     <div className="space-y-6">
-      <CSVUpload type="weather" onUploadSuccess={loadFromDatabase} />
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex items-center justify-between mb-6">
           <div>

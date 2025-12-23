@@ -416,11 +416,55 @@ export default function MandiBhaav() {
             <p className="text-gray-600">MSP (Minimum Support Price) Commodities - Tomato, Onion, Potato</p>
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            <button 
+              onClick={() => window.print()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
               <Printer className="w-4 h-4" />
               Print
             </button>
-            <button className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2">
+            <button 
+              onClick={() => {
+                try {
+                  // Create CSV content with all data (not just paginated)
+                  const headers = ['Commodity Group', 'Commodity', 'Variety', 'MSP (Rs./Quintal)', ...dates.map(d => `Price ${formatDate(d)}`), ...dates.map(d => `Arrival ${formatDate(d)}`)];
+                  const rows = data.map(item => [
+                    item.commodity_group || '',
+                    item.commodity || '',
+                    item.variety || '',
+                    item.msp > 0 ? item.msp.toFixed(2) : '-',
+                    ...dates.map(date => {
+                      const price = item.dates?.[date]?.price || 0;
+                      return price > 0 ? price.toFixed(2) : '-';
+                    }),
+                    ...dates.map(date => {
+                      const arrival = item.dates?.[date]?.arrival || 0;
+                      return arrival > 0 ? arrival.toFixed(2) : '-';
+                    })
+                  ]);
+                  
+                  const csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                  ].join('\n');
+                  
+                  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                  const link = document.createElement('a');
+                  const url = URL.createObjectURL(blob);
+                  link.setAttribute('href', url);
+                  link.setAttribute('download', `mandi_bhav_${new Date().toISOString().split('T')[0]}.csv`);
+                  link.style.visibility = 'hidden';
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  URL.revokeObjectURL(url);
+                } catch (error) {
+                  console.error('Error downloading CSV:', error);
+                  alert('Failed to download CSV. Please try again.');
+                }
+              }}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+            >
               <Download className="w-4 h-4" />
               Download
             </button>

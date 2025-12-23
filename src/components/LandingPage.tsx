@@ -271,7 +271,7 @@ export default function LandingPage() {
           </div>
 
           {/* Full Mandi Bhav Component with all filters */}
-          <div className="mt-8">
+          <div className="mt-8" id="mandi-bhav-section">
             <MandiBhaav />
           </div>
         </div>

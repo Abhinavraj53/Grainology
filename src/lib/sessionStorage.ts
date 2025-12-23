@@ -4,7 +4,7 @@
  */
 
 const CACHE_DURATION = {
-  WEATHER: 30 * 60 * 1000, // 30 minutes
+  WEATHER: 60 * 60 * 1000, // 1 hour
   MANDI: 60 * 60 * 1000, // 1 hour
   DASHBOARD: 15 * 60 * 1000, // 15 minutes
   FILTERS: 24 * 60 * 60 * 1000, // 24 hours

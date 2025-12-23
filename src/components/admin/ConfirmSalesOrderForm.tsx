@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Save, Upload, FileSpreadsheet } from 'lucide-react';
+import { FileText, Save, Upload, FileSpreadsheet, Download } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 import { useToastContext } from '../../contexts/ToastContext';
 
@@ -374,7 +374,34 @@ export default function ConfirmSalesOrderForm() {
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-900 mb-2">File Format Requirements:</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-blue-900">File Format Requirements:</h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Create sample CSV
+                    const sampleData = [
+                      ['Invoice Number', 'Transaction Date', 'State', 'Seller Name', 'Location', 'Warehouse Name', 'Chamber No', 'Commodity', 'Variety', 'Gate Pass No', 'Vehicle No', 'Weight Slip No', 'Gross Weight (MT)', 'Tare Weight (MT)', 'No of Bags', 'Net Weight (MT)', 'Rate per MT', 'Gross Amount', 'HLW', 'Excess HLW', 'Deduction Amount HLW', 'Moisture', 'Excess Moisture', 'BDOI', 'Excess BDOI', 'MOI+BDOI', 'Weight Deduction (KG)', 'Deduction Amount MOI+BDOI', 'Delivery Location', 'Remarks'],
+                      ['INV-001', '2024-01-15', 'Bihar', 'ABC Traders', 'Patna', 'Warehouse 1', 'CH-01', 'Paddy', 'Katarni', 'GP-123', 'BR-01-AB-1234', 'WS-456', '10.5', '0.5', '100', '10.0', '2500', '25000', '78.5', '0', '0', '14', '0', '2', '0', '0', '0', '0', 'Patna', 'Sample order'],
+                      ['INV-002', '2024-01-16', 'Bihar', 'XYZ Suppliers', 'Patna', 'Warehouse 2', 'CH-02', 'Wheat', 'Milling Quality', 'GP-124', 'BR-01-CD-5678', 'WS-457', '15.0', '0.5', '150', '14.5', '2800', '40600', '80.0', '0', '0', '12', '0', '1.5', '0', '0', '0', '0', 'Patna', 'Sample order 2']
+                    ];
+                    const csvContent = sampleData.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'sample_confirmed_sales_order.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center gap-1"
+                >
+                  <Download className="w-4 h-4" />
+                  Download Sample CSV
+                </button>
+              </div>
               <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
                 <li>First row should contain column headers</li>
                 <li>Required columns: Vehicle No, Net Weight (MT), Rate per MT</li>

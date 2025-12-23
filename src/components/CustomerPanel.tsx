@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Profile, supabase, Offer, Order, QualityParameter } from '../lib/supabase';
-import { Home, ShoppingBag, PlusCircle, LogOut, Cloud, TrendingUp, List, Package, ShoppingCart, Store, Menu, X, FileText } from 'lucide-react';
+import { Home, PlusCircle, LogOut, Cloud, TrendingUp, ShoppingCart, Store, Menu, X, FileText } from 'lucide-react';
 import Dashboard from './customer/Dashboard';
-import Marketplace from './customer/Marketplace';
 import CreateTrade from './customer/CreateTrade';
-import ActiveTrades from './customer/ActiveTrades';
 import MandiBhaav from './MandiBhaav';
 import WeatherForecast from './WeatherForecast';
-import OrderTracking from './customer/OrderTracking';
 import PurchaseOrderHistory from './customer/PurchaseOrderHistory';
 import SaleOrderHistory from './customer/SaleOrderHistory';
-import ConfirmedSalesOrderHistory from './customer/ConfirmedSalesOrderHistory';
-import ConfirmedPurchaseOrderHistory from './customer/ConfirmedPurchaseOrderHistory';
+import ConfirmedOrders from './customer/ConfirmedOrders';
+// Commented out - not in use
+// import Marketplace from './customer/Marketplace';
+// import ActiveTrades from './customer/ActiveTrades';
+// import OrderTracking from './customer/OrderTracking';
 import { DashboardCache } from '../lib/sessionStorage';
 
-type View = 'dashboard' | 'marketplace' | 'create-trade' | 'active-trades' | 'mandi' | 'weather' | 'tracking' | 'purchase-order' | 'sale-order' | 'confirmed-sales-orders' | 'confirmed-purchase-orders';
+type View = 'dashboard' | 'create-trade' | 'purchase-order' | 'sale-order' | 'confirmed-orders' | 'mandi' | 'weather';
 
 interface CustomerPanelProps {
   profile: Profile | null; // Allow profile to be null
@@ -238,6 +238,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
         </div>
 
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
+          {/* 1. Dashboard */}
           <button
             onClick={() => handleViewChange('dashboard')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -250,18 +251,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <span className="font-medium">Dashboard</span>
           </button>
 
-          <button
-            onClick={() => handleViewChange('marketplace')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'marketplace'
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <ShoppingBag className="w-5 h-5" />
-            <span className="font-medium">Marketplace</span>
-          </button>
-
+          {/* 2. Create Trade */}
           <button
             onClick={() => handleViewChange('create-trade')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -274,54 +264,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <span className="font-medium">Create Trade</span>
           </button>
 
-          <button
-            onClick={() => handleViewChange('active-trades')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'active-trades'
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <List className="w-5 h-5" />
-            <span className="font-medium">Your Trades</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('mandi')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'mandi'
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <TrendingUp className="w-5 h-5" />
-            <span className="font-medium">Mandi Bhaav</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('weather')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'weather'
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Cloud className="w-5 h-5" />
-            <span className="font-medium">Weather</span>
-          </button>
-
-          <button
-            onClick={() => handleViewChange('tracking')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'tracking'
-                ? 'bg-green-50 text-green-700'
-                : 'text-gray-700 hover:bg-gray-50'
-            }`}
-          >
-            <Package className="w-5 h-5" />
-            <span className="font-medium">Track Orders</span>
-          </button>
-
+          {/* 3. Purchase Order */}
           <button
             onClick={() => handleViewChange('purchase-order')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -334,6 +277,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <span className="font-medium">Purchase Order</span>
           </button>
 
+          {/* 4. Sales Order */}
           <button
             onClick={() => handleViewChange('sale-order')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -343,31 +287,46 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             }`}
           >
             <Store className="w-5 h-5" />
-            <span className="font-medium">Sale Order</span>
+            <span className="font-medium">Sales Order</span>
           </button>
 
+          {/* 5. All Confirmed Order */}
           <button
-            onClick={() => handleViewChange('confirmed-sales-orders')}
+            onClick={() => handleViewChange('confirmed-orders')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'confirmed-sales-orders'
+              currentView === 'confirmed-orders'
                 ? 'bg-green-50 text-green-700'
                 : 'text-gray-700 hover:bg-gray-50'
             }`}
           >
             <FileText className="w-5 h-5" />
-            <span className="font-medium">Confirmed Sales Orders</span>
+            <span className="font-medium">All Confirmed Order</span>
           </button>
 
+          {/* 6. Mandi Bhav */}
           <button
-            onClick={() => handleViewChange('confirmed-purchase-orders')}
+            onClick={() => handleViewChange('mandi')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              currentView === 'confirmed-purchase-orders'
+              currentView === 'mandi'
                 ? 'bg-green-50 text-green-700'
                 : 'text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <FileText className="w-5 h-5" />
-            <span className="font-medium">Confirmed Purchase Orders</span>
+            <TrendingUp className="w-5 h-5" />
+            <span className="font-medium">Mandi Bhav</span>
+          </button>
+
+          {/* 7. Weather */}
+          <button
+            onClick={() => handleViewChange('weather')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'weather'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Cloud className="w-5 h-5" />
+            <span className="font-medium">Weather</span>
           </button>
         </nav>
 
@@ -400,16 +359,12 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             </button>
             <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex-1">
             {currentView === 'dashboard' && 'Dashboard'}
-            {currentView === 'marketplace' && 'Marketplace'}
             {currentView === 'create-trade' && 'Create Trade'}
-            {currentView === 'active-trades' && 'Your Trades'}
-            {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
-            {currentView === 'weather' && 'Weather Forecast'}
-            {currentView === 'tracking' && 'Track Your Orders'}
             {currentView === 'purchase-order' && 'Purchase Order History'}
             {currentView === 'sale-order' && 'Sale Order History'}
-            {currentView === 'confirmed-sales-orders' && 'Confirmed Sales Orders'}
-            {currentView === 'confirmed-purchase-orders' && 'Confirmed Purchase Orders'}
+            {currentView === 'confirmed-orders' && 'All Confirmed Orders'}
+            {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
+            {currentView === 'weather' && 'Weather Forecast'}
             </h2>
           </div>
         </header>
@@ -417,13 +372,6 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
         <div className="p-4 md:p-6">
           {currentView === 'dashboard' && profile && (
             <Dashboard profile={profile} orders={myOrders} offers={offers} />
-          )}
-          {currentView === 'marketplace' && profile && (
-            <Marketplace
-              offers={offers}
-              profile={profile}
-              onPlaceOrder={handlePlaceOrder}
-            />
           )}
           {currentView === 'create-trade' && profile && (
             <CreateTrade
@@ -433,29 +381,20 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
               userId={profile.id}
             />
           )}
-          {currentView === 'active-trades' && profile && (
-            <ActiveTrades offers={offers} profile={profile} />
-          )}
-          {currentView === 'mandi' && (
-            <MandiBhaav />
-          )}
-          {currentView === 'weather' && (
-            <WeatherForecast />
-          )}
-          {currentView === 'tracking' && (
-            <OrderTracking profileId={profile?.id || ''} />
-          )}
           {currentView === 'purchase-order' && profile && (
             <PurchaseOrderHistory userId={profile.id} userName={profile.name || 'User'} />
           )}
           {currentView === 'sale-order' && profile && (
             <SaleOrderHistory userId={profile.id} userName={profile.name || 'User'} />
           )}
-          {currentView === 'confirmed-sales-orders' && profile && (
-            <ConfirmedSalesOrderHistory userId={profile.id} />
+          {currentView === 'confirmed-orders' && profile && (
+            <ConfirmedOrders userId={profile.id} userName={profile.name || 'User'} />
           )}
-          {currentView === 'confirmed-purchase-orders' && profile && (
-            <ConfirmedPurchaseOrderHistory userId={profile.id} userName={profile.name || 'User'} />
+          {currentView === 'mandi' && (
+            <MandiBhaav />
+          )}
+          {currentView === 'weather' && (
+            <WeatherForecast />
           )}
         </div>
       </main>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { QualityParameter } from '../../lib/supabase';
-import { Upload, FileText, Award, Info, Package, Calendar, DollarSign, ClipboardCheck } from 'lucide-react';
+import { FileText, Info, Package, Calendar, DollarSign, ClipboardCheck } from 'lucide-react';
 import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 
@@ -24,7 +24,6 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
   const [qualityTerms, setQualityTerms] = useState('');
   const [qualityReport, setQualityReport] = useState<Record<string, string>>({});
   const [qualityParameters, setQualityParameters] = useState<any[]>([]);
-  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -74,16 +73,6 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
     );
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map(file => file.name);
-      setUploadedDocs(prev => [...prev, ...newFiles]);
-    }
-  };
-
-  const removeDocument = (index: number) => {
-    setUploadedDocs(prev => prev.filter((_, i) => i !== index));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,7 +139,6 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
         setSaudaDate('');
         setQualityTerms('');
         setQualityReport({});
-        setUploadedDocs([]);
         setAgreeToTerms(false);
         setError('');
       }
@@ -171,8 +159,8 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+      <div className="max-w-5xl mx-auto">
+        <div>
           <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Tell us about your requirements</h2>
@@ -478,71 +466,6 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-lg shadow p-6 border-2 border-dashed border-gray-300">
-            <div className="text-center mb-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-3">
-                <Upload className="w-8 h-8 text-blue-600" />
-              </div>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  multiple
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                />
-                <span className="inline-block px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors">
-                  + Upload Documents
-                </span>
-              </label>
-              <p className="text-sm text-gray-600 mt-2">Please upload the following</p>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div className="flex items-start gap-3">
-                <Award className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Quality Certificate/ Specifications</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <FileText className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Commodity images of listed stock</p>
-                </div>
-              </div>
-            </div>
-
-            {uploadedDocs.length > 0 && (
-              <div className="border-t border-gray-200 pt-4">
-                <p className="text-sm font-medium text-gray-800 mb-3">Uploaded Documents</p>
-                <div className="space-y-2">
-                  {uploadedDocs.map((doc, index) => (
-                    <div key={index} className="flex items-center justify-between bg-gray-50 p-2 rounded">
-                      <span className="text-xs text-gray-600 truncate">{doc}</span>
-                      <button
-                        type="button"
-                        onClick={() => removeDocument(index)}
-                        className="text-red-500 hover:text-red-700 text-xs"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {uploadedDocs.length === 0 && (
-              <div className="text-center py-8">
-                <FileText className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">Your uploaded documents over here</p>
-              </div>
-            )}
           </div>
         </div>
       </div>

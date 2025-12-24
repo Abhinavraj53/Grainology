@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Save, Upload, FileSpreadsheet, Download } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
+import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToastContext } from '../../contexts/ToastContext';
 
 interface User {
@@ -17,6 +18,8 @@ export default function ConfirmSalesOrderForm() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
+  const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
+  const [varieties, setVarieties] = useState<string[]>([]);
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
@@ -66,7 +69,23 @@ export default function ConfirmSalesOrderForm() {
 
   useEffect(() => {
     fetchCustomers();
+    // Fetch commodities on mount
+    fetchCommodities().then(setCommodities).catch(() => {
+      setCommodities(['Paddy', 'Maize', 'Wheat']);
+    });
   }, []);
+
+  useEffect(() => {
+    // Fetch varieties when commodity changes
+    if (commodity) {
+      fetchVarieties(commodity).then(setVarieties).catch(() => {
+        setVarieties(COMMODITY_VARIETIES[commodity] || []);
+      });
+      setVariety(''); // Reset variety when commodity changes
+    } else {
+      setVarieties([]);
+    }
+  }, [commodity]);
 
   useEffect(() => {
     // Calculate net weight
@@ -255,7 +274,7 @@ export default function ConfirmSalesOrderForm() {
     setRemarks('');
   };
 
-  const varieties = COMMODITY_VARIETIES[commodity] || [];
+  // Varieties are now fetched from database via useEffect
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -764,9 +783,10 @@ export default function ConfirmSalesOrderForm() {
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
-                <option value="Paddy">Paddy</option>
-                <option value="Maize">Maize</option>
-                <option value="Wheat">Wheat</option>
+                <option value="">Select Commodity</option>
+                {commodities.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
             </div>
 

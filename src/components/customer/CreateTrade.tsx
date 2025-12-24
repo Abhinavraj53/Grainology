@@ -3,6 +3,7 @@ import { QualityParameter } from '../../lib/supabase';
 import { FileText, Info, Package, Calendar, DollarSign, ClipboardCheck, PlusCircle } from 'lucide-react';
 import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
+import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToast } from '../Toast';
 
 interface CreateTradeProps {
@@ -30,6 +31,29 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
   const [loading, setLoading] = useState(false);
 
   const [deliveryLocation, setDeliveryLocation] = useState('');
+  const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
+  const [varieties, setVarieties] = useState<string[]>([]);
+
+  // Fetch commodities on mount
+  useEffect(() => {
+    fetchCommodities().then(setCommodities).catch(() => {
+      // Fallback to static defaults on error
+      setCommodities(['Paddy', 'Maize', 'Wheat']);
+    });
+  }, []);
+
+  // Fetch varieties when commodity changes
+  useEffect(() => {
+    if (commodity) {
+      fetchVarieties(commodity).then(setVarieties).catch(() => {
+        // Fallback to static defaults on error
+        setVarieties(COMMODITY_VARIETIES[commodity] || []);
+      });
+      setVariety(''); // Reset variety when commodity changes
+    } else {
+      setVarieties([]);
+    }
+  }, [commodity]);
 
   // Update Quality Parameters based on Commodity selection
   useEffect(() => {
@@ -211,9 +235,9 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
                       className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg appearance-none"
                     >
                       <option value="">Select Commodity</option>
-                      <option value="Paddy">Paddy</option>
-                      <option value="Maize">Maize</option>
-                      <option value="Wheat">Wheat</option>
+                      {commodities.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
                     </select>
                   </div>
                   <p className="text-sm text-gray-600 mt-1">Paddy/Maize/Wheat</p>
@@ -232,7 +256,7 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg appearance-none disabled:bg-gray-100"
                   >
                     <option value="">Select Variety</option>
-                    {commodity && COMMODITY_VARIETIES[commodity]?.map((v) => (
+                    {varieties.map((v) => (
                       <option key={v} value={v}>
                         {v}
                       </option>

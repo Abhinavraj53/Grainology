@@ -386,10 +386,27 @@ router.post('/signup', async (req, res) => {
       });
     }
     
-    // Handle duplicate email error (MongoDB unique constraint)
+    // Handle duplicate key error (MongoDB unique constraint)
     if (error.code === 11000 || error.code === 11001) {
-      console.log('Duplicate email error');
-      return res.status(400).json({ error: 'User with this email already exists' });
+      console.log('Duplicate key error:', error.keyPattern, error.keyValue);
+      
+      // Check which field caused the duplicate
+      if (error.keyPattern?.mobile_number) {
+        return res.status(400).json({ error: 'User with this mobile number already exists' });
+      } else if (error.keyPattern?.email) {
+        return res.status(400).json({ error: 'User with this email already exists' });
+      } else if (error.keyPattern?.['verification_documents.aadhaar_number']) {
+        return res.status(400).json({ error: 'User with this Aadhaar number already exists' });
+      } else if (error.keyPattern?.['verification_documents.pan_number']) {
+        return res.status(400).json({ error: 'User with this PAN number already exists' });
+      } else if (error.keyPattern?.['verification_documents.gstin']) {
+        return res.status(400).json({ error: 'User with this GSTIN already exists' });
+      } else if (error.keyPattern?.['verification_documents.cin']) {
+        return res.status(400).json({ error: 'User with this CIN already exists' });
+      }
+      
+      // Generic duplicate error if we can't determine the field
+      return res.status(400).json({ error: 'A user with this information already exists' });
     }
     
     // Check if it's a database connection error

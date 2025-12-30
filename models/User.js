@@ -4,8 +4,9 @@ import bcrypt from 'bcryptjs';
 const userSchema = new mongoose.Schema({
   email: {
     type: String,
-    required: true,
+    required: false, // Made optional - users can register without email
     unique: true,
+    sparse: true, // Allows multiple null values
     lowercase: true,
     trim: true
   },
@@ -18,7 +19,10 @@ const userSchema = new mongoose.Schema({
     required: true
   },
   mobile_number: {
-    type: String
+    type: String,
+    required: true, // Now required for registration
+    unique: true,
+    trim: true
   },
   preferred_language: {
     type: String,
@@ -54,6 +58,32 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: {}
   },
+  // Verification document IDs for uniqueness checking
+  verification_documents: {
+    aadhaar_number: {
+      type: String,
+      sparse: true,
+      trim: true
+    },
+    pan_number: {
+      type: String,
+      sparse: true,
+      trim: true,
+      uppercase: true
+    },
+    gstin: {
+      type: String,
+      sparse: true,
+      trim: true,
+      uppercase: true
+    },
+    cin: {
+      type: String,
+      sparse: true,
+      trim: true,
+      uppercase: true
+    }
+  },
   business_name: String,
   business_type: {
     type: String,
@@ -71,6 +101,13 @@ const userSchema = new mongoose.Schema({
     }
   }
 });
+
+// Create indexes for verification documents to ensure uniqueness
+userSchema.index({ 'verification_documents.aadhaar_number': 1 }, { unique: true, sparse: true });
+userSchema.index({ 'verification_documents.pan_number': 1 }, { unique: true, sparse: true });
+userSchema.index({ 'verification_documents.gstin': 1 }, { unique: true, sparse: true });
+userSchema.index({ 'verification_documents.cin': 1 }, { unique: true, sparse: true });
+userSchema.index({ mobile_number: 1 }, { unique: true });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

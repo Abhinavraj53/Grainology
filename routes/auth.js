@@ -19,6 +19,72 @@ const checkDB = (req, res) => {
 
 // Note: KYC verification is now handled by Cashfree routes at /api/cashfree/kyc/*
 
+// Check if user exists by verification document
+router.post('/check-verification-document', async (req, res) => {
+  try {
+    // Check database connection
+    const dbError = checkDB(req, res);
+    if (dbError) return;
+
+    const { verification_method, document_id } = req.body;
+
+    if (!verification_method || !document_id) {
+      return res.status(400).json({ 
+        error: 'Verification method and document ID are required',
+        exists: false 
+      });
+    }
+
+    // Normalize document ID based on method
+    let normalizedDocId = String(document_id).trim();
+    if (verification_method === 'pan' || verification_method === 'gst' || verification_method === 'cin') {
+      normalizedDocId = normalizedDocId.toUpperCase();
+    }
+
+    // Build query based on verification method
+    let query = {};
+    switch (verification_method) {
+      case 'aadhaar':
+        query = { 'verification_documents.aadhaar_number': normalizedDocId };
+        break;
+      case 'pan':
+        query = { 'verification_documents.pan_number': normalizedDocId };
+        break;
+      case 'gst':
+        query = { 'verification_documents.gstin': normalizedDocId };
+        break;
+      case 'cin':
+        query = { 'verification_documents.cin': normalizedDocId };
+        break;
+      default:
+        return res.status(400).json({ 
+          error: 'Invalid verification method',
+          exists: false 
+        });
+    }
+
+    const existingUser = await User.findOne(query);
+
+    if (existingUser) {
+      return res.status(200).json({ 
+        exists: true,
+        message: `An account already exists with this ${verification_method.toUpperCase()} number`
+      });
+    }
+
+    return res.status(200).json({ 
+      exists: false,
+      message: 'Document ID is available'
+    });
+  } catch (error) {
+    console.error('Check verification document error:', error);
+    res.status(500).json({ 
+      error: 'Failed to check verification document',
+      exists: false
+    });
+  }
+});
+
 // Check if user exists (email or mobile number)
 router.post('/check-user', async (req, res) => {
   try {
@@ -133,11 +199,6 @@ router.post('/signup', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!email || !email.trim()) {
-      console.log('Validation failed: Email is missing or empty');
-      return res.status(400).json({ error: 'Email is required' });
-    }
-    
     if (!password || password.length < 6) {
       console.log('Validation failed: Password is missing or too short', { passwordLength: password?.length || 0 });
       return res.status(400).json({ error: 'Password is required and must be at least 6 characters' });
@@ -148,24 +209,114 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return res.status(400).json({ error: 'Invalid email format' });
+    // Mobile number is now required (email is optional)
+    if (!mobile_number || !mobile_number.trim()) {
+      console.log('Validation failed: Mobile number is missing or empty');
+      return res.status(400).json({ error: 'Mobile number is required' });
     }
 
-    // Check if user exists
-    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
-    if (existingUser) {
-      return res.status(400).json({ error: 'User already exists' });
+    // Validate mobile number format (10 digits)
+    const mobileRegex = /^[0-9]{10}$/;
+    const cleanMobile = mobile_number.trim().replace(/\D/g, '');
+    if (!mobileRegex.test(cleanMobile)) {
+      return res.status(400).json({ error: 'Mobile number must be 10 digits' });
+    }
+
+    // Validate email format if provided (optional)
+    if (email && email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        return res.status(400).json({ error: 'Invalid email format' });
+      }
+    }
+
+    // Check if user exists by mobile number
+    const existingUserByMobile = await User.findOne({ mobile_number: cleanMobile });
+    if (existingUserByMobile) {
+      return res.status(400).json({ error: 'User with this mobile number already exists' });
+    }
+
+    // Check if user exists by email (if provided)
+    if (email && email.trim()) {
+      const existingUserByEmail = await User.findOne({ email: email.toLowerCase().trim() });
+      if (existingUserByEmail) {
+        return res.status(400).json({ error: 'User with this email already exists' });
+      }
+    }
+
+    // Check if user exists by verification document
+    if (kyc_verification_data) {
+      let verificationDocQuery = {};
+      const verificationMethod = kyc_verification_data.verification_method || kyc_verification_data.verificationMethod;
+      
+      if (verificationMethod === 'aadhaar' || verificationMethod === 'sandbox') {
+        const aadhaarNum = kyc_verification_data.aadhaar_data?.aadhaar_number || 
+                          kyc_verification_data.aadhaarNumber || 
+                          kyc_verification_data.aadhaar_number;
+        if (aadhaarNum) {
+          verificationDocQuery = { 'verification_documents.aadhaar_number': String(aadhaarNum).trim() };
+        }
+      } else if (verificationMethod === 'pan') {
+        const panNum = kyc_verification_data.pan_data?.pan || kyc_verification_data.documentNumber;
+        if (panNum) {
+          verificationDocQuery = { 'verification_documents.pan_number': String(panNum).trim().toUpperCase() };
+        }
+      } else if (verificationMethod === 'gst') {
+        const gstin = kyc_verification_data.gstin_data?.gstin || kyc_verification_data.documentNumber;
+        if (gstin) {
+          verificationDocQuery = { 'verification_documents.gstin': String(gstin).trim().toUpperCase() };
+        }
+      } else if (verificationMethod === 'cin') {
+        const cin = kyc_verification_data.cin_data?.cin || kyc_verification_data.documentNumber;
+        if (cin) {
+          verificationDocQuery = { 'verification_documents.cin': String(cin).trim().toUpperCase() };
+        }
+      }
+
+      if (Object.keys(verificationDocQuery).length > 0) {
+        const existingUserByDoc = await User.findOne(verificationDocQuery);
+        if (existingUserByDoc) {
+          return res.status(400).json({ error: `User with this ${verificationMethod.toUpperCase()} already exists` });
+        }
+      }
+    }
+
+    // Extract verification document IDs
+    const verificationDocuments = {};
+    if (kyc_verification_data) {
+      const verificationMethod = kyc_verification_data.verification_method || kyc_verification_data.verificationMethod;
+      
+      if (verificationMethod === 'aadhaar' || verificationMethod === 'sandbox') {
+        const aadhaarNum = kyc_verification_data.aadhaar_data?.aadhaar_number || 
+                          kyc_verification_data.aadhaarNumber || 
+                          kyc_verification_data.aadhaar_number;
+        if (aadhaarNum) {
+          verificationDocuments.aadhaar_number = String(aadhaarNum).trim();
+        }
+      } else if (verificationMethod === 'pan') {
+        const panNum = kyc_verification_data.pan_data?.pan || kyc_verification_data.documentNumber;
+        if (panNum) {
+          verificationDocuments.pan_number = String(panNum).trim().toUpperCase();
+        }
+      } else if (verificationMethod === 'gst') {
+        const gstin = kyc_verification_data.gstin_data?.gstin || kyc_verification_data.documentNumber;
+        if (gstin) {
+          verificationDocuments.gstin = String(gstin).trim().toUpperCase();
+        }
+      } else if (verificationMethod === 'cin') {
+        const cin = kyc_verification_data.cin_data?.cin || kyc_verification_data.documentNumber;
+        if (cin) {
+          verificationDocuments.cin = String(cin).trim().toUpperCase();
+        }
+      }
     }
 
     // Create user with KYC status based on verification
     const user = new User({
-      email: email.toLowerCase().trim(),
+      email: email && email.trim() ? email.toLowerCase().trim() : undefined,
       password,
       name: name.trim(),
-      mobile_number: mobile_number?.trim() || undefined,
+      mobile_number: cleanMobile,
       preferred_language: preferred_language || 'English',
       address_line1: address_line1?.trim() || undefined,
       address_line2: address_line2?.trim() || undefined,
@@ -180,12 +331,13 @@ router.post('/signup', async (req, res) => {
       kyc_status: kyc_verification_data ? 'verified' : 'not_started',
       kyc_verified_at: kyc_verification_data ? new Date() : undefined,
       kyc_data: kyc_verification_data ? {
-        verification_method: kyc_verification_data.verificationMethod || 'digilocker',
+        verification_method: kyc_verification_data.verification_method || kyc_verification_data.verificationMethod || 'sandbox',
         verification_id: kyc_verification_data.verification_id,
         aadhaar_data: kyc_verification_data.aadhaar_data || {},
         verified_at: kyc_verification_data.aadhaar_data?.verified_at || new Date().toISOString(),
         ...kyc_verification_data,
-      } : {}
+      } : {},
+      verification_documents: verificationDocuments
     });
 
     await user.save();
@@ -201,14 +353,16 @@ router.post('/signup', async (req, res) => {
     res.status(201).json({
       user: {
         id: user._id.toString(),
-        email: user.email,
+        mobile_number: user.mobile_number,
+        email: user.email || null,
         ...userObj
       },
       session: {
         access_token: token,
         user: {
           id: user._id.toString(),
-          email: user.email
+          mobile_number: user.mobile_number,
+          email: user.email || null
         }
       }
     });
@@ -255,20 +409,27 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Sign in
+// Sign in (using mobile number and password)
 router.post('/signin', async (req, res) => {
   try {
     // Check database connection
     const dbError = checkDB(req, res);
     if (dbError) return;
 
-    const { email, password } = req.body;
+    const { mobile_number, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!mobile_number || !password) {
+      return res.status(400).json({ error: 'Mobile number and password are required' });
     }
 
-    const user = await User.findOne({ email });
+    // Clean and validate mobile number
+    const cleanMobile = mobile_number.trim().replace(/\D/g, '');
+    const mobileRegex = /^[0-9]{10}$/;
+    if (!mobileRegex.test(cleanMobile)) {
+      return res.status(400).json({ error: 'Mobile number must be 10 digits' });
+    }
+
+    const user = await User.findOne({ mobile_number: cleanMobile });
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -289,14 +450,16 @@ router.post('/signin', async (req, res) => {
     res.json({
       user: {
         id: user._id.toString(),
-        email: user.email,
+        mobile_number: user.mobile_number,
+        email: user.email || null,
         ...userObj
       },
       session: {
         access_token: token,
         user: {
           id: user._id.toString(),
-          email: user.email
+          mobile_number: user.mobile_number,
+          email: user.email || null
         }
       }
     });
@@ -350,14 +513,16 @@ router.get('/session', async (req, res) => {
       res.json({
         user: {
           id: user._id.toString(),
-          email: user.email,
+          mobile_number: user.mobile_number,
+          email: user.email || null,
           ...userObj
         },
         session: {
           access_token: token,
           user: {
             id: user._id.toString(),
-            email: user.email
+            mobile_number: user.mobile_number,
+            email: user.email || null
           }
         }
       });
@@ -401,7 +566,8 @@ router.get('/user', authenticate, async (req, res) => {
     res.json({
       user: {
         id: user._id.toString(),
-        email: user.email,
+        mobile_number: user.mobile_number,
+        email: user.email || null,
         ...userObj
       }
     });

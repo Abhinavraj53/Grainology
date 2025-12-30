@@ -180,7 +180,7 @@ router.post('/signup', async (req, res) => {
     });
 
     const {
-      email,
+      email: emailRaw,
       password,
       name,
       mobile_number,
@@ -197,6 +197,9 @@ router.post('/signup', async (req, res) => {
       business_type,
       kyc_verification_data
     } = req.body;
+
+    // Clean email - only use if it's a non-empty string (convert empty strings to null)
+    const email = (emailRaw && typeof emailRaw === 'string' && emailRaw.trim()) ? emailRaw.trim() : null;
 
     // Validate required fields
     if (!password || password.length < 6) {
@@ -223,9 +226,9 @@ router.post('/signup', async (req, res) => {
     }
 
     // Validate email format if provided (optional)
-    if (email && email.trim()) {
+    if (email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email.trim())) {
+      if (!emailRegex.test(email)) {
         return res.status(400).json({ error: 'Invalid email format' });
       }
     }
@@ -236,9 +239,9 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'User with this mobile number already exists' });
     }
 
-    // Check if user exists by email (if provided)
-    if (email && email.trim()) {
-      const existingUserByEmail = await User.findOne({ email: email.toLowerCase().trim() });
+    // Check if user exists by email (only if email is provided)
+    if (email) {
+      const existingUserByEmail = await User.findOne({ email: email.toLowerCase() });
       if (existingUserByEmail) {
         return res.status(400).json({ error: 'User with this email already exists' });
       }
@@ -312,8 +315,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Create user with KYC status based on verification
-    const user = new User({
-      email: email && email.trim() ? email.toLowerCase().trim() : undefined,
+    const userData = {
       password,
       name: name.trim(),
       mobile_number: cleanMobile,
@@ -338,7 +340,14 @@ router.post('/signup', async (req, res) => {
         ...kyc_verification_data,
       } : {},
       verification_documents: verificationDocuments
-    });
+    };
+
+    // Only add email if it's provided and not empty
+    if (email) {
+      userData.email = email.toLowerCase();
+    }
+
+    const user = new User(userData);
 
     await user.save();
 
@@ -388,13 +397,17 @@ router.post('/signup', async (req, res) => {
     
     // Handle duplicate key error (MongoDB unique constraint)
     if (error.code === 11000 || error.code === 11001) {
-      console.log('Duplicate key error:', error.keyPattern, error.keyValue);
+      console.log('Duplicate key error:', {
+        keyPattern: error.keyPattern,
+        keyValue: error.keyValue,
+        emailProvided: !!email,
+        emailValue: email ? `${email.substring(0, 3)}***` : 'not provided',
+        requestBodyEmail: req.body.email ? `${String(req.body.email).substring(0, 3)}***` : 'not in request'
+      });
       
-      // Check which field caused the duplicate
+      // Check which field caused the duplicate - prioritize mobile_number
       if (error.keyPattern?.mobile_number) {
         return res.status(400).json({ error: 'User with this mobile number already exists' });
-      } else if (error.keyPattern?.email) {
-        return res.status(400).json({ error: 'User with this email already exists' });
       } else if (error.keyPattern?.['verification_documents.aadhaar_number']) {
         return res.status(400).json({ error: 'User with this Aadhaar number already exists' });
       } else if (error.keyPattern?.['verification_documents.pan_number']) {
@@ -403,10 +416,19 @@ router.post('/signup', async (req, res) => {
         return res.status(400).json({ error: 'User with this GSTIN already exists' });
       } else if (error.keyPattern?.['verification_documents.cin']) {
         return res.status(400).json({ error: 'User with this CIN already exists' });
+      } else if (error.keyPattern?.email) {
+        // Only show email error if email was actually provided in the request
+        if (email) {
+          return res.status(400).json({ error: 'User with this email already exists' });
+        } else {
+          // Email field in error but email wasn't provided - this shouldn't happen, but handle gracefully
+          console.warn('Email duplicate error but email was not provided in request. KeyValue:', error.keyValue);
+          return res.status(400).json({ error: 'A user with this information already exists. Please check your mobile number or verification document.' });
+        }
       }
       
       // Generic duplicate error if we can't determine the field
-      return res.status(400).json({ error: 'A user with this information already exists' });
+      return res.status(400).json({ error: 'A user with this information already exists. Please check your mobile number or verification document.' });
     }
     
     // Check if it's a database connection error

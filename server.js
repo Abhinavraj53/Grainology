@@ -24,6 +24,7 @@ import reportRoutes from './routes/reports.js';
 import uploadRoutes from './routes/uploads.js';
 import supplyTransactionRoutes from './routes/supplyTransactions.js';
 import cashfreeKYCRoutes from './routes/cashfreeKYC.js';
+import sandboxKYCRoutes from './routes/sandboxKYC.js';
 
 dotenv.config();
 
@@ -132,6 +133,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/supply-transactions', supplyTransactionRoutes);
 app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
+app.use('/api/sandbox/kyc', sandboxKYCRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

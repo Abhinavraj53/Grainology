@@ -170,12 +170,47 @@ router.post('/aadhaar/generate-otp', async (req, res) => {
  */
 router.post('/aadhaar/verify-otp', async (req, res) => {
   try {
+    // Log incoming request for debugging
+    console.log('OTP verification request received:', {
+      hasReferenceId: !!req.body.reference_id,
+      hasOtp: !!req.body.otp,
+      referenceIdType: typeof req.body.reference_id,
+      otpType: typeof req.body.otp
+    });
+
     const { reference_id, otp } = req.body;
 
-    if (!reference_id || !otp) {
+    // Validate and clean reference_id
+    if (!reference_id) {
       return res.status(400).json({
         success: false,
-        error: 'Reference ID and OTP are required'
+        error: 'Reference ID is required',
+        verified: false
+      });
+    }
+    const cleanReferenceId = String(reference_id).trim();
+    if (cleanReferenceId === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Reference ID cannot be empty',
+        verified: false
+      });
+    }
+
+    // Validate and clean OTP
+    if (!otp) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP is required',
+        verified: false
+      });
+    }
+    const otpString = String(otp).trim();
+    if (otpString.length !== 6 || !/^\d{6}$/.test(otpString)) {
+      return res.status(400).json({
+        success: false,
+        error: 'OTP must be exactly 6 digits',
+        verified: false
       });
     }
 
@@ -187,8 +222,8 @@ router.post('/aadhaar/verify-otp', async (req, res) => {
       `${SANDBOX_BASE_URL}/kyc/aadhaar/okyc/otp/verify`,
       {
         '@entity': 'in.co.sandbox.kyc.aadhaar.okyc.request',
-        reference_id: reference_id,
-        otp: otp
+        reference_id: cleanReferenceId,
+        otp: otpString
       },
       {
         headers: {
@@ -245,7 +280,7 @@ router.post('/aadhaar/verify-otp', async (req, res) => {
           mobile_hash: data.mobile_hash || '',
           photo: data.photo || '',
           share_code: data.share_code || '',
-          reference_id: data.reference_id || reference_id,
+          reference_id: data.reference_id || cleanReferenceId,
           transaction_id: response.data.transaction_id,
           details: data
         });

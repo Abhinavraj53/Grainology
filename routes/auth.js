@@ -456,27 +456,50 @@ router.post('/signin', async (req, res) => {
     if (dbError) return;
 
     const { mobile_number, password } = req.body;
+    
+    console.log('🔐 Sign in request received:', {
+      mobile_number: mobile_number ? `${mobile_number.substring(0, 3)}***` : 'missing',
+      hasPassword: !!password,
+      passwordLength: password?.length
+    });
 
     if (!mobile_number || !password) {
+      console.log('❌ Missing mobile_number or password');
       return res.status(400).json({ error: 'Mobile number and password are required' });
     }
 
     // Clean and validate mobile number
     const cleanMobile = mobile_number.trim().replace(/\D/g, '');
+    console.log('📱 Cleaned mobile number:', cleanMobile);
+    
     const mobileRegex = /^[0-9]{10}$/;
     if (!mobileRegex.test(cleanMobile)) {
+      console.log('❌ Invalid mobile number format:', cleanMobile);
       return res.status(400).json({ error: 'Mobile number must be 10 digits' });
     }
 
     const user = await User.findOne({ mobile_number: cleanMobile });
     if (!user) {
+      console.log('❌ User not found with mobile number:', cleanMobile);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    
+    console.log('✅ User found:', {
+      id: user._id,
+      name: user.name,
+      role: user.role,
+      mobile_number: user.mobile_number
+    });
 
     const isPasswordValid = await user.comparePassword(password);
+    console.log('🔐 Password validation result:', isPasswordValid);
+    
     if (!isPasswordValid) {
+      console.log('❌ Invalid password');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+    
+    console.log('✅ Login successful for user:', user._id);
 
     // Generate token
     const token = jwt.sign(

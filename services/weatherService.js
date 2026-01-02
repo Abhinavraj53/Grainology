@@ -454,7 +454,12 @@ export const getCurrentWeather = async (location, state = '') => {
     const weatherUrl = `${OPEN_METEO_BASE_URL}/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weather_code&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation&timezone=auto`;
     
     try {
-      const response = await axios.get(weatherUrl);
+      const response = await axios.get(weatherUrl, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'User-Agent': 'Grainology-Weather-Service/1.0'
+        }
+      });
       const data = response.data;
       
       if (!data.current) {
@@ -508,7 +513,18 @@ export const getCurrentWeather = async (location, state = '') => {
     } catch (weatherError) {
       console.error('Open-Meteo API error:', weatherError.message);
       if (weatherError.response) {
-        console.error('Open-Meteo API response:', weatherError.response.data);
+        console.error('Open-Meteo API response status:', weatherError.response.status);
+        console.error('Open-Meteo API response data:', weatherError.response.data);
+        
+        // Handle rate limiting (429)
+        if (weatherError.response.status === 429) {
+          throw new Error('Weather API rate limit exceeded. Please try again in a few minutes.');
+        }
+        
+        // Handle other API errors
+        if (weatherError.response.status >= 500) {
+          throw new Error('Weather service is temporarily unavailable. Please try again later.');
+        }
       }
       throw new Error(`Failed to fetch weather data: ${weatherError.message}`);
     }
@@ -529,7 +545,12 @@ export const getWeatherForecast = async (location, state = '', days = 5) => {
     const weatherUrl = `${OPEN_METEO_BASE_URL}/forecast?latitude=${coords.lat}&longitude=${coords.lon}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,relative_humidity_2m_max,weather_code&timezone=auto&forecast_days=${forecastDays}`;
     
     try {
-      const response = await axios.get(weatherUrl);
+      const response = await axios.get(weatherUrl, {
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'User-Agent': 'Grainology-Weather-Service/1.0'
+        }
+      });
       const data = response.data;
       
       if (!data.daily || !data.daily.time) {
@@ -581,7 +602,18 @@ export const getWeatherForecast = async (location, state = '', days = 5) => {
     } catch (weatherError) {
       console.error('Open-Meteo API error:', weatherError.message);
       if (weatherError.response) {
-        console.error('Open-Meteo API response:', weatherError.response.data);
+        console.error('Open-Meteo API response status:', weatherError.response.status);
+        console.error('Open-Meteo API response data:', weatherError.response.data);
+        
+        // Handle rate limiting (429)
+        if (weatherError.response.status === 429) {
+          throw new Error('Weather API rate limit exceeded. Please try again in a few minutes.');
+        }
+        
+        // Handle other API errors
+        if (weatherError.response.status >= 500) {
+          throw new Error('Weather service is temporarily unavailable. Please try again later.');
+        }
       }
       throw new Error(`Failed to fetch weather forecast: ${weatherError.message}`);
     }

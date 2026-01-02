@@ -61,6 +61,22 @@ router.get('/forecast', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Get weather forecast error:', error.message);
     
+    // Handle rate limiting (429)
+    if (error.message.includes('rate limit')) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        message: 'Too many requests to weather service. Please wait a few minutes and try again.'
+      });
+    }
+    
+    // Handle service unavailable
+    if (error.message.includes('temporarily unavailable') || error.message.includes('unavailable')) {
+      return res.status(503).json({ 
+        error: 'Service unavailable',
+        message: 'Weather service is temporarily unavailable. Please try again later.'
+      });
+    }
+    
     // Return user-friendly error message
     if (error.message.includes('not found in coordinates database')) {
       return res.status(404).json({ 
@@ -92,6 +108,22 @@ router.get('/current', authenticate, async (req, res) => {
     res.json(currentWeather);
   } catch (error) {
     console.error('Get current weather error:', error.message);
+    
+    // Handle rate limiting (429)
+    if (error.message.includes('rate limit')) {
+      return res.status(429).json({ 
+        error: 'Rate limit exceeded',
+        message: 'Too many requests to weather service. Please wait a few minutes and try again.'
+      });
+    }
+    
+    // Handle service unavailable
+    if (error.message.includes('temporarily unavailable') || error.message.includes('unavailable')) {
+      return res.status(503).json({ 
+        error: 'Service unavailable',
+        message: 'Weather service is temporarily unavailable. Please try again later.'
+      });
+    }
     
     // Return user-friendly error message
     if (error.message.includes('not found in coordinates database')) {

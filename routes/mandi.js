@@ -535,6 +535,156 @@ router.get('/filters', async (req, res) => {
   }
 });
 
+// Test endpoint to check Mandi API configuration and connectivity (PUBLIC - no auth)
+// IMPORTANT: This must be BEFORE router.get('/:id') to avoid route matching issues
+router.get('/test', async (req, res) => {
+  try {
+    const testResults = {
+      timestamp: new Date().toISOString(),
+      apiConfiguration: {
+        hasApiKey: !!MANDI_API_KEY,
+        apiKeyLength: MANDI_API_KEY ? MANDI_API_KEY.length : 0,
+        apiKeyPreview: MANDI_API_KEY ? `${MANDI_API_KEY.substring(0, 8)}...` : 'NOT SET',
+        apiBase: MANDI_API_BASE,
+        resourceId: MANDI_RESOURCE_ID,
+      },
+      tests: []
+    };
+
+    // Test 1: Check if API key is configured
+    if (!MANDI_API_KEY || MANDI_API_KEY === 'your-data-gov-api-key') {
+      testResults.tests.push({
+        name: 'API Key Configuration',
+        status: 'FAILED',
+        message: 'MANDI_API_KEY is not set or is using placeholder value',
+        fix: 'Set MANDI_API_KEY in your environment variables with a valid data.gov.in API key'
+      });
+      return res.status(500).json({
+        success: false,
+        error: 'Mandi API is not configured',
+        details: testResults
+      });
+    }
+
+    testResults.tests.push({
+      name: 'API Key Configuration',
+      status: 'PASSED',
+      message: 'API key is configured'
+    });
+
+    // Test 2: Try a small API request
+    const testParams = new URLSearchParams({
+      'api-key': MANDI_API_KEY,
+      format: 'json',
+      limit: '10', // Small limit for testing
+      offset: '0',
+    });
+
+    // Add a commodity filter to reduce data
+    testParams.append('filters[commodity]', 'Paddy');
+
+    const testUrl = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${testParams.toString()}`;
+    
+    console.log('🧪 Testing Mandi API:', testUrl.replace(MANDI_API_KEY, '***HIDDEN***'));
+
+    try {
+      const startTime = Date.now();
+      const response = await axios.get(testUrl, { 
+        timeout: 20000, // 20 second timeout for test
+        validateStatus: (status) => status < 500 // Don't throw on 4xx
+      });
+      const responseTime = Date.now() - startTime;
+
+      if (response.status === 200) {
+        const records = response.data?.records || [];
+        testResults.tests.push({
+          name: 'API Connectivity',
+          status: 'PASSED',
+          message: `Successfully connected to data.gov.in API`,
+          details: {
+            responseTime: `${responseTime}ms`,
+            recordsReturned: records.length,
+            totalRecords: response.data?.total || 'unknown'
+          }
+        });
+
+        // Test 3: Check if data structure is correct
+        if (records.length > 0) {
+          const sampleRecord = records[0];
+          const hasCommodity = !!(sampleRecord.Commodity || sampleRecord.commodity);
+          const hasPrice = !!(sampleRecord.Modal_Price || sampleRecord.modal_price || 
+                             sampleRecord.Price || sampleRecord.price);
+          
+          testResults.tests.push({
+            name: 'Data Structure',
+            status: hasCommodity && hasPrice ? 'PASSED' : 'WARNING',
+            message: hasCommodity && hasPrice 
+              ? 'Data structure looks correct' 
+              : 'Data structure may be different than expected',
+            details: {
+              sampleFields: Object.keys(sampleRecord).slice(0, 10),
+              hasCommodity,
+              hasPrice
+            }
+          });
+        } else {
+          testResults.tests.push({
+            name: 'Data Structure',
+            status: 'WARNING',
+            message: 'No records returned - API may be working but no data available',
+            details: {
+              responseData: response.data
+            }
+          });
+        }
+      } else {
+        testResults.tests.push({
+          name: 'API Connectivity',
+          status: 'FAILED',
+          message: `API returned status ${response.status}`,
+          details: {
+            status: response.status,
+            statusText: response.statusText,
+            data: response.data
+          }
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Mandi API test completed',
+        results: testResults
+      });
+
+    } catch (apiError) {
+      testResults.tests.push({
+        name: 'API Connectivity',
+        status: 'FAILED',
+        message: apiError.message,
+        details: {
+          code: apiError.code,
+          response: apiError.response?.data,
+          status: apiError.response?.status
+        }
+      });
+
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to connect to Mandi API',
+        details: testResults
+      });
+    }
+
+  } catch (error) {
+    console.error('Test endpoint error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Test endpoint error',
+      details: error.message
+    });
+  }
+});
+
 // Get all mandi prices
 router.get('/', authenticate, async (req, res) => {
   try {

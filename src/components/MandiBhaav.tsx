@@ -32,7 +32,7 @@ export default function MandiBhaav() {
   const [dates, setDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    state: 'all',
+    state: 'all', // Show overall data by default
     district: 'all',
     market: 'all',
     commodity_group: 'Cereals', // Default to Cereals to show Paddy, Maize, Wheat
@@ -104,8 +104,8 @@ export default function MandiBhaav() {
         console.error('Failed to load filter options:', errorData);
         // Set default filters to allow data loading even if filters fail
         setFilterOptions({
-          states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana'], // Default states
-          districts: [],
+          states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana', 'Madhya Pradesh', 'Rajasthan'], // Default states with Bihar first
+          districts: ['Patna', 'Muzaffarpur', 'Gaya', 'Bhagalpur', 'Purnia', 'Darbhanga', 'Saran', 'Siwan', 'Vaishali', 'Samastipur'], // Bihar districts
           markets: [],
           commodities: ['Paddy', 'Maize', 'Wheat'],
           varieties: [],
@@ -125,8 +125,8 @@ export default function MandiBhaav() {
         console.warn('Invalid filter options response:', options);
         // Set default filters
         setFilterOptions({
-          states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana'],
-          districts: [],
+          states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana', 'Madhya Pradesh', 'Rajasthan'],
+          districts: ['Patna', 'Muzaffarpur', 'Gaya', 'Bhagalpur', 'Purnia', 'Darbhanga', 'Saran', 'Siwan', 'Vaishali', 'Samastipur'], // Bihar districts
           markets: [],
           commodities: ['Paddy', 'Maize', 'Wheat'],
           varieties: [],
@@ -137,8 +137,8 @@ export default function MandiBhaav() {
       console.error('Error loading filter options:', error);
       // Set default filters to allow data loading
       setFilterOptions({
-        states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana'],
-        districts: [],
+        states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana', 'Madhya Pradesh', 'Rajasthan'],
+        districts: ['Patna', 'Muzaffarpur', 'Gaya', 'Bhagalpur', 'Purnia', 'Darbhanga', 'Saran', 'Siwan', 'Vaishali', 'Samastipur'], // Bihar districts
         markets: [],
         commodities: ['Paddy', 'Maize', 'Wheat'],
         varieties: [],
@@ -162,9 +162,10 @@ export default function MandiBhaav() {
         return;
       }
 
-      // Fetch data for Paddy, Maize, Wheat by default
+      // Fetch data for Paddy, Maize, Wheat by default (all states)
       const params = new URLSearchParams();
       params.append('commodity_group', 'Cereals');
+      // No state filter - show overall data
       // Filter to show only Paddy, Maize, Wheat
       const defaultCommodities = ['Paddy', 'Maize', 'Wheat'];
       
@@ -187,8 +188,8 @@ export default function MandiBhaav() {
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Failed to fetch data' }));
-            console.error(`Failed to fetch ${commodity} data:`, errorData);
-            setApiError(`Failed to fetch ${commodity} data: ${errorData.error || errorData.message || 'Unknown error'}`);
+            console.error(`Failed to fetch ${commodity} data (${response.status}):`, errorData);
+            // Don't set error for individual commodities, just log it and continue
             continue; // Skip this commodity and continue with others
           }
 
@@ -206,7 +207,6 @@ export default function MandiBhaav() {
           }
         } catch (error: any) {
           console.error(`Error fetching ${commodity} data:`, error);
-          setApiError(`Error fetching ${commodity}: ${error.message || 'Network error'}`);
           // Continue with other commodities even if one fails
         }
       }
@@ -216,12 +216,13 @@ export default function MandiBhaav() {
       
       if (allData.length > 0) {
         setData(allData);
-        setDates(sortedDates);
+        setDates(sortedDates.length > 0 ? sortedDates : [new Date().toISOString().split('T')[0]]);
         // Cache the data
-        MandiCache.setDefault({ data: allData, dates: sortedDates });
+        MandiCache.setDefault({ data: allData, dates: sortedDates.length > 0 ? sortedDates : [new Date().toISOString().split('T')[0]] });
         setApiError(null); // Clear any previous errors
+        console.log(`✅ Successfully loaded ${allData.length} mandi records`);
       } else {
-        setApiError('No data available for the selected commodities. Please try again later or adjust filters.');
+        setApiError('No data available for the selected commodities. Please try adjusting filters or check your connection.');
         setData([]);
         setDates([]);
       }
@@ -305,13 +306,13 @@ export default function MandiBhaav() {
       setData([]);
       setDates([]);
     } finally {
-      setLoading(false);
+    setLoading(false);
     }
   };
 
   const resetFilters = () => {
     setFilters({
-      state: 'all',
+      state: 'all', // Reset to show overall data
       district: 'all',
       market: 'all',
       commodity_group: 'Cereals', // Reset to default
@@ -645,10 +646,13 @@ export default function MandiBhaav() {
         )}
 
         {/* Info Bar */}
-        {!apiError && (
+        {!apiError && data.length > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
             <p className="text-sm text-gray-700">
-              <span className="font-semibold">All States</span> | Data Freeze Up to {dates[0] ? formatDate(dates[0]) : new Date().toLocaleDateString()}
+              <span className="font-semibold">{filters.state !== 'all' ? filters.state : 'All States'}</span>
+              {filters.district !== 'all' && ` | ${filters.district} District`}
+              {' '}| Data Freeze Up to {dates[0] ? formatDate(dates[0]) : new Date().toLocaleDateString()} | 
+              {' '}Showing {data.length} records
             </p>
           </div>
         )}

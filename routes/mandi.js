@@ -434,7 +434,28 @@ router.get('/filters', async (req, res) => {
       });
     }
 
-    // Fetch a large sample to get all unique values
+    // Fetch a large sample to get all unique values, prioritizing Bihar
+    // First try to get Bihar-specific data
+    const biharParams = new URLSearchParams({
+      'api-key': MANDI_API_KEY,
+      format: 'json',
+      limit: '5000',
+      offset: '0',
+      'filters[state.keyword]': 'Bihar',
+    });
+
+    const biharUrl = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${biharParams.toString()}`;
+    let biharResponse;
+    let biharRecords = [];
+    
+    try {
+      biharResponse = await axios.get(biharUrl, { timeout: 15000 });
+      biharRecords = biharResponse.data?.records || [];
+    } catch (error) {
+      console.warn('Failed to fetch Bihar-specific data, will fetch all data:', error.message);
+    }
+
+    // Also fetch general data to get all states
     const params = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
@@ -444,7 +465,10 @@ router.get('/filters', async (req, res) => {
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
     const response = await axios.get(url, { timeout: 15000 });
-    const records = response.data?.records || [];
+    const allRecords = response.data?.records || [];
+
+    // Combine Bihar records with all records (Bihar first)
+    const records = [...biharRecords, ...allRecords];
 
     const states = new Set();
     const districts = new Set();
@@ -452,6 +476,9 @@ router.get('/filters', async (req, res) => {
     const commodities = new Set();
     const varieties = new Set();
     const commodityGroups = new Set();
+
+    // Bihar districts list for default
+    const biharDistricts = ['Patna', 'Muzaffarpur', 'Gaya', 'Bhagalpur', 'Purnia', 'Darbhanga', 'Saran', 'Siwan', 'Vaishali', 'Samastipur', 'Madhubani', 'East Champaran', 'West Champaran', 'Sitamarhi', 'Begusarai', 'Nalanda', 'Bhojpur', 'Rohtas', 'Aurangabad', 'Nawada'];
 
     records.forEach(record => {
       const state = record.State || record.state || record.state_name;
@@ -470,10 +497,29 @@ router.get('/filters', async (req, res) => {
       if (variety) varieties.add(variety);
     });
 
+    // Ensure Bihar districts are included even if not in API response
+    biharDistricts.forEach(dist => districts.add(dist));
+
+    // Sort states with Bihar first
+    const sortedStates = Array.from(states).sort((a, b) => {
+      if (a === 'Bihar') return -1;
+      if (b === 'Bihar') return 1;
+      return a.localeCompare(b);
+    });
+
+    // Sort districts with Bihar districts first
+    const sortedDistricts = Array.from(districts).sort((a, b) => {
+      const aIsBihar = biharDistricts.some(d => a.includes(d) || d.includes(a));
+      const bIsBihar = biharDistricts.some(d => b.includes(d) || d.includes(b));
+      if (aIsBihar && !bIsBihar) return -1;
+      if (!aIsBihar && bIsBihar) return 1;
+      return a.localeCompare(b);
+    });
+
     return res.json({
       success: true,
-      states: Array.from(states).sort(),
-      districts: Array.from(districts).sort(),
+      states: sortedStates,
+      districts: sortedDistricts,
       markets: Array.from(markets).sort(),
       commodities: Array.from(commodities).sort(),
       varieties: Array.from(varieties).sort(),

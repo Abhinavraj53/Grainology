@@ -23,7 +23,6 @@ export default function ConfirmSalesOrderForm() {
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
-  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [state, setState] = useState('');
   const [sellerName, setSellerName] = useState('');
@@ -176,7 +175,6 @@ export default function ConfirmSalesOrderForm() {
 
       const orderData = {
         customer_id: customerId,
-        invoice_number: invoiceNumber,
         transaction_date: transactionDate,
         state,
         seller_name: sellerName,
@@ -240,7 +238,6 @@ export default function ConfirmSalesOrderForm() {
 
   const resetForm = () => {
     setCustomerId('');
-    setInvoiceNumber('');
     setTransactionDate('');
     setState('');
     setSellerName('');
@@ -400,7 +397,6 @@ export default function ConfirmSalesOrderForm() {
                   onClick={() => {
                     // Create sample CSV matching Excel format exactly
                     const headers = [
-                      'Invoice Number',
                       'Date of Transaction',
                       'State',
                       'Seller Name',
@@ -451,7 +447,6 @@ export default function ConfirmSalesOrderForm() {
                     ];
                     
                     const sampleRow1 = [
-                      'INV-001',
                       '01/05/25',
                       'Bihar',
                       'FARMKEN VENTURES',
@@ -502,7 +497,6 @@ export default function ConfirmSalesOrderForm() {
                     ];
                     
                     const sampleRow2 = [
-                      'INV-002',
                       '09/04/25',
                       'Bihar',
                       'Agro Valley Trading',
@@ -574,7 +568,7 @@ export default function ConfirmSalesOrderForm() {
               <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
                 <li>First row should contain column headers</li>
                 <li>Required columns: Vehicle No, Net Weight (MT), Rate per MT</li>
-                <li>Optional columns: Invoice Number, Transaction Date, Commodity, Variety, Gross Weight (MT), Tare Weight (MT), No of Bags, Gross Amount, and all quality parameters</li>
+                <li>Optional columns: Transaction Date, Commodity, Variety, Gross Weight (MT), Tare Weight (MT), No of Bags, Gross Amount, and all quality parameters</li>
                 <li>Each row represents one confirmed sales order</li>
               </ul>
             </div>
@@ -677,20 +671,6 @@ export default function ConfirmSalesOrderForm() {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Invoice Number <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter invoice number"
-              />
             </div>
 
             <div>

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Order, Offer, supabase, LogisticsShipment } from '../../lib/supabase';
 import { Users, Package, ShoppingCart, AlertCircle, TrendingUp, DollarSign, UserCheck, Cloud, CheckCircle, Truck } from 'lucide-react';
 import MandiBhaav from '../MandiBhaav';
-import { WeatherCache, DashboardCache } from '../../lib/sessionStorage';
+import Weathersonu from '../weathersonu';
+import { DashboardCache, WeatherCache } from '../../lib/sessionStorage';
 
 interface EnhancedDashboardProps {
   stats: {
@@ -56,7 +57,6 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
         }
       }
     });
-    loadWeather();
   }, [orders]);
 
   const loadShipmentsAndPerformance = async (userId?: string) => {
@@ -133,7 +133,6 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
     delivered: shipments.filter(s => s.status === 'delivered').length,
     total: shipments.length
   };
-
 
   const [weather, setWeather] = useState<{
     location: string;
@@ -213,6 +212,12 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
     }
   };
 
+  useEffect(() => {
+    loadWeather();
+  }, []);
+
+
+
 
   return (
     <div className="space-y-6">
@@ -291,6 +296,10 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
       </div>
 
       <div className="grid grid-cols-1 gap-6">
+        {/* Location & Weather KPI Card - New Component */}
+        <Weathersonu />
+
+        {/* Previous Weather Component */}
         <div className="bg-white rounded-lg shadow">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center gap-2">
@@ -299,7 +308,7 @@ export default function EnhancedDashboard({ stats, orders, offers }: EnhancedDas
             </div>
           </div>
           <div className="p-6 space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200"> 
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Today's Weather</p>

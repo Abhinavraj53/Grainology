@@ -32,7 +32,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
 
-  // KYC Verification state (Cashfree)
+  // KYC Verification state
   const [verificationMethod, setVerificationMethod] = useState<'pan' | 'aadhaar' | 'gst' | 'cin' | ''>('');
   const [panNumber, setPanNumber] = useState('');
   const [panName, setPanName] = useState('');
@@ -45,27 +45,34 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   const [kycVerified, setKycVerified] = useState(false);
   const [kycVerificationData, setKycVerificationData] = useState<any>(null);
   const [autoFilledData, setAutoFilledData] = useState<any>(null);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingStartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pollingMaxTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Sandbox Aadhaar verification state
+  const [aadhaarOtpSent, setAadhaarOtpSent] = useState(false);
+  const [aadhaarReferenceId, setAadhaarReferenceId] = useState<string | null>(null);
+  const [aadhaarOtp, setAadhaarOtp] = useState('');
+  
+  // Cashfree Digilocker polling refs (commented out but kept for reference)
+  // const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // const pollingStartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // const pollingMaxTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-      if (pollingStartTimeoutRef.current) {
-        clearTimeout(pollingStartTimeoutRef.current);
-      }
-      if (pollingMaxTimeoutRef.current) {
-        clearTimeout(pollingMaxTimeoutRef.current);
-      }
-    };
-  }, []);
+  // Cleanup polling on unmount (commented out - was for Cashfree Digilocker)
+  // useEffect(() => {
+  //   return () => {
+  //     if (pollingIntervalRef.current) {
+  //       clearInterval(pollingIntervalRef.current);
+  //     }
+  //     if (pollingStartTimeoutRef.current) {
+  //       clearTimeout(pollingStartTimeoutRef.current);
+  //     }
+  //     if (pollingMaxTimeoutRef.current) {
+  //       clearTimeout(pollingMaxTimeoutRef.current);
+  //     }
+  //   };
+  // }, []);
 
   const handleDocumentUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -86,7 +93,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
     setError('');
 
     // Handle navigation between steps for registration
-    if (!isLogin && step < 5) {
+    if (!isLogin && step < 4) {
       if (step === 1) {
         // Step 1: Validate role selection
         if (!role) {
@@ -96,101 +103,28 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         setStep(2);
         return;
       } else if (step === 2) {
-        // Step 2: Validate Name, Number, Email, Password and check if account exists
-        if (!name || !name.trim()) {
-          setError('Name is required');
-          return;
-        }
-        if (!mobileNumber || mobileNumber.length !== 10) {
-          setError('Please enter a valid 10-digit mobile number');
-          return;
-        }
-        if (!email || !email.trim()) {
-          setError('Email is required');
-          return;
-        }
-        // Validate email format
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email.trim())) {
-          setError('Please enter a valid email address');
-          return;
-        }
-        if (!password || password.length < 6) {
-          setError('Password is required and must be at least 6 characters');
-          return;
-        }
-
-        // Check if account already exists
-        setLoading(true);
-        setError('');
-        try {
-          const checkResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-user`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              email: email.trim(),
-              mobile_number: mobileNumber.trim()
-            }),
-          });
-
-          const checkResult = await checkResponse.json();
-
-          if (checkResult.exists) {
-            // Show specific error message based on what exists
-            let errorMessage = '';
-            if (checkResult.emailExists && checkResult.mobileExists) {
-              errorMessage = 'This email is already used and This number is already used';
-            } else if (checkResult.emailExists) {
-              errorMessage = 'This email is already used';
-            } else if (checkResult.mobileExists) {
-              errorMessage = 'This number is already used';
-            } else {
-              errorMessage = checkResult.message || 'An account with this email or mobile number already exists. Please use a different email or mobile number.';
-            }
-            
-            setError(errorMessage);
-            setLoading(false);
-            return;
-          }
-
-          // Account doesn't exist, proceed to next step
-          setStep(3);
-          setLoading(false);
-          return;
-        } catch (err: any) {
-          console.error('Check user error:', err);
-          setError('Failed to verify account availability. Please try again.');
-          setLoading(false);
-          return;
-        }
-      } else if (step === 3) {
-        // Step 3: Validate verification method selection
+        // Step 2: Validate verification method selection
         if (!verificationMethod) {
           setError('Please select a verification method to continue');
           return;
         }
-        setStep(4);
+        setStep(3);
         return;
-      } else if (step === 4) {
-        // Step 4: Document verification - validation will be done in the verification function
+      } else if (step === 3) {
+        // Step 3: Document verification - validation will be done in the verification function
         // Just proceed to next step after verification is complete
         return;
       }
       return;
     }
 
-    // If on step 5 (final step) or login, proceed with account creation/sign in
-    if (!isLogin && step !== 5) {
+    // If on step 4 (final step) or login, proceed with account creation/sign in
+    if (!isLogin && step !== 4) {
       return; // Don't proceed if not on final step
     }
 
-    // Final validation for step 5
-    if (!isLogin && step === 5) {
-      if (!email || !email.trim()) {
-        setError('Email is required');
-        setLoading(false);
-        return;
-      }
+    // Final validation for step 4 (final step - create account)
+    if (!isLogin && step === 4) {
       if (!password || password.length < 6) {
         setError('Password is required and must be at least 6 characters');
         setLoading(false);
@@ -214,7 +148,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
     try {
       if (isLogin) {
-        await signIn(email, password);
+        // Login with mobile number and password
+        await signIn(mobileNumber, password);
         // Redirect to dashboard after successful login
         navigate('/dashboard');
       } else {
@@ -230,7 +165,6 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         const isCompany = entityType === 'company';
 
         const signUpPayload: any = {
-          email: email.trim(),
           password,
           name: finalName.trim(),
           mobile_number: mobileNumber?.trim() || undefined,
@@ -251,6 +185,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
             : undefined,
           business_type: isCompany ? businessType : undefined,
         };
+
+        // Only add email if it's provided and not empty - don't send empty strings
+        const cleanEmail = email && typeof email === 'string' ? email.trim() : '';
+        if (cleanEmail && cleanEmail.length > 0) {
+          signUpPayload.email = cleanEmail;
+        }
 
         // Add KYC data if verified
         if (kycVerified && kycVerificationData) {
@@ -312,25 +252,36 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
         console.log('Signup payload:', { ...signUpPayload, password: '***' }); // Log without password
 
+        // Call signup with timeout protection (handled in api.js)
+        console.log('🚀 Starting signup request...');
+        const startTime = Date.now();
+        
         const { data: authData, error: signUpError } = await api.auth.signUp(signUpPayload);
+        
+        const elapsedTime = Date.now() - startTime;
+        console.log(`⏱️ Signup request completed in ${elapsedTime}ms`);
 
         if (signUpError) {
           // Extract error message from signup error
           const errorMessage = signUpError.message || 
                                signUpError.error?.message || 
+                               signUpError.error ||
                                signUpError.details || 
                                'An error occurred while creating an account';
-          console.error('Signup error:', signUpError);
+          console.error('❌ Signup error:', signUpError);
           setError(errorMessage);
           setLoading(false);
           return;
         }
         
         if (!authData?.user) {
+          console.error('❌ Signup failed: No user data returned');
           setError('Failed to create user. Please try again.');
           setLoading(false);
           return;
         }
+        
+        console.log('✅ Signup successful, user created:', authData.user.id);
         
         // Show success message
         console.log('✅ Account created successfully with Aadhaar verification!');
@@ -338,7 +289,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         
         // Automatically sign in the user after successful registration
         try {
-          await signIn(email, password);
+          await signIn(mobileNumber, password);
           // Redirect to dashboard after successful sign in
           console.log('✅ Sign in successful, redirecting to dashboard...');
           navigate('/dashboard');
@@ -353,10 +304,10 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
       console.error('Auth error:', err);
       const errorMessage = err.message || 
                           err.error?.message || 
+                          err.error ||
                           err.details || 
-                          'An error occurred';
+                          'An error occurred. Please try again.';
       setError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
@@ -449,13 +400,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
             </button>
           </div>
 
-          {!isLogin && step <= 5 && (
+          {!isLogin && step <= 4 && (
             <div className="mb-6 flex justify-between gap-1">
               <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 1 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
               <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 2 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
               <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 3 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
               <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 4 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
-              <div className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${step >= 5 ? 'bg-green-600' : 'bg-gray-200'}`}></div>
             </div>
           )}
 
@@ -500,84 +450,9 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
             {!isLogin && step === 2 && (
               <>
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
-                  <p className="text-base font-semibold text-blue-900 mb-1">Step 2: Personal Information</p>
-                  <p className="text-sm text-blue-700">Enter your name, mobile number, email, and password</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Full Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                    placeholder="Enter your full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Mobile Number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                    placeholder="Enter 10-digit mobile number"
-                    maxLength={10}
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Email <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                    placeholder="Enter your email"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Password <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                    placeholder="Create a password (min. 6 characters)"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-all duration-200"
-                >
-                  Back
-                </button>
-              </>
-            )}
-
-            {!isLogin && step === 3 && (
-              <>
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    <p className="text-base font-semibold text-blue-900">Step 3: Choose Verification Method</p>
+                    <p className="text-base font-semibold text-blue-900">Step 2: Choose Verification Method</p>
                   </div>
                   <p className="text-sm text-blue-700">Select how you want to verify your identity</p>
                 </div>
@@ -654,7 +529,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(1)}
                   className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-all duration-200"
                 >
                   Back
@@ -662,14 +537,14 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </>
             )}
 
-            {!isLogin && step === 4 && (
+            {!isLogin && step === 3 && (
               <>
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <Shield className="w-5 h-5 text-blue-600" />
-                    <p className="text-base font-semibold text-blue-900">Step 4: Document Verification</p>
+                    <p className="text-base font-semibold text-blue-900">Step 3: Document Verification</p>
                   </div>
-                  <p className="text-sm text-blue-700">Enter your document details and verify via Cashfree</p>
+                  <p className="text-sm text-blue-700">Enter your document details and verify. We'll check if an account already exists with this document.</p>
                 </div>
 
                 {verificationMethod === 'pan' && (
@@ -710,6 +585,28 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         setKycVerifying(true);
                         setError('');
                         try {
+                          // First check if user already exists with this PAN
+                          const checkResponse = await fetch(
+                            `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-verification-document`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                verification_method: 'pan',
+                                document_id: panNumber.trim().toUpperCase()
+                              })
+                            }
+                          );
+
+                          const checkResult = await checkResponse.json();
+
+                          if (checkResult.exists) {
+                            setError(checkResult.message || 'An account already exists with this PAN number');
+                            setKycVerifying(false);
+                            return;
+                          }
+
+                          // If account doesn't exist, proceed with verification
                           const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/cashfree/kyc/verify-pan`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -735,7 +632,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               documentType: 'PAN',
                               verifiedDetails: result,
                             });
-                            setStep(5);
+                            setStep(4); // Go to review and password step
                           } else {
                             const errorMessage = result.message || result.error || 'PAN verification failed. Please check your PAN number and name.';
                             setError(errorMessage);
@@ -757,6 +654,246 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
                 {verificationMethod === 'aadhaar' && (
                   <>
+                    {/* ========== SANDBOX AADHAAR VERIFICATION (NEW) ========== */}
+                    {!aadhaarOtpSent ? (
+                  <>
+                    <div>
+                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                        Aadhaar Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={aadhaarNumber}
+                        onChange={(e) => setAadhaarNumber(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                            disabled={kycVerifying}
+                            className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all disabled:bg-gray-100"
+                        placeholder="Enter 12-digit Aadhaar number"
+                        maxLength={12}
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Enter your 12-digit Aadhaar number</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!aadhaarNumber || aadhaarNumber.length !== 12) {
+                          setError('Please enter a valid 12-digit Aadhaar number');
+                          return;
+                        }
+
+                            // Additional validation: Aadhaar should not start with 0 or 1
+                            if (aadhaarNumber.startsWith('0') || aadhaarNumber.startsWith('1')) {
+                              setError('Invalid Aadhaar number. Aadhaar cannot start with 0 or 1.');
+                              return;
+                            }
+
+                        setKycVerifying(true);
+                        setError('');
+
+                            try {
+                              // First check if user already exists with this Aadhaar
+                              const checkResponse = await fetch(
+                                `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-verification-document`,
+                                {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    verification_method: 'aadhaar',
+                                    document_id: aadhaarNumber
+                                  })
+                                }
+                              );
+
+                              const checkResult = await checkResponse.json();
+
+                              if (checkResult.exists) {
+                                setError(checkResult.message || 'An account already exists with this Aadhaar number');
+                                setKycVerifying(false);
+                                return;
+                              }
+
+                              // If account doesn't exist, proceed with OTP generation
+                              const response = await fetch(
+                                `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/sandbox/kyc/aadhaar/generate-otp`,
+                                {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    aadhaar_number: aadhaarNumber,
+                                    reason: 'KYC verification for account registration'
+                                  })
+                                }
+                              );
+
+                              const result = await response.json();
+
+                              if (!response.ok) {
+                                throw new Error(result.error || 'Failed to generate OTP');
+                              }
+
+                              if (result.success && result.reference_id) {
+                                setAadhaarReferenceId(result.reference_id);
+                                setAadhaarOtpSent(true);
+                                setError('');
+                                // Show success message
+                                console.log('✅ OTP sent successfully. Reference ID:', result.reference_id);
+                              } else {
+                                throw new Error(result.error || 'Failed to generate OTP');
+                              }
+                            } catch (err: any) {
+                              console.error('Aadhaar OTP generation error:', err);
+                              setError(err.message || 'Failed to send OTP. Please try again.');
+                            } finally {
+                              setKycVerifying(false);
+                            }
+                          }}
+                          disabled={kycVerifying || !aadhaarNumber || aadhaarNumber.length !== 12}
+                          className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {kycVerifying ? 'Sending OTP...' : 'Send OTP'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                          <p className="text-sm text-blue-800">
+                            OTP has been sent to your registered mobile number linked with Aadhaar. Please enter the OTP below.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                            Enter OTP <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={aadhaarOtp}
+                            onChange={(e) => setAadhaarOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                            disabled={kycVerifying}
+                            className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all disabled:bg-gray-100 text-center text-2xl tracking-widest"
+                            placeholder="000000"
+                            maxLength={6}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Enter the 6-digit OTP received on your mobile</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!aadhaarOtp || aadhaarOtp.length !== 6) {
+                              setError('Please enter a valid 6-digit OTP');
+                              return;
+                            }
+
+                            if (!aadhaarReferenceId) {
+                              setError('Reference ID missing. Please start verification again.');
+                              return;
+                            }
+
+                            setKycVerifying(true);
+                            setError('');
+
+                            try {
+                              // Validate inputs before sending
+                              if (!aadhaarReferenceId || !aadhaarOtp) {
+                                setError('Reference ID and OTP are required');
+                                setKycVerifying(false);
+                                return;
+                              }
+
+                              const response = await fetch(
+                                `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/sandbox/kyc/aadhaar/verify-otp`,
+                                {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    reference_id: String(aadhaarReferenceId).trim(),
+                                    otp: String(aadhaarOtp).trim()
+                                  })
+                                }
+                              );
+
+                              const result = await response.json();
+
+                              if (!response.ok) {
+                                // Log full error for debugging
+                                console.error('OTP verification failed:', {
+                                  status: response.status,
+                                  error: result.error,
+                                  details: result.details
+                                });
+                                throw new Error(result.error || result.message || 'Failed to verify OTP');
+                              }
+
+                              if (result.success && result.verified) {
+                                // Extract Aadhaar details
+                                const address = result.address || {};
+                                const fullAddress = address.full_address || [
+                                  address.house,
+                                  address.street,
+                                  address.landmark,
+                                  address.vtc,
+                                  address.post_office,
+                                  address.district,
+                                  address.state,
+                                  address.pincode
+                                ].filter(Boolean).join(', ');
+
+                                const aadhaarData = {
+                                  name: result.name || '',
+                                  dateOfBirth: result.date_of_birth || result.year_of_birth || '',
+                                  gender: result.gender || '',
+                                  address: fullAddress,
+                                  aadhaarNumber: result.aadhaar_number || aadhaarNumber,
+                                  care_of: result.care_of || '',
+                                  documentType: 'Aadhaar',
+                                  verification_method: 'sandbox',
+                                  reference_id: result.reference_id,
+                                  verifiedDetails: result,
+                                  verifiedAt: new Date().toISOString()
+                                };
+
+                                setKycVerified(true);
+                                setKycVerificationData(result);
+                                setAutoFilledData(aadhaarData);
+                                setKycVerifying(false);
+                                setError('');
+
+                                console.log('✅ Aadhaar verification successful!', aadhaarData);
+
+                                // Proceed to next step (review and password)
+                                setStep(4);
+                              } else {
+                                throw new Error(result.error || 'Aadhaar verification failed');
+                              }
+                            } catch (err: any) {
+                              console.error('Aadhaar OTP verification error:', err);
+                              setError(err.message || 'Failed to verify OTP. Please check the OTP and try again.');
+                            } finally {
+                              setKycVerifying(false);
+                            }
+                          }}
+                          disabled={kycVerifying || !aadhaarOtp || aadhaarOtp.length !== 6}
+                          className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold py-3 px-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {kycVerifying ? 'Verifying...' : 'Verify OTP'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAadhaarOtpSent(false);
+                            setAadhaarReferenceId(null);
+                            setAadhaarOtp('');
+                            setAadhaarNumber('');
+                            setError('');
+                          }}
+                          className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors mt-2"
+                        >
+                          Change Aadhaar Number
+                        </button>
+                      </>
+                    )}
+                    {/* ========== END SANDBOX AADHAAR VERIFICATION ========== */}
+
+                    {/* ========== CASHFREE DIGILOCKER VERIFICATION (COMMENTED OUT) ========== */}
+                    {/* 
                     <div>
                       <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                         Aadhaar Number <span className="text-red-500">*</span>
@@ -774,6 +911,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     <button
                       type="button"
                       onClick={async () => {
+                        // Cashfree Digilocker verification code commented out - replaced with Sandbox Aadhaar OTP verification
                         if (!aadhaarNumber || aadhaarNumber.length !== 12) {
                           setError('Please enter a valid 12-digit Aadhaar number');
                           return;
@@ -965,7 +1103,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                       console.log('✅ Aadhaar verification successful!', aadhaarData);
                                       
                                       // Proceed to next step (review and account creation)
-                                    setStep(5);
+                                    setStep(4);
                                       return;
                                     } else if (statusResult.error === 'eaadhaar_not_available') {
                                       // Aadhaar document not available in DigiLocker
@@ -1113,7 +1251,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                 verifiedDetails: result,
                               });
                               setKycVerifying(false);
-                              setStep(5);
+                              setStep(4);
                             } else {
                               // Format validation only - NOT verified
                               setError(result.error || result.message || 'Aadhaar format validated, but full verification is required. Please complete DigiLocker verification to fetch your details.');
@@ -1153,6 +1291,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     >
                       {kycVerifying ? 'Verifying...' : 'Verify Aadhaar'}
                     </button>
+                    */}
+                    {/* ========== END CASHFREE DIGILOCKER VERIFICATION ========== */}
                   </>
                 )}
 
@@ -1247,7 +1387,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               documentType: 'GSTIN',
                               verifiedDetails: result,
                             });
-                            setStep(5);
+                            setStep(4);
                           } else {
                             const errorMessage =
                               result.message ||
@@ -1341,7 +1481,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               documentType: 'CIN',
                               verifiedDetails: result,
                             });
-                            setStep(5);
+                            setStep(4);
                           } else {
                             const errorMessage =
                               result.message ||
@@ -1382,14 +1522,14 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </>
             )}
 
-            {!isLogin && step === 5 && (
+            {!isLogin && step === 4 && (
               <>
                 <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5 mb-6">
                   <div className="flex items-center gap-2 mb-1">
                     <CheckCircle className="w-5 h-5 text-blue-600" />
-                    <p className="text-base font-semibold text-blue-900">Step 5: Review & Create Account</p>
+                    <p className="text-base font-semibold text-blue-900">Step 4: Review & Set Password</p>
                   </div>
-                  <p className="text-sm text-blue-700">Review all your information before creating your account</p>
+                  <p className="text-sm text-blue-700">Review your information and set your password</p>
                 </div>
 
                 {autoFilledData && (
@@ -1493,7 +1633,6 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Role:</span> <span className="capitalize text-gray-900 font-semibold">{role}</span></div>
                       <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Name:</span> <span className="text-gray-900 font-semibold">{autoFilledData?.name || name || 'N/A'}</span></div>
-                      <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Email:</span> <span className="text-gray-900 font-semibold">{email || 'N/A'}</span></div>
                       <div className="flex justify-between py-2 border-b border-gray-200"><span className="font-medium text-gray-600">Mobile:</span> <span className="text-gray-900 font-semibold">{mobileNumber || 'N/A'}</span></div>
                       {autoFilledData?.documentType && (
                         <div className="flex justify-between py-2"><span className="font-medium text-gray-600">Verified Document:</span> <span className="text-green-600 font-semibold">{autoFilledData.documentType}</span></div>
@@ -1502,9 +1641,70 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                   </div>
                 </div>
 
+                <div className="mt-6">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Mobile Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={mobileNumber}
+                    onChange={async (e) => {
+                      const newMobile = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setMobileNumber(newMobile);
+                      // Clear error when user starts typing
+                      if (error && error.includes('mobile number')) {
+                        setError('');
+                      }
+                      // Check if mobile number already exists when user enters 10 digits
+                      if (newMobile.length === 10) {
+                        try {
+                          const checkResponse = await fetch(
+                            `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/auth/check-user`,
+                            {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ mobile_number: newMobile })
+                            }
+                          );
+                          const checkResult = await checkResponse.json();
+                          if (checkResult.exists && checkResult.mobileExists) {
+                            setError('User with this mobile number already exists');
+                          }
+                        } catch (err) {
+                          // Silently fail - don't show error for check failures
+                        }
+                      }
+                    }}
+                    className={`w-full px-4 py-3 text-sm sm:text-base border rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all ${
+                      error && error.includes('mobile number') ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                      placeholder="Enter 10-digit mobile number"
+                      maxLength={10}
+                      required
+                    />
+                  {error && error.includes('mobile number') && (
+                    <p className="text-xs text-red-600 mt-1">{error}</p>
+                  )}
+                  </div>
+
+                <div className="mt-4">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
+                    placeholder="Create a password (min. 6 characters)"
+                      required
+                    />
+                  <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => setStep(4)}
+                  onClick={() => setStep(3)}
                   className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded-lg transition-colors mt-4"
                 >
                   Back
@@ -1512,20 +1712,21 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </>
             )}
 
-            {/* Email and Password fields only for Login */}
+            {/* Mobile Number and Password fields only for Login */}
             {isLogin && (
               <>
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Email <span className="text-red-500">*</span>
+                    Mobile Number <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    type="tel"
+                    value={mobileNumber}
+                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
                     required
                     className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                    placeholder="Enter your email"
+                    placeholder="Enter 10-digit mobile number"
+                    maxLength={10}
                   />
                 </div>
 
@@ -1581,8 +1782,8 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </button>
             )}
 
-            {/* Submit button for login or step 5 (final step) */}
-            {(isLogin || step === 5) && (
+            {/* Submit button for login or step 4 (final step - create account) */}
+            {(isLogin || step === 4) && (
               <button
                 type="submit"
                 disabled={loading}

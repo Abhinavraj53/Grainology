@@ -94,9 +94,9 @@ export function useAuth() {
     return data;
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (mobile_number: string, password: string) => {
     const { data, error } = await api.auth.signInWithPassword({
-      email,
+      mobile_number,
       password,
     });
 

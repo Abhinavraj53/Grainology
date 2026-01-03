@@ -30,11 +30,18 @@ class ApiClient {
       this.token = token;
     }
 
+    // Create an AbortController for timeout (30 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       // Handle 401 (Unauthorized) gracefully for session endpoint
       if (response.status === 401 && endpoint === '/auth/session') {
@@ -64,6 +71,28 @@ class ApiClient {
 
       return await response.json();
     } catch (error) {
+      clearTimeout(timeoutId);
+      
+      // Handle timeout/abort errors
+      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
+        console.error('Request timeout:', url);
+        throw {
+          error: 'Request timeout',
+          message: 'The request took too long. Please check your internet connection and try again.',
+          details: 'Network timeout after 30 seconds'
+        };
+      }
+      
+      // Handle network errors
+      if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        console.error('Network error:', url);
+        throw {
+          error: 'Network error',
+          message: 'Unable to connect to the server. Please check your internet connection and try again.',
+          details: error.message
+        };
+      }
+      
       // For session endpoint, return null instead of throwing
       if (endpoint === '/auth/session') {
         return { user: null, session: null };
@@ -110,11 +139,23 @@ class ApiClient {
 
     signUp: async (signUpData) => {
       try {
-        console.log('Signup request payload:', { ...signUpData, password: '***' });
+        console.log('📤 Signup request payload:', { ...signUpData, password: '***' });
+        console.log('🌐 API Base URL:', API_BASE_URL);
+        console.log('🔗 Full URL:', `${API_BASE_URL}/auth/signup`);
+        
+        const startTime = Date.now();
         const data = await this.request('/auth/signup', {
           method: 'POST',
           body: JSON.stringify(signUpData),
         });
+        const elapsedTime = Date.now() - startTime;
+        
+        console.log(`✅ Signup API response received in ${elapsedTime}ms:`, { 
+          hasUser: !!data.user, 
+          hasSession: !!data.session,
+          userId: data.user?.id 
+        });
+        
         if (data.session?.access_token) {
           this.setToken(data.session.access_token);
         }
@@ -126,32 +167,53 @@ class ApiClient {
           error: null
         };
       } catch (error) {
-        console.error('Signup error details:', error);
+        console.error('❌ Signup error details:', {
+          error: error,
+          errorName: error?.name,
+          errorMessage: error?.message,
+          errorDetails: error?.details,
+          errorError: error?.error
+        });
+        
         // Extract error message from response
         const errorMessage = error.error || error.message || error.details || 'An error occurred while creating an account';
         return { 
           data: { user: null, session: null }, 
           error: {
             message: errorMessage,
+            error: error.error,
             details: error.details || error
           }
         };
       }
     },
 
-    signInWithPassword: async ({ email, password }) => {
+    signInWithPassword: async ({ mobile_number, password }) => {
       try {
+        console.log('🔐 Sign in request:', {
+          mobile_number: mobile_number,
+          passwordLength: password?.length,
+          apiUrl: `${API_BASE_URL}/auth/signin`
+        });
+        
         const response = await fetch(`${API_BASE_URL}/auth/signin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ mobile_number, password }),
         });
 
+        console.log('📥 Sign in response status:', response.status);
         const data = await response.json();
+        console.log('📥 Sign in response data:', { 
+          hasUser: !!data.user, 
+          hasSession: !!data.session,
+          error: data.error 
+        });
 
         if (!response.ok) {
+          console.error('❌ Sign in failed:', data);
           return {
             data: { user: null, session: null },
             error: data.error || { message: 'Invalid credentials' }

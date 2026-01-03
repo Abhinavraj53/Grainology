@@ -7,67 +7,24 @@ import {
 } from 'lucide-react';
 import MandiBhaav from './MandiBhaav';
 import LogisticsOverview from './LogisticsOverview';
-import { WeatherCache, MandiCache } from '../lib/sessionStorage';
-import { useIsVisible } from '../hooks/useIsVisible';
+import Weathersonu from './weathersonu';
+import { MandiCache } from '../lib/sessionStorage';
 
 export default function LandingPage() {
   const location = useLocation();
   const isLandingPage = location.pathname === '/';
   const sectionRef = useRef<HTMLDivElement>(null);
-  const isVisible = useIsVisible(sectionRef);
   const [hasLoaded, setHasLoaded] = useState(false);
 
-  const [weather, setWeather] = useState<any>(null);
-  const [weatherLoading, setWeatherLoading] = useState(false);
   const [mandiData, setMandiData] = useState<any[]>([]);
 
-  // Only load data if this is the active route and component is visible
+  // Load data on component mount
   useEffect(() => {
-    if (isLandingPage && (isVisible || !hasLoaded)) {
-      if (!hasLoaded) {
-        loadWeather();
-        loadMandiPreview();
-        setHasLoaded(true);
-      }
+    if (isLandingPage && !hasLoaded) {
+      loadMandiPreview();
+      setHasLoaded(true);
     }
-  }, [isLandingPage, isVisible, hasLoaded]);
-
-  const loadWeather = async () => {
-    try {
-      setWeatherLoading(true);
-      const location = 'Patna';
-      const state = 'Bihar';
-
-      // Check cache first
-      const cached = WeatherCache.get(location, state);
-      if (cached) {
-        setWeather(cached);
-        setWeatherLoading(false);
-        return;
-      }
-
-      // Fetch from API
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      const params = new URLSearchParams({
-        location,
-        state,
-      });
-
-      const response = await fetch(`${baseUrl}/weather/current?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (!data.error) {
-          setWeather(data);
-          // Cache the data
-          WeatherCache.set(location, state, data);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading weather:', error);
-    } finally {
-      setWeatherLoading(false);
-    }
-  };
+  }, [isLandingPage, hasLoaded]);
 
   const loadMandiPreview = async () => {
     try {
@@ -180,54 +137,8 @@ export default function LandingPage() {
           </h2>
           
           <div className="grid md:grid-cols-3 gap-6 mb-8">
-            {/* Weather Card */}
-            <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="bg-blue-100 p-3 rounded-lg">
-                    <Cloud className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">Weather Forecast</h3>
-                    <p className="text-sm text-gray-600">Patna, Bihar</p>
-                  </div>
-                </div>
-              </div>
-              {weatherLoading ? (
-                <div className="text-center py-4">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                </div>
-              ) : weather ? (
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-4xl font-bold text-gray-900">
-                      {Math.round((weather.temperature_min + weather.temperature_max) / 2)}°C
-                    </span>
-                    <span className="text-sm text-gray-600">{weather.weather_condition}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Humidity:</span>
-                      <span className="font-semibold ml-2">{Math.round(weather.humidity || 0)}%</span>
-                    </div>
-                    {weather.rainfall > 0 && (
-                      <div>
-                        <span className="text-gray-600">Rainfall:</span>
-                        <span className="font-semibold ml-2">{weather.rainfall} mm</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-500 text-center py-4">Weather data loading...</p>
-              )}
-              <Link
-                to="/login"
-                className="mt-4 inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 font-semibold text-sm"
-              >
-                View Full Forecast <LogIn className="w-4 h-4" />
-              </Link>
-            </div>
+            {/* Weather Card - Using Weathersonu Component */}
+            <Weathersonu />
 
             {/* Mandi Bhav Card */}
             <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-500">
@@ -1137,3 +1048,4 @@ function FAQSection() {
     </section>
   );
 }
+

@@ -1,150 +1,100 @@
 import { useState, useEffect } from 'react';
 import { supabase, WeatherData } from '../lib/supabase';
-import { Cloud, Droplets, Wind, Thermometer, MapPin, Calendar, RefreshCw } from 'lucide-react';
+import { Cloud, Droplets, Wind, Thermometer, MapPin, Calendar, RefreshCw, Loader2 } from 'lucide-react';
 import { WeatherCache } from '../lib/sessionStorage';
+import Weathersonu from './weathersonu';
+
+interface LocationInfo {
+  lat: number;
+  lon: number;
+  city: string;
+  state: string;
+  country: string;
+}
 
 export default function WeatherForecast() {
   const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
-  const [selectedState, setSelectedState] = useState<string>('');
-  const [selectedDistrict, setSelectedDistrict] = useState<string>('');
-  const [states, setStates] = useState<string[]>([]);
-  const [districts, setDistricts] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingDistricts, setLoadingDistricts] = useState(false);
-  const [customerState, setCustomerState] = useState<string>('');
+  const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [place, setPlace] = useState<LocationInfo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [locationDetected, setLocationDetected] = useState(false);
 
-  // Load customer profile to get default state
+  // Auto-detect location on component mount
   useEffect(() => {
-    loadCustomerProfile();
-    loadStates();
+    detectLocation();
   }, []);
 
-  // Set Bihar as default if no customer state
+  // Load weather when location is detected
   useEffect(() => {
-    if (states.length > 0 && !selectedState && !customerState) {
-      setSelectedState('Bihar');
-      loadDistricts('Bihar');
+    if (coords && place) {
+      loadWeatherData(coords.lat, coords.lon, place.city, place.state);
     }
-  }, [states, selectedState, customerState]);
+  }, [coords, place]);
 
-  // Load weather when district is selected
-  useEffect(() => {
-    if (selectedDistrict && selectedState) {
-      loadWeatherData(selectedDistrict, selectedState);
+  const detectLocation = () => {
+    setError('');
+    setCoords(null);
+    setPlace(null);
+    setWeatherData([]);
+    setLoading(true);
+    setLocationDetected(false);
+
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser. Please enable location access.');
+      setLoading(false);
+      return;
     }
-  }, [selectedDistrict, selectedState]);
 
-  const loadCustomerProfile = async () => {
-    try {
-      const session = await supabase.auth.getSession();
-      if (!session.data.session) {
-        // If no session, set Bihar as default
-        return;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+          setCoords({ lat, lon });
+
+          // Get location name using OpenStreetMap Nominatim (FREE)
+          const geoRes = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1`
+          );
+          const geo = await geoRes.json();
+
+          const locationInfo: LocationInfo = {
+            lat,
+            lon,
+            city: geo.address?.city || geo.address?.town || geo.address?.village || geo.address?.county || 'Unknown',
+            state: geo.address?.state || geo.address?.region || 'Unknown',
+            country: geo.address?.country || 'Unknown'
+          };
+
+          setPlace(locationInfo);
+          setLocationDetected(true);
+        } catch (err) {
+          console.error('Error fetching location:', err);
+          setError('Failed to fetch location information. Please try again.');
+          setLoading(false);
+        }
+      },
+      (err) => {
+        console.error('Geolocation error:', err);
+        setError('Location access denied. Please enable location permissions in your browser settings.');
+        setLoading(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
       }
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, state, district')
-        .eq('id', session.data.session.user.id)
-        .maybeSingle();
-
-      if (!error && data && data.state) {
-        setCustomerState(data.state);
-        setSelectedState(data.state);
-        // Load districts for customer's state
-        loadDistricts(data.state);
-      } else {
-        // No customer state found, will default to Bihar
-        setCustomerState('');
-      }
-    } catch (error) {
-      console.error('Error loading customer profile:', error);
-      // On error, will default to Bihar
-    }
+    );
   };
 
-  const loadStates = async () => {
-    try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/weather/states`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token || ''}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const statesData = await response.json();
-        setStates(statesData);
-      }
-    } catch (error) {
-      console.error('Error loading states:', error);
-    }
-  };
-
-  const loadDistricts = async (state: string) => {
-    if (!state) return;
-    
-    setLoadingDistricts(true);
-    try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/weather/districts/${encodeURIComponent(state)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token || ''}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.ok) {
-        const districtsData = await response.json();
-        setDistricts(districtsData);
-        
-        // If customer has district set, select it
-        if (customerState === state) {
-          const session = await supabase.auth.getSession();
-          const { data } = await supabase
-            .from('profiles')
-            .select('district')
-            .eq('id', session.data.session?.user.id)
-            .maybeSingle();
-          
-          if (data?.district && districtsData.includes(data.district)) {
-            setSelectedDistrict(data.district);
-          } else if (districtsData.length > 0) {
-            // Select first district as default
-            setSelectedDistrict(districtsData[0]);
-          }
-        } else if (state === 'Bihar' && districtsData.includes('Patna')) {
-          // Default to Patna for Bihar
-          setSelectedDistrict('Patna');
-        } else if (districtsData.length > 0) {
-          setSelectedDistrict(districtsData[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading districts:', error);
-    } finally {
-      setLoadingDistricts(false);
-    }
-  };
-
-  const loadWeatherData = async (district: string, state: string) => {
-    if (!district || !state) return;
+  const loadWeatherData = async (lat: number, lon: number, city: string, state: string) => {
+    if (!lat || !lon || !city) return;
     
     setLoading(true);
     try {
       // Check cache first
-      const cached = WeatherCache.getForecast(district, state);
+      const cached = WeatherCache.getForecast(city, state);
       if (cached && Array.isArray(cached) && cached.length > 0) {
         setWeatherData(cached);
         setLoading(false);
@@ -154,8 +104,9 @@ export default function WeatherForecast() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       
+      // Use city name and state to fetch weather from backend
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/weather/forecast?location=${encodeURIComponent(district)}&state=${encodeURIComponent(state)}&days=7`,
+        `${import.meta.env.VITE_API_URL}/weather/forecast?location=${encodeURIComponent(city)}&state=${encodeURIComponent(state)}&days=7`,
         {
           headers: {
             'Authorization': `Bearer ${token || ''}`,
@@ -171,8 +122,8 @@ export default function WeatherForecast() {
           id: `${forecast.location}-${f.date}`,
           location: forecast.location,
           state: forecast.state,
-          latitude: forecast.latitude,
-          longitude: forecast.longitude,
+          latitude: forecast.latitude || lat,
+          longitude: forecast.longitude || lon,
           date: f.date,
           temperature_min: f.temperature_min,
           temperature_max: f.temperature_max,
@@ -185,44 +136,35 @@ export default function WeatherForecast() {
         }));
         setWeatherData(transformedData);
         // Cache the data
-        WeatherCache.setForecast(district, state, transformedData);
+        WeatherCache.setForecast(city, state, transformedData);
       } else {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch weather' }));
         console.error('Error fetching weather:', errorData);
         
         // Show user-friendly error message
         if (response.status === 503 && errorData.message) {
-          alert(`⚠️ ${errorData.message}`);
+          setError(errorData.message);
+        } else if (response.status === 429) {
+          setError('Too many requests. Please wait a few minutes and try again.');
         } else {
-          alert(`⚠️ Unable to fetch weather data. Please check your API configuration.`);
+          setError('Unable to fetch weather data. Please try again later.');
         }
         setWeatherData([]);
       }
     } catch (error) {
       console.error('Error loading weather data:', error);
+      setError('Failed to load weather data. Please try again.');
       setWeatherData([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStateChange = (state: string) => {
-    setSelectedState(state);
-    setSelectedDistrict(''); // Reset district when state changes
-    setDistricts([]);
-    setWeatherData([]);
-    if (state) {
-      loadDistricts(state);
-    }
-  };
-
-  const handleDistrictChange = (district: string) => {
-    setSelectedDistrict(district);
-  };
-
   const refreshWeather = () => {
-    if (selectedDistrict && selectedState) {
-      loadWeatherData(selectedDistrict, selectedState);
+    if (coords && place) {
+      loadWeatherData(coords.lat, coords.lon, place.city, place.state);
+    } else {
+      detectLocation();
     }
   };
 
@@ -241,180 +183,8 @@ export default function WeatherForecast() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <Cloud className="w-6 h-6 text-blue-600" />
-              Weather Forecast
-            </h2>
-            <p className="text-gray-600">7-day weather forecast for your location</p>
-          </div>
-          {selectedDistrict && selectedState && (
-            <button
-              onClick={refreshWeather}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-          )}
-        </div>
-
-        {/* State and District Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select State
-            </label>
-            <select
-              value={selectedState}
-              onChange={(e) => handleStateChange(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">Select State</option>
-              {states.map(state => (
-                <option key={state} value={state}>{state}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select District
-            </label>
-            <select
-              value={selectedDistrict}
-              onChange={(e) => handleDistrictChange(e.target.value)}
-              disabled={!selectedState || loadingDistricts}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-            >
-              <option value="">
-                {loadingDistricts ? 'Loading districts...' : selectedState ? 'Select District' : 'Select State First'}
-              </option>
-              {districts.map(district => (
-                <option key={district} value={district}>{district}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {customerState && selectedState === customerState && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <MapPin className="w-4 h-4 inline mr-1" />
-              Showing weather for your registered location: <strong>{selectedDistrict}, {selectedState}</strong>
-            </p>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="text-center py-12 text-gray-500">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4">Loading weather data...</p>
-          </div>
-        ) : weatherData.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <Cloud className="w-12 h-12 mx-auto mb-4 opacity-30" />
-            {!selectedDistrict ? (
-              <>
-                <p>Please select a state and district to view weather forecast</p>
-                {customerState && (
-                  <p className="text-sm mt-2">Default location set to: <strong>{customerState}</strong></p>
-                )}
-              </>
-            ) : (
-              <p>No weather data available for this location</p>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 border border-blue-200 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <MapPin className="w-5 h-5 text-blue-600" />
-                <h3 className="font-semibold text-gray-800">
-                  {weatherData[0]?.location || selectedDistrict}, {selectedState}
-                </h3>
-              </div>
-              {weatherData[0]?.forecast_data?.formatted_address && (
-                <p className="text-sm text-gray-600">{weatherData[0].forecast_data.formatted_address}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {weatherData.map((weather) => (
-                <div key={weather.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <p className="font-semibold text-gray-800">{weather.location}</p>
-                    </div>
-                    {getWeatherIcon(weather.weather_condition)}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
-                    <Calendar className="w-4 h-4" />
-                    <span>{new Date(weather.date).toLocaleDateString('en-IN', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric'
-                    })}</span>
-                  </div>
-
-                  {weather.weather_condition && (
-                    <p className="text-sm text-gray-700 mb-3 capitalize">{weather.weather_condition}</p>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-3">
-                    {(weather.temperature_min !== undefined && weather.temperature_max !== undefined) && (
-                      <div className="bg-orange-50 rounded-lg p-3">
-                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                          <Thermometer className="w-3 h-3" />
-                          <span>Temperature</span>
-                        </div>
-                        <p className="text-sm font-bold text-gray-800">
-                          {weather.temperature_min}° - {weather.temperature_max}°C
-                        </p>
-                      </div>
-                    )}
-
-                    {weather.humidity !== undefined && (
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                          <Droplets className="w-3 h-3" />
-                          <span>Humidity</span>
-                        </div>
-                        <p className="text-sm font-bold text-gray-800">{weather.humidity}%</p>
-                      </div>
-                    )}
-
-                    {weather.rainfall !== undefined && (typeof weather.rainfall === 'number' ? weather.rainfall : parseFloat(String(weather.rainfall || '0'))) > 0 && (
-                      <div className="bg-blue-50 rounded-lg p-3">
-                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                          <Droplets className="w-3 h-3" />
-                          <span>Rainfall</span>
-                        </div>
-                        <p className="text-sm font-bold text-gray-800">{weather.rainfall} mm</p>
-                      </div>
-                    )}
-
-                    {weather.wind_speed !== undefined && (
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
-                          <Wind className="w-3 h-3" />
-                          <span>Wind Speed</span>
-                        </div>
-                        <p className="text-sm font-bold text-gray-800">{weather.wind_speed} km/h</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+      {/* Location & Weather KPI Card */}
+      <Weathersonu />
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
         <h3 className="font-semibold text-blue-900 mb-3">Agricultural Weather Tips</h3>

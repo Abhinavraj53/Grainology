@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import Footer from '../components/Footer';
 import { Users, Target, Award, TrendingUp, Shield, CheckCircle, Globe, Heart, Zap, BarChart3 } from 'lucide-react';
+// import Weathersonu from '../components/weathersonu';
 
 export default function About() {
   return (
@@ -22,6 +23,7 @@ export default function About() {
           </p>
         </div>
       </section>
+      {/* <Weathersonu /> */}
 
       {/* Mission & Vision - Enhanced */}
       <section className="py-20 px-4 bg-white">

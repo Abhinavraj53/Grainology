@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { TrendingUp, Download, Printer, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { MandiCache } from '../lib/sessionStorage';
-import { useIsVisible } from '../hooks/useIsVisible';
 
 interface AgMarkNetData {
   commodity_group: string;
@@ -46,18 +45,16 @@ export default function MandiBhaav() {
   const [apiError, setApiError] = useState<string | null>(null);
   const itemsPerCommodity = 3; // 3 Paddy + 3 Maize + 3 Wheat = 9 rows per page
   const componentRef = useRef<HTMLDivElement>(null);
-  const isVisible = useIsVisible(componentRef);
 
   useEffect(() => {
-    // Only load if component is visible
-    if (isVisible) {
-      loadFilterOptions();
-    }
-  }, [isVisible]);
+    // Load filter options on mount (don't wait for visibility)
+    loadFilterOptions();
+  }, []);
 
   useEffect(() => {
-    // Only load data if component is visible and filter options are loaded
-    if (isVisible && filterOptions.states.length > 0) {
+    // Load data when filter options are loaded or after a delay
+    // Don't wait for visibility check - load immediately for panel views
+    if (filterOptions.states.length > 0) {
       // On initial load, fetch default commodities (Paddy, Maize, Wheat)
       if (isInitialLoad) {
         loadDefaultData();
@@ -65,9 +62,19 @@ export default function MandiBhaav() {
       } else {
         loadData();
       }
+    } else if (filterOptions.states.length === 0 && !loading && isInitialLoad) {
+      // If filters haven't loaded yet, try loading default data anyway after a short delay
+      const timer = setTimeout(() => {
+        if (isInitialLoad) {
+          console.log('Loading default data without filters...');
+          loadDefaultData();
+          setIsInitialLoad(false);
+        }
+      }, 2000);
+      return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVisible, filters, filterOptions.states.length]);
+  }, [filters, filterOptions.states.length]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -78,63 +85,79 @@ export default function MandiBhaav() {
     try {
       // Check cache first
       const cached = MandiCache.getFilters() as FilterOptions | null;
-      if (cached) {
+      if (cached && cached.states && cached.states.length > 0) {
         setFilterOptions(cached);
         return;
       }
 
       // Fetch from API
       const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/filters`;
-      const response = await fetch(apiUrl);
+      console.log('Fetching filter options from:', apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch filters' }));
         console.error('Failed to load filter options:', errorData);
-        // Set empty filters to prevent infinite loading
+        // Set default filters to allow data loading even if filters fail
         setFilterOptions({
-          states: [],
+          states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana'], // Default states
           districts: [],
           markets: [],
-          commodities: [],
+          commodities: ['Paddy', 'Maize', 'Wheat'],
           varieties: [],
-          commodity_groups: []
+          commodity_groups: ['Cereals']
         });
+        // Don't set error - allow data to load with default filters
         return;
       }
 
       const options = await response.json();
-      if (options && typeof options === 'object') {
+      if (options && typeof options === 'object' && options.states && Array.isArray(options.states)) {
         setFilterOptions(options);
         // Cache the filters
         MandiCache.setFilters(options);
         setApiError(null); // Clear any previous errors
       } else {
-        setApiError('Invalid response from server');
+        console.warn('Invalid filter options response:', options);
+        // Set default filters
+        setFilterOptions({
+          states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana'],
+          districts: [],
+          markets: [],
+          commodities: ['Paddy', 'Maize', 'Wheat'],
+          varieties: [],
+          commodity_groups: ['Cereals']
+        });
       }
     } catch (error: any) {
       console.error('Error loading filter options:', error);
-      setApiError(error.message || 'Failed to load filter options. Please try again later.');
-      // Set empty filters on error
+      // Set default filters to allow data loading
       setFilterOptions({
-        states: [],
+        states: ['Bihar', 'Uttar Pradesh', 'Punjab', 'Haryana'],
         districts: [],
         markets: [],
-        commodities: [],
+        commodities: ['Paddy', 'Maize', 'Wheat'],
         varieties: [],
-        commodity_groups: []
+        commodity_groups: ['Cereals']
       });
+      // Don't set error - allow data to load with default filters
     }
   };
 
   const loadDefaultData = async () => {
     try {
       setLoading(true);
+      setApiError(null);
       
       // Check cache first
       const cached = MandiCache.getDefault() as { data: AgMarkNetData[]; dates: string[] } | null;
-      if (cached && cached.data && cached.dates) {
+      if (cached && cached.data && Array.isArray(cached.data) && cached.data.length > 0) {
         setData(cached.data);
-        setDates(cached.dates);
+        setDates(cached.dates || []);
         setLoading(false);
         return;
       }
@@ -155,36 +178,53 @@ export default function MandiBhaav() {
         
         try {
           const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/agmarknet?${commodityParams.toString()}`;
-          const response = await fetch(apiUrl);
+          console.log(`Fetching ${commodity} data from:`, apiUrl);
+          const response = await fetch(apiUrl, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({ error: 'Failed to fetch data' }));
             console.error(`Failed to fetch ${commodity} data:`, errorData);
+            setApiError(`Failed to fetch ${commodity} data: ${errorData.error || errorData.message || 'Unknown error'}`);
             continue; // Skip this commodity and continue with others
           }
 
           const result = await response.json();
+          console.log(`${commodity} API response:`, result);
+          
           if (result && result.success !== false && result.data && Array.isArray(result.data) && result.data.length > 0) {
             // Take all data (we'll paginate it)
             allData.push(...result.data);
             if (result.dates && Array.isArray(result.dates)) {
               result.dates.forEach((d: string) => allDatesSet.add(d));
             }
+          } else {
+            console.warn(`${commodity} returned no data:`, result);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error(`Error fetching ${commodity} data:`, error);
+          setApiError(`Error fetching ${commodity}: ${error.message || 'Network error'}`);
           // Continue with other commodities even if one fails
         }
       }
 
       // Sort dates and take last 3
       const sortedDates = Array.from(allDatesSet).sort().reverse().slice(0, 3);
-      setData(allData);
-      setDates(sortedDates);
       
-      // Cache the data
-      MandiCache.setDefault({ data: allData, dates: sortedDates });
-      setApiError(null); // Clear any previous errors
+      if (allData.length > 0) {
+        setData(allData);
+        setDates(sortedDates);
+        // Cache the data
+        MandiCache.setDefault({ data: allData, dates: sortedDates });
+        setApiError(null); // Clear any previous errors
+      } else {
+        setApiError('No data available for the selected commodities. Please try again later or adjust filters.');
+        setData([]);
+        setDates([]);
+      }
     } catch (error: any) {
       console.error('Error loading default data:', error);
       setApiError(error.message || 'Failed to load mandi data. Please check your connection and try again.');
@@ -198,12 +238,13 @@ export default function MandiBhaav() {
   const loadData = async () => {
     try {
       setLoading(true);
+      setApiError(null);
       
       // Check cache first
       const cached = MandiCache.get(filters) as { data: AgMarkNetData[]; dates: string[] } | null;
-      if (cached && cached.data && cached.dates) {
+      if (cached && cached.data && Array.isArray(cached.data) && cached.data.length > 0) {
         setData(cached.data);
-        setDates(cached.dates);
+        setDates(cached.dates || []);
         setLoading(false);
         return;
       }
@@ -217,27 +258,41 @@ export default function MandiBhaav() {
       });
 
       const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/agmarknet?${params.toString()}`;
-      const response = await fetch(apiUrl);
+      console.log('Fetching mandi data from:', apiUrl);
+      const response = await fetch(apiUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch data' }));
         console.error('Failed to fetch mandi data:', errorData);
-        setApiError(errorData.error || errorData.message || 'Failed to fetch mandi data. Please try again.');
+        setApiError(errorData.error || errorData.message || `Failed to fetch mandi data (${response.status}). Please try again.`);
         setData([]);
         setDates([]);
+        setLoading(false);
         return;
       }
 
       const result = await response.json();
+      console.log('Mandi API response:', result);
+      
       if (result && result.success !== false) {
         const resultData = Array.isArray(result.data) ? result.data : [];
         const resultDates = Array.isArray(result.dates) ? result.dates : [];
-        setData(resultData);
-        setDates(resultDates);
         
-        // Cache the data
-        MandiCache.set(filters, { data: resultData, dates: resultDates });
-        setApiError(null); // Clear any previous errors
+        if (resultData.length > 0) {
+          setData(resultData);
+          setDates(resultDates);
+          // Cache the data
+          MandiCache.set(filters, { data: resultData, dates: resultDates });
+          setApiError(null); // Clear any previous errors
+        } else {
+          setApiError('No data found for the selected filters. Please try different filters.');
+          setData([]);
+          setDates([]);
+        }
       } else {
         console.error('API returned error:', result);
         setApiError(result.error || result.message || 'Invalid response from server');
@@ -250,7 +305,7 @@ export default function MandiBhaav() {
       setData([]);
       setDates([]);
     } finally {
-    setLoading(false);
+      setLoading(false);
     }
   };
 

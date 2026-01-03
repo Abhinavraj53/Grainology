@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
 import { Profile, Order, Offer } from '../../lib/supabase';
-import { Cloud, Package, ShoppingCart, AlertCircle } from 'lucide-react';
+import { Package, ShoppingCart, AlertCircle } from 'lucide-react';
 import MandiBhaav from '../MandiBhaav';
-import { WeatherCache } from '../../lib/sessionStorage';
+import Weathersonu from '../weathersonu';
 
 interface DashboardProps {
   profile: Profile | null;
@@ -28,129 +27,6 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
     }
   };
 
-  const [weather, setWeather] = useState<{
-    location: string;
-    state: string;
-    temperature_min: number;
-    temperature_max: number;
-    humidity: number;
-    rainfall: number;
-    weather_condition: string;
-  } | null>(null);
-
-  const [weatherLoading, setWeatherLoading] = useState(false);
-
-  useEffect(() => {
-    loadWeather(); // Load weather even without profile (uses default Patna, Bihar)
-  }, [profile]);
-
-
-  const loadWeather = async () => {
-    try {
-      setWeatherLoading(true);
-      // Prefer user's district/state; fallback to Patna, Bihar
-      const location = profile?.district || 'Patna';
-      const state = profile?.state || 'Bihar';
-
-      // Check cache first
-      const cached = WeatherCache.get(location, state) as {
-        location: string;
-        state: string;
-        temperature_min: number;
-        temperature_max: number;
-        humidity: number;
-        rainfall: number;
-        weather_condition: string;
-      } | null;
-      if (cached) {
-        setWeather(cached);
-        setWeatherLoading(false);
-        return;
-      }
-
-      // Fetch from API
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      const params = new URLSearchParams({
-        location,
-        state,
-      });
-
-      const token = localStorage.getItem('auth_token') || '';
-
-      const response = await fetch(`${baseUrl}/weather/current?${params.toString()}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch' }));
-        console.error('Failed to fetch weather data:', errorData);
-        // Set default weather data if API fails
-        const defaultWeather = {
-          location,
-          state,
-          temperature_min: 0,
-          temperature_max: 0,
-          humidity: 0,
-          rainfall: 0,
-          weather_condition: 'Data not available',
-        };
-        setWeather(defaultWeather);
-        WeatherCache.set(location, state, defaultWeather);
-        return;
-      }
-
-      const data = await response.json();
-      if (data.error) {
-        console.error('Weather API error:', data.error);
-        const defaultWeather = {
-          location,
-          state,
-          temperature_min: 0,
-          temperature_max: 0,
-          humidity: 0,
-          rainfall: 0,
-          weather_condition: 'Data not available',
-        };
-        setWeather(defaultWeather);
-        WeatherCache.set(location, state, defaultWeather);
-        return;
-      }
-
-      const weatherData = {
-        location: data.location || location,
-        state: data.state || state,
-        temperature_min: data.temperature_min || 0,
-        temperature_max: data.temperature_max || 0,
-        humidity: data.humidity || 0,
-        rainfall: data.rainfall || 0,
-        weather_condition: data.weather_condition || data.weather_description || 'Unknown',
-      };
-      setWeather(weatherData);
-      // Cache the data
-      WeatherCache.set(location, state, weatherData);
-    } catch (error) {
-      console.error('Error loading weather:', error);
-      // Set default on error
-      const location = profile?.district || 'Patna';
-      const state = profile?.state || 'Bihar';
-      const defaultWeather = {
-        location,
-        state,
-        temperature_min: 0,
-        temperature_max: 0,
-        humidity: 0,
-        rainfall: 0,
-        weather_condition: 'Data not available',
-      };
-      setWeather(defaultWeather);
-      WeatherCache.set(location, state, defaultWeather);
-    } finally {
-      setWeatherLoading(false);
-    }
-  };
 
   if (!profile) {
     return (
@@ -214,59 +90,8 @@ export default function Dashboard({ profile, orders, offers }: DashboardProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-6">
-        <div className="bg-white rounded-lg shadow">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center gap-2">
-              <Cloud className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-800">Weather & Advisory</h3>
-            </div>
-          </div>
-          <div className="p-6 space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200"> 
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Today's Weather</p>
-                  <p className="text-xs text-gray-500">
-                    {weather
-                      ? `${weather.location}, ${weather.state}`
-                      : profile?.district && profile?.state
-                        ? `${profile.district}, ${profile.state}`
-                        : 'Location'}
-                  </p>
-                </div>
-                <p className="text-2xl font-bold text-gray-800">
-                  {weather
-                    ? `${Math.round((weather.temperature_min + weather.temperature_max) / 2)}°C`
-                    : weatherLoading
-                      ? '...'
-                      : '--'}
-                </p>
-              </div>
-              <p className="text-sm text-gray-600">
-                {weather
-                  ? `${weather.weather_condition}. Humidity ${Math.round(weather.humidity || 0)}%.` +
-                    (weather.rainfall && weather.rainfall > 0 ? ` Rainfall ${weather.rainfall} mm.` : '')
-                  : weatherLoading
-                    ? 'Loading latest weather from Open-Meteo...'
-                    : 'Weather data not available.'}
-              </p>
-            </div>
-
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-              <p className="text-sm font-medium text-gray-800 mb-2">Crop Advisory</p>
-              <p className="text-sm text-gray-600">
-                Good time for harvesting paddy. Moisture levels optimal for storage.
-              </p>
-            </div>
-
-            <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <p className="text-sm font-medium text-gray-800 mb-2">Market Tip</p>
-              <p className="text-sm text-gray-600">
-                Wheat prices expected to rise next week due to festival demand.
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Location & Weather KPI Card - Only Weathersonu Component */}
+        <Weathersonu />
       </div>
 
       {/* Mandi Bhav Component with all filters */}

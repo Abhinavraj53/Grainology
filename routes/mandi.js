@@ -116,7 +116,7 @@ router.get('/agmarknet', async (req, res) => {
     const params = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
-      limit: Math.min(Number(limit) || 1000, 5000).toString(),
+      limit: Math.min(Number(limit) || 500, 2000).toString(), // Reduced from 1000/5000 to 500/2000
       offset: (Number(offset) || 0).toString(),
     });
 
@@ -127,14 +127,21 @@ router.get('/agmarknet', async (req, res) => {
     if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
     if (variety && variety !== 'all') params.append('filters[variety]', variety);
     
-    // If commodity_group is 'Cereals' and commodity is 'all', fetch Paddy, Maize, Wheat by default
+    // If commodity_group is 'Cereals' and commodity is 'all', use smaller limit to prevent timeout
     if (commodity_group === 'Cereals' && commodity === 'all') {
-      // Increase limit to get more data for multiple commodities
-      params.set('limit', Math.min(Number(limit) || 5000, 10000).toString());
+      // Reduce limit significantly to prevent timeout - don't fetch too much at once
+      params.set('limit', Math.min(Number(limit) || 1000, 2000).toString()); // Reduced from 5000/10000
     }
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 15000 });
+    console.log('🔍 Mandi API Request:', {
+      url: url.replace(MANDI_API_KEY, '***HIDDEN***'),
+      limit: params.get('limit'),
+      filters: Array.from(params.entries()).filter(([k]) => k.startsWith('filters'))
+    });
+    
+    // Increase timeout to 30 seconds
+    const response = await axios.get(url, { timeout: 30000 }); // Changed from 15000 to 30000
 
     const records = response.data?.records || [];
 
@@ -235,7 +242,24 @@ router.get('/agmarknet', async (req, res) => {
       count: result.length
     });
   } catch (error) {
-    console.error('AgMarkNet API error:', error);
+    console.error('AgMarkNet API error:', {
+      message: error.message,
+      code: error.code,
+      status: error.response?.status,
+      url: error.config?.url?.replace(MANDI_API_KEY, '***HIDDEN***')
+    });
+    
+    // Check if it's a timeout error
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.status(504).json({
+        success: false,
+        error: 'Request timeout - The API is taking too long to respond',
+        details: 'The data.gov.in API may be slow or overloaded. Please try with more specific filters to reduce data size.',
+        suggestion: 'Try adding filters like ?commodity=Paddy&state=Bihar&limit=100',
+        timeout: '30 seconds'
+      });
+    }
+    
     return res.status(error.response?.status || 500).json({
       success: false,
       error: 'Failed to fetch AgMarkNet-style data',
@@ -278,7 +302,7 @@ router.get('/live', async (req, res) => {
     if (commodity) params.append('filters[commodity]', commodity);
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 10000 });
+    const response = await axios.get(url, { timeout: 30000 }); // Increased from 10000 to 30000
 
     const records = response.data?.records || [];
 
@@ -413,9 +437,21 @@ router.get('/live', async (req, res) => {
   } catch (error) {
     console.error('Live mandi API error:', {
       message: error.message,
+      code: error.code,
       status: error.response?.status,
       data: error.response?.data,
     });
+    
+    // Check if it's a timeout error
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.status(504).json({
+        success: false,
+        error: 'Request timeout - The API is taking too long to respond',
+        details: 'The data.gov.in API may be slow. Try with more specific filters to reduce data size.',
+        suggestion: 'Try adding filters like ?commodity=Paddy&state=Bihar&limit=50'
+      });
+    }
+    
     return res.status(error.response?.status || 500).json({
       success: false,
       error: 'Failed to fetch live mandi prices',
@@ -435,11 +471,11 @@ router.get('/filters', async (req, res) => {
     }
 
     // Fetch a large sample to get all unique values, prioritizing Bihar
-    // First try to get Bihar-specific data
+    // First try to get Bihar-specific data - reduce limit to prevent timeout
     const biharParams = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
-      limit: '5000',
+      limit: '2000', // Reduced from 5000 to 2000
       offset: '0',
       'filters[state.keyword]': 'Bihar',
     });
@@ -449,22 +485,22 @@ router.get('/filters', async (req, res) => {
     let biharRecords = [];
     
     try {
-      biharResponse = await axios.get(biharUrl, { timeout: 15000 });
+      biharResponse = await axios.get(biharUrl, { timeout: 30000 }); // Increased from 15000 to 30000
       biharRecords = biharResponse.data?.records || [];
     } catch (error) {
       console.warn('Failed to fetch Bihar-specific data, will fetch all data:', error.message);
     }
 
-    // Also fetch general data to get all states
+    // Also fetch general data to get all states - reduce limit to prevent timeout
     const params = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
-      limit: '5000',
+      limit: '2000', // Reduced from 5000 to 2000
       offset: '0',
     });
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 15000 });
+    const response = await axios.get(url, { timeout: 30000 }); // Increased from 15000 to 30000
     const allRecords = response.data?.records || [];
 
     // Combine Bihar records with all records (Bihar first)

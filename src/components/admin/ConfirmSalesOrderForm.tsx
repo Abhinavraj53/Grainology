@@ -20,6 +20,8 @@ export default function ConfirmSalesOrderForm() {
   const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
   const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
   const [varieties, setVarieties] = useState<string[]>([]);
+  const [warehouses, setWarehouses] = useState<string[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
@@ -72,7 +74,21 @@ export default function ConfirmSalesOrderForm() {
     fetchCommodities().then(setCommodities).catch(() => {
       setCommodities(['Paddy', 'Maize', 'Wheat']);
     });
+    fetchWarehouses();
+    fetchLocations();
   }, []);
+
+  // Auto-populate seller name when customer is selected
+  useEffect(() => {
+    if (customerId) {
+      const selectedCustomer = customers.find(c => c.id === customerId);
+      if (selectedCustomer) {
+        setSellerName(selectedCustomer.name);
+      }
+    } else {
+      setSellerName('');
+    }
+  }, [customerId, customers]);
 
   useEffect(() => {
     // Fetch varieties when commodity changes
@@ -705,32 +721,38 @@ export default function ConfirmSalesOrderForm() {
               <input
                 type="text"
                 value={sellerName}
-                onChange={(e) => setSellerName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter seller name"
+                readOnly
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 font-semibold"
+                placeholder="Auto-populated from customer"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-              <input
-                type="text"
+              <select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter location"
-              />
+              >
+                <option value="">Select Location</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
+              </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Warehouse Name</label>
-              <input
-                type="text"
+              <select
                 value={warehouseName}
                 onChange={(e) => setWarehouseName(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter warehouse name"
-              />
+              >
+                <option value="">Select Warehouse</option>
+                {warehouses.map((wh) => (
+                  <option key={wh} value={wh}>{wh}</option>
+                ))}
+              </select>
             </div>
 
             <div>

@@ -14,6 +14,7 @@ import ConfirmSalesOrderForm from './admin/ConfirmSalesOrderForm';
 import ConfirmPurchaseOrderForm from './admin/ConfirmPurchaseOrderForm';
 import AllConfirmedOrders from './admin/AllConfirmedOrders';
 import CommodityVarietyManagement from './admin/CommodityVarietyManagement';
+import WarehouseManagement from './admin/WarehouseManagement';
 import { DashboardCache } from '../lib/sessionStorage';
 // Commented out unused component imports - can be restored if needed
 // import OrderManagementEnhanced from './admin/OrderManagementEnhanced';
@@ -25,7 +26,7 @@ import { DashboardCache } from '../lib/sessionStorage';
 // import CustomerCommoditySales from './admin/CustomerCommoditySales';
 // import SupplyTransactionsView from './admin/SupplyTransactionsView';
 
-type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders' | 'commodity-variety-management';
+type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders' | 'commodity-variety-management' | 'warehouse-management';
 
 interface AdminPanelProps {
   profile: Profile;
@@ -325,6 +326,19 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <span className="font-medium">Commodity & Variety</span>
           </button>
 
+          {/* 12. Warehouse Management */}
+          <button
+            onClick={() => handleViewChange('warehouse-management')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'warehouse-management'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <Package className="w-5 h-5" />
+            <span className="font-medium">Warehouse Management</span>
+          </button>
+
           {/* ========== COMMENTED OUT - NOT IN USE ========== */}
           {/* 
           <button
@@ -470,6 +484,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             {currentView === 'weather' && 'Weather Forecast'}
             {currentView === 'logistics-providers' && 'Logistics Provider Management'}
             {currentView === 'commodity-variety-management' && 'Commodity & Variety Management'}
+            {currentView === 'warehouse-management' && 'Warehouse Management'}
             {/* Commented out header titles for unused views */}
             {/* {currentView === 'orders' && 'Order Management & Quality Control'} */}
             {/* {currentView === 'offers' && 'Offer Oversight & Inventory'} */}
@@ -526,6 +541,9 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           )}
           {currentView === 'commodity-variety-management' && (
             <CommodityVarietyManagement />
+          )}
+          {currentView === 'warehouse-management' && (
+            <WarehouseManagement />
           )}
           {/* ========== COMMENTED OUT - NOT IN USE ========== */}
           {/* 

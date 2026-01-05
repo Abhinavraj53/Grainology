@@ -424,6 +424,47 @@ router.get('/live', async (req, res) => {
   }
 });
 
+// Complete list of all Indian States and Union Territories
+const ALL_INDIAN_STATES = [
+  'Andhra Pradesh',
+  'Arunachal Pradesh',
+  'Assam',
+  'Bihar',
+  'Chhattisgarh',
+  'Goa',
+  'Gujarat',
+  'Haryana',
+  'Himachal Pradesh',
+  'Jharkhand',
+  'Karnataka',
+  'Kerala',
+  'Madhya Pradesh',
+  'Maharashtra',
+  'Manipur',
+  'Meghalaya',
+  'Mizoram',
+  'Nagaland',
+  'Odisha',
+  'Punjab',
+  'Rajasthan',
+  'Sikkim',
+  'Tamil Nadu',
+  'Telangana',
+  'Tripura',
+  'Uttar Pradesh',
+  'Uttarakhand',
+  'West Bengal',
+  // Union Territories
+  'Andaman and Nicobar Islands',
+  'Chandigarh',
+  'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi',
+  'Jammu and Kashmir',
+  'Ladakh',
+  'Lakshadweep',
+  'Puducherry'
+];
+
 // Get filter options (states, districts, markets, commodities, varieties)
 router.get('/filters', async (req, res) => {
   try {
@@ -443,8 +484,14 @@ router.get('/filters', async (req, res) => {
     });
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 15000 });
-    const records = response.data?.records || [];
+    let records = [];
+    
+    try {
+      const response = await axios.get(url, { timeout: 15000 });
+      records = response.data?.records || [];
+    } catch (error) {
+      console.warn('Failed to fetch filter data from API, using default states:', error.message);
+    }
 
     const states = new Set();
     const districts = new Set();
@@ -453,6 +500,10 @@ router.get('/filters', async (req, res) => {
     const varieties = new Set();
     const commodityGroups = new Set();
 
+    // Add all Indian states first (ensures all states are included)
+    ALL_INDIAN_STATES.forEach(state => states.add(state));
+
+    // Then add states from API records (may have variations or additional data)
     records.forEach(record => {
       const state = record.State || record.state || record.state_name;
       const district = record.District || record.district || record.district_name;
@@ -470,9 +521,20 @@ router.get('/filters', async (req, res) => {
       if (variety) varieties.add(variety);
     });
 
+    // Sort states alphabetically, but ensure all Indian states are included
+    const sortedStates = Array.from(states).sort((a, b) => {
+      // Prioritize exact matches with our list
+      const aIndex = ALL_INDIAN_STATES.indexOf(a);
+      const bIndex = ALL_INDIAN_STATES.indexOf(b);
+      if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
     return res.json({
       success: true,
-      states: Array.from(states).sort(),
+      states: sortedStates,
       districts: Array.from(districts).sort(),
       markets: Array.from(markets).sort(),
       commodities: Array.from(commodities).sort(),
@@ -481,10 +543,15 @@ router.get('/filters', async (req, res) => {
     });
   } catch (error) {
     console.error('Get filters error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to fetch filter options',
-      details: error.message,
+    // Return default states even on error
+    return res.json({
+      success: true,
+      states: ALL_INDIAN_STATES,
+      districts: [],
+      markets: [],
+      commodities: ['Paddy', 'Maize', 'Wheat', 'Bajra', 'Barley', 'Jowar', 'Ragi', 'Cotton', 'Copra', 'Groundnut'],
+      varieties: [],
+      commodity_groups: ['Cereals', 'Fibre Crops', 'Oil Seeds'],
     });
   }
 });

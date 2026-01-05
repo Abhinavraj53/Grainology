@@ -1,68 +1,93 @@
-import { useState, useEffect } from 'react';
-import { AlertCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { AlertCircle, RefreshCw, ExternalLink, Loader2 } from 'lucide-react';
+
+// Extend iframe attributes to support 'is' property for x-frame-bypass
+interface ExtendedIframeAttributes extends React.IframeHTMLAttributes<HTMLIFrameElement> {
+  is?: string;
+}
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      iframe: React.DetailedHTMLProps<ExtendedIframeAttributes, HTMLIFrameElement>;
+    }
+  }
+}
 
 export default function AgMarkNetEmbed() {
   const [iframeError, setIframeError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [scriptsLoaded, setScriptsLoaded] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // AgMarkNet URL - you can adjust this to target a specific page/section
+  // AgMarkNet URL
   const agmarknetUrl = 'https://agmarknet.gov.in/home';
 
   useEffect(() => {
-    // Check if iframe is blocked immediately
-    const checkIframeBlocked = () => {
-      const timer = setTimeout(() => {
-        // If still loading after 2 seconds, likely blocked
-        if (isLoading) {
-          setIframeError(true);
-          setIsLoading(false);
+    // Load x-frame-bypass scripts
+    const loadScripts = async () => {
+      try {
+        // Check if scripts are already loaded
+        if (document.querySelector('script[src*="custom-elements-builtin"]')) {
+          setScriptsLoaded(true);
+          return;
         }
-      }, 2000);
 
-      return () => clearTimeout(timer);
-    };
+        // Load polyfill for Safari (Custom Elements Built-in Extends)
+        const polyfillScript = document.createElement('script');
+        polyfillScript.src = 'https://unpkg.com/@ungap/custom-elements-builtin';
+        polyfillScript.async = true;
+        
+        // Load x-frame-bypass module
+        const bypassScript = document.createElement('script');
+        bypassScript.type = 'module';
+        bypassScript.src = 'https://unpkg.com/x-frame-bypass';
+        bypassScript.async = true;
 
-    const cleanup = checkIframeBlocked();
-    return cleanup;
-  }, [isLoading]);
+        // Wait for both scripts to load
+        await Promise.all([
+          new Promise<void>((resolve, reject) => {
+            polyfillScript.onload = () => resolve();
+            polyfillScript.onerror = () => reject(new Error('Failed to load polyfill'));
+            document.head.appendChild(polyfillScript);
+          }),
+          new Promise<void>((resolve, reject) => {
+            bypassScript.onload = () => resolve();
+            bypassScript.onerror = () => reject(new Error('Failed to load x-frame-bypass'));
+            document.head.appendChild(bypassScript);
+          })
+        ]);
 
-  useEffect(() => {
-    // Listen for iframe blocking errors
-    const handleMessage = (event: MessageEvent) => {
-      // Check if message indicates iframe blocking
-      if (event.data && typeof event.data === 'string' && event.data.includes('X-Frame-Options')) {
+        // Give a small delay for the custom element to register
+        setTimeout(() => {
+          setScriptsLoaded(true);
+        }, 500);
+      } catch (error) {
+        console.error('Failed to load x-frame-bypass scripts:', error);
         setIframeError(true);
         setIsLoading(false);
       }
     };
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    loadScripts();
   }, []);
 
   const handleIframeLoad = () => {
     setIsLoading(false);
-    // Check if iframe actually loaded content or was blocked
-    setTimeout(() => {
-      const iframe = document.getElementById('agmarknet-iframe') as HTMLIFrameElement;
-      if (iframe) {
-        try {
-          // Try to access iframe content - if blocked, this will throw
-          const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-          if (!iframeDoc || iframeDoc.body.innerHTML.includes('X-Frame-Options')) {
-            setIframeError(true);
-          }
-        } catch (e) {
-          // Cross-origin error means iframe is blocked
-          setIframeError(true);
-        }
-      }
-    }, 1000);
+    setIframeError(false);
   };
 
   const handleIframeError = () => {
     setIsLoading(false);
     setIframeError(true);
+  };
+
+  const handleRefresh = () => {
+    setIframeError(false);
+    setIsLoading(true);
+    if (iframeRef.current) {
+      iframeRef.current.src = agmarknetUrl;
+    }
   };
 
   return (
@@ -74,6 +99,9 @@ export default function AgMarkNetEmbed() {
           </h2>
           <p className="text-gray-600 text-sm">
             MSP (Minimum Support Price) Commodities & Tomato, Onion, Potato
+            <span className="block mt-1 text-xs text-yellow-600 font-medium">
+              ⚠️ Educational/Testing Purpose Only - Using x-frame-bypass
+            </span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -87,16 +115,9 @@ export default function AgMarkNetEmbed() {
             Open in New Tab
           </a>
           <button
-            onClick={() => {
-              setIframeError(false);
-              setIsLoading(true);
-              // Force iframe reload
-              const iframe = document.getElementById('agmarknet-iframe') as HTMLIFrameElement;
-              if (iframe) {
-                iframe.src = iframe.src;
-              }
-            }}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2"
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center gap-2 disabled:opacity-50"
           >
             <RefreshCw className="w-4 h-4" />
             Refresh
@@ -107,8 +128,10 @@ export default function AgMarkNetEmbed() {
       {/* Loading State */}
       {isLoading && (
         <div className="border-2 border-gray-200 rounded-lg p-12 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading AgMarkNet data...</p>
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">
+            {!scriptsLoaded ? 'Loading x-frame-bypass scripts...' : 'Loading AgMarkNet data...'}
+          </p>
         </div>
       )}
 
@@ -122,15 +145,15 @@ export default function AgMarkNetEmbed() {
                 Unable to Load AgMarkNet
               </h3>
               <p className="text-sm text-red-600 mb-4">
-                The AgMarkNet website may have restrictions that prevent embedding in an iframe. 
-                This is a common security measure (X-Frame-Options) to prevent clickjacking attacks.
+                The x-frame-bypass method may not work in all browsers or the proxy may be unavailable.
+                This is expected behavior for testing purposes.
               </p>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-red-800">Alternative Options:</p>
+              <div className="space-y-2 mb-4">
+                <p className="text-sm font-medium text-red-800">Possible Reasons:</p>
                 <ul className="text-sm text-red-600 list-disc list-inside space-y-1">
-                  <li>Click "Open in New Tab" to view the data directly on AgMarkNet</li>
-                  <li>Use our integrated Mandi Bhav component which uses the same data source</li>
-                  <li>Contact AgMarkNet to request iframe embedding permissions</li>
+                  <li>Browser doesn't support Customized Built-in Elements (Safari/Edge)</li>
+                  <li>CORS proxy is unavailable or blocked</li>
+                  <li>AgMarkNet has additional security measures</li>
                 </ul>
               </div>
               <a
@@ -146,58 +169,35 @@ export default function AgMarkNetEmbed() {
         </div>
       )}
 
-      {/* Iframe Container */}
-      {!iframeError && (
+      {/* Iframe Container with x-frame-bypass */}
+      {scriptsLoaded && !iframeError && (
         <div className="relative border-2 border-gray-200 rounded-lg overflow-hidden bg-gray-50">
           <iframe
-            id="agmarknet-iframe"
+            ref={iframeRef}
+            is="x-frame-bypass"
             src={agmarknetUrl}
             className="w-full"
             style={{
-              height: '1200px', // Adjust height as needed
+              height: '1200px',
               border: 'none',
               display: isLoading ? 'none' : 'block'
             }}
-            title="AgMarkNet Market Data"
+            title="AgMarkNet Market Data (x-frame-bypass)"
             onLoad={handleIframeLoad}
             onError={handleIframeError}
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
             loading="lazy"
           />
-          
-          {/* Overlay message if iframe is blocked */}
-          {!isLoading && (
-            <div 
-              className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center"
-              style={{ display: 'none' }} // Hidden by default, shown if iframe fails
-            >
-              <div className="text-center p-8">
-                <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-                <p className="text-gray-700 mb-4">
-                  Iframe embedding is blocked by AgMarkNet
-                </p>
-                <a
-                  href={agmarknetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Open in New Tab
-                </a>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
       {/* Info Footer */}
-      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs text-blue-800">
-          <strong>Note:</strong> This component embeds data directly from AgMarkNet.gov.in. 
-          If the iframe is blocked, please use the "Open in New Tab" button or check our integrated Mandi Bhav component.
+      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <p className="text-xs text-yellow-800">
+          <strong>⚠️ Educational/Testing Notice:</strong> This component uses x-frame-bypass library 
+          for educational purposes only. It may not work in all browsers (Safari/Edge) and relies on 
+          a CORS proxy. For production use, please use our integrated Mandi Bhav API components instead.
         </p>
       </div>
     </div>
   );
 }
-

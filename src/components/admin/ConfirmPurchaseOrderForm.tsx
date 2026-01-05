@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Save, Upload, FileSpreadsheet, Download } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
+import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToastContext } from '../../contexts/ToastContext';
 
 interface User {
@@ -17,6 +18,10 @@ export default function ConfirmPurchaseOrderForm() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
+  const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
+  const [varieties, setVarieties] = useState<string[]>([]);
+  const [warehouses, setWarehouses] = useState<string[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
@@ -65,7 +70,37 @@ export default function ConfirmPurchaseOrderForm() {
 
   useEffect(() => {
     fetchCustomers();
+    // Fetch commodities on mount
+    fetchCommodities().then(setCommodities).catch(() => {
+      setCommodities(['Paddy', 'Maize', 'Wheat']);
+    });
+    fetchWarehouses();
+    fetchLocations();
   }, []);
+
+  useEffect(() => {
+    // Fetch varieties when commodity changes
+    if (commodity) {
+      fetchVarieties(commodity).then(setVarieties).catch(() => {
+        setVarieties(COMMODITY_VARIETIES[commodity] || []);
+      });
+      setVariety(''); // Reset variety when commodity changes
+    } else {
+      setVarieties([]);
+    }
+  }, [commodity]);
+
+  // Auto-populate supplier name when customer is selected
+  useEffect(() => {
+    if (customerId) {
+      const selectedCustomer = customers.find(c => c.id === customerId);
+      if (selectedCustomer) {
+        setSupplierName(selectedCustomer.name);
+      }
+    } else {
+      setSupplierName('');
+    }
+  }, [customerId, customers]);
 
   useEffect(() => {
     // Calculate net weight
@@ -117,6 +152,36 @@ export default function ConfirmPurchaseOrderForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch(`${apiUrl}/warehouse-master?is_active=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setWarehouses(data.map((w: any) => w.name));
+      }
+    } catch (error) {
+      console.error('Failed to fetch warehouses:', error);
+    }
+  };
+
+  const fetchLocations = async () => {
+    // For now, use a static list. Can be replaced with location master API if available
+    const commonLocations = [
+      'GULABBAGH', 'BUXAR', 'PATNA', 'MUZAFFARPUR', 'GAYA', 'BHAGALPUR',
+      'PURNIA', 'DARBHANGA', 'SARAN', 'SIWAN', 'VAISHALI', 'SAMASTIPUR'
+    ];
+    setLocations(commonLocations);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -252,8 +317,6 @@ export default function ConfirmPurchaseOrderForm() {
     setRemarks('');
   };
 
-  const varieties = COMMODITY_VARIETIES[commodity] || [];
-
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-6">
@@ -375,9 +438,70 @@ export default function ConfirmPurchaseOrderForm() {
                 <h4 className="font-semibold text-blue-900">File Format Requirements:</h4>
                 <button
                   type="button"
-                  onClick={() => {
-                    // Create sample CSV matching Excel format exactly (with Supplier Name instead of Seller Name)
-                    const headers = [
+                  onClick={async () => {
+                    try {
+                      // Fetch master data dynamically
+                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+                      const token = localStorage.getItem('auth_token');
+                      if (!token) {
+                        showError('Authentication required');
+                        return;
+                      }
+
+                      // Fetch all master data
+                      const [commoditiesRes, warehousesRes, customersRes] = await Promise.all([
+                        fetch(`${apiUrl}/commodity-master?is_active=true`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        }),
+                        fetch(`${apiUrl}/warehouse-master?is_active=true`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        }),
+                        fetch(`${apiUrl}/admin/users`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        })
+                      ]);
+
+                      const commoditiesData = commoditiesRes.ok ? await commoditiesRes.json() : [];
+                      const warehousesData = warehousesRes.ok ? await warehousesRes.json() : [];
+                      const customersData = customersRes.ok ? await customersRes.json() : [];
+                      const customerList = customersData.filter((u: any) => u.role !== 'admin');
+
+                      // Get sample values from master data
+                      const sampleState = indianStates[0] || 'Bihar';
+                      const sampleLocation = locations[0] || 'GULABBAGH';
+                      const sampleWarehouse = warehousesData[0]?.name || warehouses[0] || 'SATISH KUMAR WAREHOUSE';
+                      const sampleCommodity1 = commoditiesData.find((c: any) => c.name === 'Maize')?.name || commodities.find(c => c === 'Maize') || 'Maize';
+                      const sampleCommodity2 = commoditiesData.find((c: any) => c.name === 'Wheat')?.name || commodities.find(c => c === 'Wheat') || 'Wheat';
+                      const sampleSupplier1 = customerList[0]?.name || 'FARMKEN VENTURES';
+                      const sampleSupplier2 = customerList[1]?.name || customerList[0]?.name || 'Agro Valley Trading';
+
+                      // Fetch varieties for sample commodities
+                      let sampleVarieties1: string[] = [];
+                      let sampleVarieties2: string[] = [];
+                      try {
+                        const var1Res = await fetch(`${apiUrl}/variety-master?commodity_name=${encodeURIComponent(sampleCommodity1)}`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (var1Res.ok) {
+                          const var1Data = await var1Res.json();
+                          sampleVarieties1 = var1Data.filter((v: any) => v.is_active).map((v: any) => v.variety_name);
+                        }
+                      } catch {}
+                      try {
+                        const var2Res = await fetch(`${apiUrl}/variety-master?commodity_name=${encodeURIComponent(sampleCommodity2)}`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (var2Res.ok) {
+                          const var2Data = await var2Res.json();
+                          sampleVarieties2 = var2Data.filter((v: any) => v.is_active).map((v: any) => v.variety_name);
+                        }
+                      } catch {}
+
+                      const finalVariety1 = sampleVarieties1[0] || 'Hybrid';
+                      const finalVariety2 = sampleVarieties2[0] || 'Dara';
+
+                      // Create sample CSV matching Excel format exactly (with Supplier Name instead of Seller Name)
+                      const headers = [
                       'Date of Transaction',
                       'State',
                       'Supplier Name',
@@ -427,15 +551,21 @@ export default function ConfirmPurchaseOrderForm() {
                       'Remarks'
                     ];
                     
-                    const sampleRow1 = [
-                      '01/05/25',
-                      'Bihar',
-                      'FARMKEN VENTURES',
-                      'GULABBAGH',
-                      'SATISH KUMAR WAREHOUSE',
-                      '16',
-                      'Maize',
-                      'Hybrid',
+                      const today = new Date();
+                      const date1 = new Date(today);
+                      date1.setDate(date1.getDate() - 5);
+                      const date2 = new Date(today);
+                      date2.setDate(date2.getDate() - 10);
+                      
+                      const sampleRow1 = [
+                        date1.toLocaleDateString('en-GB'),
+                        sampleState,
+                        sampleSupplier1,
+                        sampleLocation,
+                        sampleWarehouse,
+                        '16',
+                        sampleCommodity1,
+                        finalVariety1,
                       '754201',
                       'BR11GD-8172',
                       '1300',
@@ -475,15 +605,15 @@ export default function ConfirmPurchaseOrderForm() {
                       ''
                     ];
                     
-                    const sampleRow2 = [
-                      '09/04/25',
-                      'Bihar',
-                      'Agro Valley Trading',
-                      'BUXAR',
-                      'SIDDHASHRAM WAREHOUSE',
-                      '2',
-                      'Wheat',
-                      'Dara',
+                      const sampleRow2 = [
+                        date2.toLocaleDateString('en-GB'),
+                        sampleState,
+                        sampleSupplier2,
+                        locations[1] || 'BUXAR',
+                        warehousesData[1]?.name || warehouses[1] || 'SIDDHASHRAM WAREHOUSE',
+                        '2',
+                        sampleCommodity2,
+                        finalVariety2,
                       'Not Available',
                       'Not Available',
                       'Not Available',
@@ -523,18 +653,21 @@ export default function ConfirmPurchaseOrderForm() {
                       ''
                     ];
                     
-                    const sampleData = [headers, sampleRow1, sampleRow2];
-                    const csvContent = sampleData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    const url = URL.createObjectURL(blob);
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', 'sample_confirmed_purchase_order.csv');
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
+                      const sampleData = [headers, sampleRow1, sampleRow2];
+                      const csvContent = sampleData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement('a');
+                      const url = URL.createObjectURL(blob);
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', 'sample_confirmed_purchase_order.csv');
+                      link.style.visibility = 'hidden';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+                    } catch (error: any) {
+                      showError('Failed to generate sample CSV: ' + (error.message || 'Unknown error'));
+                    }
                   }}
                   className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center gap-1"
                 >
@@ -682,32 +815,38 @@ export default function ConfirmPurchaseOrderForm() {
               <input
                 type="text"
                 value={supplierName}
-                onChange={(e) => setSupplierName(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter supplier name"
+                readOnly
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 font-semibold"
+                placeholder="Auto-populated from customer"
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-              <input
-                type="text"
+              <select
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter location"
-              />
+              >
+                <option value="">Select Location</option>
+                {locations.map((loc) => (
+                  <option key={loc} value={loc}>{loc}</option>
+                ))}
+              </select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Warehouse Name</label>
-              <input
-                type="text"
+              <select
                 value={warehouseName}
                 onChange={(e) => setWarehouseName(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter warehouse name"
-              />
+              >
+                <option value="">Select Warehouse</option>
+                {warehouses.map((wh) => (
+                  <option key={wh} value={wh}>{wh}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -740,9 +879,10 @@ export default function ConfirmPurchaseOrderForm() {
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
-                <option value="Paddy">Paddy</option>
-                <option value="Maize">Maize</option>
-                <option value="Wheat">Wheat</option>
+                <option value="">Select Commodity</option>
+                {commodities.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
             </div>
 

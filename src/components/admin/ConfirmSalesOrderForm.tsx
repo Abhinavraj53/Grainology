@@ -154,6 +154,36 @@ export default function ConfirmSalesOrderForm() {
     }
   };
 
+  const fetchWarehouses = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch(`${apiUrl}/warehouse-master?is_active=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setWarehouses(data.map((w: any) => w.name));
+      }
+    } catch (error) {
+      console.error('Failed to fetch warehouses:', error);
+    }
+  };
+
+  const fetchLocations = async () => {
+    // For now, use a static list. Can be replaced with location master API if available
+    const commonLocations = [
+      'GULABBAGH', 'BUXAR', 'PATNA', 'MUZAFFARPUR', 'GAYA', 'BHAGALPUR',
+      'PURNIA', 'DARBHANGA', 'SARAN', 'SIWAN', 'VAISHALI', 'SAMASTIPUR'
+    ];
+    setLocations(commonLocations);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
@@ -410,67 +440,134 @@ export default function ConfirmSalesOrderForm() {
                 <h4 className="font-semibold text-blue-900">File Format Requirements:</h4>
                 <button
                   type="button"
-                  onClick={() => {
-                    // Create sample CSV matching Excel format exactly
-                    const headers = [
-                      'Date of Transaction',
-                      'State',
-                      'Seller Name',
-                      'Location',
-                      'Warehouse Name',
-                      'Chamber No.',
-                      'Commodity',
-                      'Variety',
-                      'Gate Pass No.',
-                      'Vehicle No.',
-                      'Weight Slip No.',
-                      'Gross Weight in MT (Vehicle + Goods)',
-                      'Tare Weight of Vehicle',
-                      'No. of Bags',
-                      'Net Weight in MT',
-                      'Rate Per MT',
-                      'Gross Amount',
-                      'HLW (Hectolitre Weight) in Wheat',
-                      'Excess HLW',
-                      'Deduction Amount Rs. (HLW)',
-                      'Moisture (MOI)',
-                      'Excess Moisture',
-                      'Broken, Damage, Discolour, Immature (BDOI)',
-                      'Excess BDOI',
-                      'MOI+BDOI',
-                      'Weight Deduction in KG (MOI+BDOI)',
-                      'Deduction Amount Rs. (MOI+BDOI)',
-                      'Other Deduction 1',
-                      'Other Deduction 1 Remarks',
-                      'Other Deduction 2',
-                      'Other Deduction 2 Remarks',
-                      'Other Deduction 3',
-                      'Other Deduction 3 Remarks',
-                      'Other Deduction 4',
-                      'Other Deduction 4 Remarks',
-                      'Other Deduction 5',
-                      'Other Deduction 5 Remarks',
-                      'Other Deduction 6',
-                      'Other Deduction 6 Remarks',
-                      'Other Deduction 7',
-                      'Other Deduction 7 Remarks',
-                      'Other Deduction 8',
-                      'Other Deduction 8 Remarks',
-                      'Other Deduction 9',
-                      'Other Deduction 9 Remarks',
-                      'Net Amount',
-                      'Remarks'
-                    ];
-                    
-                    const sampleRow1 = [
-                      '01/05/25',
-                      'Bihar',
-                      'FARMKEN VENTURES',
-                      'GULABBAGH',
-                      'SATISH KUMAR WAREHOUSE',
-                      '16',
-                      'Maize',
-                      'Hybrid',
+                  onClick={async () => {
+                    try {
+                      // Fetch master data dynamically
+                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+                      const token = localStorage.getItem('auth_token');
+                      if (!token) {
+                        showError('Authentication required');
+                        return;
+                      }
+
+                      // Fetch all master data
+                      const [commoditiesRes, warehousesRes, customersRes] = await Promise.all([
+                        fetch(`${apiUrl}/commodity-master?is_active=true`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        }),
+                        fetch(`${apiUrl}/warehouse-master?is_active=true`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        }),
+                        fetch(`${apiUrl}/admin/users`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        })
+                      ]);
+
+                      const commoditiesData = commoditiesRes.ok ? await commoditiesRes.json() : [];
+                      const warehousesData = warehousesRes.ok ? await warehousesRes.json() : [];
+                      const customersData = customersRes.ok ? await customersRes.json() : [];
+                      const customerList = customersData.filter((u: any) => u.role !== 'admin');
+
+                      // Get sample values from master data
+                      const sampleState = indianStates[0] || 'Bihar';
+                      const sampleLocation = locations[0] || 'GULABBAGH';
+                      const sampleWarehouse = warehousesData[0]?.name || warehouses[0] || 'SATISH KUMAR WAREHOUSE';
+                      const sampleCommodity1 = commoditiesData.find((c: any) => c.name === 'Maize')?.name || commodities.find(c => c === 'Maize') || 'Maize';
+                      const sampleCommodity2 = commoditiesData.find((c: any) => c.name === 'Wheat')?.name || commodities.find(c => c === 'Wheat') || 'Wheat';
+                      const sampleSeller1 = customerList[0]?.name || 'FARMKEN VENTURES';
+                      const sampleSeller2 = customerList[1]?.name || customerList[0]?.name || 'Agro Valley Trading';
+
+                      // Fetch varieties for sample commodities
+                      let sampleVarieties1: string[] = [];
+                      let sampleVarieties2: string[] = [];
+                      try {
+                        const var1Res = await fetch(`${apiUrl}/variety-master?commodity_name=${encodeURIComponent(sampleCommodity1)}`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (var1Res.ok) {
+                          const var1Data = await var1Res.json();
+                          sampleVarieties1 = var1Data.filter((v: any) => v.is_active).map((v: any) => v.variety_name);
+                        }
+                      } catch {}
+                      try {
+                        const var2Res = await fetch(`${apiUrl}/variety-master?commodity_name=${encodeURIComponent(sampleCommodity2)}`, {
+                          headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (var2Res.ok) {
+                          const var2Data = await var2Res.json();
+                          sampleVarieties2 = var2Data.filter((v: any) => v.is_active).map((v: any) => v.variety_name);
+                        }
+                      } catch {}
+
+                      const finalVariety1 = sampleVarieties1[0] || 'Hybrid';
+                      const finalVariety2 = sampleVarieties2[0] || 'Dara';
+
+                      // Create sample CSV matching Excel format exactly
+                      const headers = [
+                        'Date of Transaction',
+                        'State',
+                        'Seller Name',
+                        'Location',
+                        'Warehouse Name',
+                        'Chamber No.',
+                        'Commodity',
+                        'Variety',
+                        'Gate Pass No.',
+                        'Vehicle No.',
+                        'Weight Slip No.',
+                        'Gross Weight in MT (Vehicle + Goods)',
+                        'Tare Weight of Vehicle',
+                        'No. of Bags',
+                        'Net Weight in MT',
+                        'Rate Per MT',
+                        'Gross Amount',
+                        'HLW (Hectolitre Weight) in Wheat',
+                        'Excess HLW',
+                        'Deduction Amount Rs. (HLW)',
+                        'Moisture (MOI)',
+                        'Excess Moisture',
+                        'Broken, Damage, Discolour, Immature (BDOI)',
+                        'Excess BDOI',
+                        'MOI+BDOI',
+                        'Weight Deduction in KG (MOI+BDOI)',
+                        'Deduction Amount Rs. (MOI+BDOI)',
+                        'Other Deduction 1',
+                        'Other Deduction 1 Remarks',
+                        'Other Deduction 2',
+                        'Other Deduction 2 Remarks',
+                        'Other Deduction 3',
+                        'Other Deduction 3 Remarks',
+                        'Other Deduction 4',
+                        'Other Deduction 4 Remarks',
+                        'Other Deduction 5',
+                        'Other Deduction 5 Remarks',
+                        'Other Deduction 6',
+                        'Other Deduction 6 Remarks',
+                        'Other Deduction 7',
+                        'Other Deduction 7 Remarks',
+                        'Other Deduction 8',
+                        'Other Deduction 8 Remarks',
+                        'Other Deduction 9',
+                        'Other Deduction 9 Remarks',
+                        'Net Amount',
+                        'Remarks'
+                      ];
+                      
+                      const today = new Date();
+                      const date1 = new Date(today);
+                      date1.setDate(date1.getDate() - 5);
+                      const date2 = new Date(today);
+                      date2.setDate(date2.getDate() - 10);
+                      
+                      const sampleRow1 = [
+                        date1.toLocaleDateString('en-GB'),
+                        sampleState,
+                        sampleSeller1,
+                        sampleLocation,
+                        sampleWarehouse,
+                        '16',
+                        sampleCommodity1,
+                        finalVariety1,
                       '754201',
                       'BR11GD-8172',
                       '1300',
@@ -512,15 +609,15 @@ export default function ConfirmSalesOrderForm() {
                       ''
                     ];
                     
-                    const sampleRow2 = [
-                      '09/04/25',
-                      'Bihar',
-                      'Agro Valley Trading',
-                      'BUXAR',
-                      'SIDDHASHRAM WAREHOUSE',
-                      '2',
-                      'Wheat',
-                      'Dara',
+                      const sampleRow2 = [
+                        date2.toLocaleDateString('en-GB'),
+                        sampleState,
+                        sampleSeller2,
+                        locations[1] || 'BUXAR',
+                        warehousesData[1]?.name || warehouses[1] || 'SIDDHASHRAM WAREHOUSE',
+                        '2',
+                        sampleCommodity2,
+                        finalVariety2,
                       'Not Available',
                       'Not Available',
                       'Not Available',
@@ -562,18 +659,21 @@ export default function ConfirmSalesOrderForm() {
                       ''
                     ];
                     
-                    const sampleData = [headers, sampleRow1, sampleRow2];
-                    const csvContent = sampleData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
-                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                    const link = document.createElement('a');
-                    const url = URL.createObjectURL(blob);
-                    link.setAttribute('href', url);
-                    link.setAttribute('download', 'sample_confirmed_sales_order.csv');
-                    link.style.visibility = 'hidden';
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    URL.revokeObjectURL(url);
+                      const sampleData = [headers, sampleRow1, sampleRow2];
+                      const csvContent = sampleData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const link = document.createElement('a');
+                      const url = URL.createObjectURL(blob);
+                      link.setAttribute('href', url);
+                      link.setAttribute('download', 'sample_confirmed_sales_order.csv');
+                      link.style.visibility = 'hidden';
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+                    } catch (error: any) {
+                      showError('Failed to generate sample CSV: ' + (error.message || 'Unknown error'));
+                    }
                   }}
                   className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center gap-1"
                 >

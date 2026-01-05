@@ -1,6 +1,9 @@
 import express from 'express';
 import ConfirmedSalesOrder from '../models/ConfirmedSalesOrder.js';
 import User from '../models/User.js';
+import CommodityMaster from '../models/CommodityMaster.js';
+import VarietyMaster from '../models/VarietyMaster.js';
+import WarehouseMaster from '../models/WarehouseMaster.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import { parseFile } from '../utils/csvParser.js';
@@ -189,6 +192,37 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       return res.status(400).json({ error: 'File is empty or invalid' });
     }
 
+    // Fetch master data for validation
+    const [commodities, varieties, warehouses, allCustomers] = await Promise.all([
+      CommodityMaster.find({ is_active: true }),
+      VarietyMaster.find({ is_active: true }),
+      WarehouseMaster.find({ is_active: true }),
+      User.find({ role: { $ne: 'admin' } })
+    ]);
+
+    const validCommodities = new Set(commodities.map(c => c.name));
+    const validVarieties = new Map(); // commodity -> Set of varieties
+    varieties.forEach(v => {
+      if (!validVarieties.has(v.commodity_name)) {
+        validVarieties.set(v.commodity_name, new Set());
+      }
+      validVarieties.get(v.commodity_name).add(v.variety_name);
+    });
+    const validWarehouses = new Set(warehouses.map(w => w.name));
+    const validStates = new Set([
+      'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+      'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+      'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+      'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
+      'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+      'Andaman and Nicobar Islands', 'Chandigarh', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+    ]);
+    const validLocations = new Set([
+      'GULABBAGH', 'BUXAR', 'PATNA', 'MUZAFFARPUR', 'GAYA', 'BHAGALPUR',
+      'PURNIA', 'DARBHANGA', 'SARAN', 'SIWAN', 'VAISHALI', 'SAMASTIPUR'
+    ]);
+    const validSellerNames = new Set(allCustomers.map(c => c.name));
+
     // Transform and validate records
     const orders = [];
     const errors = [];
@@ -241,17 +275,58 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           return isNaN(parsed) ? defaultValue : parsed;
         };
 
+        // Validate against master data
+        const state = record['State'] || record.state || '';
+        const sellerName = record['Seller Name'] || record.seller_name || record['Seller'] || customer.name;
+        const location = record['Location'] || record.location || '';
+        const warehouseName = record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '';
+        const commodity = record['Commodity'] || record.commodity || 'Paddy';
+        const variety = record['Variety'] || record.variety || '';
+
+        // Validate state
+        if (state && !validStates.has(state)) {
+          errors.push(`Row ${rowNum}: Invalid state "${state}". Must be one of the valid Indian states.`);
+        }
+
+        // Validate seller name matches customer
+        if (sellerName && sellerName !== customer.name) {
+          errors.push(`Row ${rowNum}: Seller Name "${sellerName}" does not match customer "${customer.name}". Seller Name must be the same as Customer.`);
+        }
+
+        // Validate location
+        if (location && !validLocations.has(location.toUpperCase())) {
+          errors.push(`Row ${rowNum}: Invalid location "${location}". Must be from the valid locations list.`);
+        }
+
+        // Validate warehouse
+        if (warehouseName && !validWarehouses.has(warehouseName)) {
+          errors.push(`Row ${rowNum}: Invalid warehouse "${warehouseName}". Must be from the warehouse master list.`);
+        }
+
+        // Validate commodity
+        if (commodity && !validCommodities.has(commodity)) {
+          errors.push(`Row ${rowNum}: Invalid commodity "${commodity}". Must be from the commodity master list.`);
+        }
+
+        // Validate variety (if provided and commodity is valid)
+        if (variety && commodity && validCommodities.has(commodity)) {
+          const commodityVarieties = validVarieties.get(commodity);
+          if (commodityVarieties && !commodityVarieties.has(variety)) {
+            errors.push(`Row ${rowNum}: Invalid variety "${variety}" for commodity "${commodity}". Must be from the variety master list for this commodity.`);
+          }
+        }
+
         const orderData = {
           customer_id: customer_id,
           invoice_number: record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}`,
           transaction_date: transactionDate,
-          state: record['State'] || record.state || '',
-          seller_name: record['Seller Name'] || record.seller_name || record['Seller'] || '',
-          location: record['Location'] || record.location || '',
-          warehouse_name: record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '',
+          state: state,
+          seller_name: sellerName,
+          location: location,
+          warehouse_name: warehouseName,
           chamber_no: record['Chamber No.'] || record['Chamber No'] || record.chamber_no || record['Chamber'] || '',
-          commodity: record['Commodity'] || record.commodity || 'Paddy',
-          variety: record['Variety'] || record.variety || '',
+          commodity: commodity,
+          variety: variety,
           gate_pass_no: record['Gate Pass No.'] || record['Gate Pass No'] || record.gate_pass_no || record['Gate Pass'] || '',
           vehicle_no: record['Vehicle No.'] || record['Vehicle No'] || record.vehicle_no || record['Vehicle Number'] || record['Truck No'] || '',
           weight_slip_no: record['Weight Slip No.'] || record['Weight Slip No'] || record.weight_slip_no || record['Weight Slip'] || '',

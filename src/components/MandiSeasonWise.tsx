@@ -127,6 +127,7 @@ export default function MandiSeasonWise() {
       console.log('Fetching season-wise data from:', apiUrl);
       const response = await fetch(apiUrl, {
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(20000), // 20 second timeout
       });
 
       if (!response.ok) {

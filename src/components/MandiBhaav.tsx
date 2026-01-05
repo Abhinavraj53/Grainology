@@ -176,6 +176,7 @@ export default function MandiBhaav() {
       for (const commodity of defaultCommodities) {
         const commodityParams = new URLSearchParams(params);
         commodityParams.append('commodity', commodity);
+        commodityParams.append('limit', '200'); // Smaller limit for each commodity
         
         try {
           const apiUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/agmarknet?${commodityParams.toString()}`;
@@ -184,6 +185,7 @@ export default function MandiBhaav() {
             headers: {
               'Content-Type': 'application/json',
             },
+            signal: AbortSignal.timeout(20000), // 20 second timeout per commodity
           });
 
           if (!response.ok) {

@@ -43,16 +43,23 @@ export default function LandingPage() {
         const params = new URLSearchParams();
         params.append('commodity_group', 'Cereals');
         params.append('commodity', commodity);
+        params.append('limit', '50'); // Small limit for preview
         
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/agmarknet?${params.toString()}`
-        );
+        try {
+          const response = await fetch(
+            `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/mandi/agmarknet?${params.toString()}`,
+            { signal: AbortSignal.timeout(15000) } // 15 second timeout for preview
+          );
 
-        if (response.ok) {
-          const result = await response.json();
-          if (result.data && result.data.length > 0) {
-            allData.push(...result.data.slice(0, 1)); // Just one per commodity for preview
+          if (response.ok) {
+            const result = await response.json();
+            if (result.data && result.data.length > 0) {
+              allData.push(...result.data.slice(0, 1)); // Just one per commodity for preview
+            }
           }
+        } catch (error: any) {
+          // Silently fail for preview - don't show errors
+          console.warn(`Failed to load ${commodity} preview:`, error.message);
         }
       }
 

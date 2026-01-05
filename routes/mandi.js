@@ -116,33 +116,25 @@ router.get('/agmarknet', async (req, res) => {
     const params = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
-      limit: Math.min(Number(limit) || 500, 2000).toString(), // Reduced from 1000/5000 to 500/2000
+      limit: Math.min(Number(limit) || 1000, 5000).toString(),
       offset: (Number(offset) || 0).toString(),
     });
 
     // Apply filters - handle 'all' values properly
-    // Note: API uses filters[State], filters[Commodity] format (capitalized)
-    if (state && state !== 'all') params.append('filters[State]', state);
-    if (district && district !== 'all') params.append('filters[District]', district);
-    if (market && market !== 'all') params.append('filters[Market]', market);
-    if (commodity && commodity !== 'all') params.append('filters[Commodity]', commodity);
-    if (variety && variety !== 'all') params.append('filters[Variety]', variety);
+    if (state && state !== 'all') params.append('filters[state.keyword]', state);
+    if (district && district !== 'all') params.append('filters[district]', district);
+    if (market && market !== 'all') params.append('filters[market]', market);
+    if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
+    if (variety && variety !== 'all') params.append('filters[variety]', variety);
     
-    // If commodity_group is 'Cereals' and commodity is 'all', use smaller limit to prevent timeout
+    // If commodity_group is 'Cereals' and commodity is 'all', fetch Paddy, Maize, Wheat by default
     if (commodity_group === 'Cereals' && commodity === 'all') {
-      // Reduce limit significantly to prevent timeout - don't fetch too much at once
-      params.set('limit', Math.min(Number(limit) || 1000, 2000).toString()); // Reduced from 5000/10000
+      // Increase limit to get more data for multiple commodities
+      params.set('limit', Math.min(Number(limit) || 5000, 10000).toString());
     }
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    console.log('🔍 Mandi API Request:', {
-      url: url.replace(MANDI_API_KEY, '***HIDDEN***'),
-      limit: params.get('limit'),
-      filters: Array.from(params.entries()).filter(([k]) => k.startsWith('filters'))
-    });
-    
-    // Increase timeout to 30 seconds
-    const response = await axios.get(url, { timeout: 30000 }); // Changed from 15000 to 30000
+    const response = await axios.get(url, { timeout: 15000 });
 
     const records = response.data?.records || [];
 
@@ -243,24 +235,7 @@ router.get('/agmarknet', async (req, res) => {
       count: result.length
     });
   } catch (error) {
-    console.error('AgMarkNet API error:', {
-      message: error.message,
-      code: error.code,
-      status: error.response?.status,
-      url: error.config?.url?.replace(MANDI_API_KEY, '***HIDDEN***')
-    });
-    
-    // Check if it's a timeout error
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      return res.status(504).json({
-        success: false,
-        error: 'Request timeout - The API is taking too long to respond',
-        details: 'The data.gov.in API may be slow or overloaded. Please try with more specific filters to reduce data size.',
-        suggestion: 'Try adding filters like ?commodity=Paddy&state=Bihar&limit=100',
-        timeout: '30 seconds'
-      });
-    }
-    
+    console.error('AgMarkNet API error:', error);
     return res.status(error.response?.status || 500).json({
       success: false,
       error: 'Failed to fetch AgMarkNet-style data',
@@ -296,14 +271,14 @@ router.get('/live', async (req, res) => {
       offset: (Number(offset) || 0).toString(),
     });
 
-    // Apply filters per data.gov.in spec - use capitalized field names
-    if (state) params.append('filters[State]', state);
-    if (district) params.append('filters[District]', district);
-    if (market) params.append('filters[Market]', market);
-    if (commodity) params.append('filters[Commodity]', commodity);
+    // Apply filters per data.gov.in spec
+    if (state) params.append('filters[state.keyword]', state);
+    if (district) params.append('filters[district]', district);
+    if (market) params.append('filters[market]', market);
+    if (commodity) params.append('filters[commodity]', commodity);
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 30000 }); // Increased from 10000 to 30000
+    const response = await axios.get(url, { timeout: 10000 });
 
     const records = response.data?.records || [];
 
@@ -438,21 +413,9 @@ router.get('/live', async (req, res) => {
   } catch (error) {
     console.error('Live mandi API error:', {
       message: error.message,
-      code: error.code,
       status: error.response?.status,
       data: error.response?.data,
     });
-    
-    // Check if it's a timeout error
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      return res.status(504).json({
-        success: false,
-        error: 'Request timeout - The API is taking too long to respond',
-        details: 'The data.gov.in API may be slow. Try with more specific filters to reduce data size.',
-        suggestion: 'Try adding filters like ?commodity=Paddy&state=Bihar&limit=50'
-      });
-    }
-    
     return res.status(error.response?.status || 500).json({
       success: false,
       error: 'Failed to fetch live mandi prices',
@@ -471,41 +434,17 @@ router.get('/filters', async (req, res) => {
       });
     }
 
-    // Fetch a large sample to get all unique values, prioritizing Bihar
-    // First try to get Bihar-specific data - reduce limit to prevent timeout
-    const biharParams = new URLSearchParams({
-      'api-key': MANDI_API_KEY,
-      format: 'json',
-      limit: '2000', // Reduced from 5000 to 2000
-      offset: '0',
-      'filters[State]': 'Bihar',
-    });
-
-    const biharUrl = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${biharParams.toString()}`;
-    let biharResponse;
-    let biharRecords = [];
-    
-    try {
-      biharResponse = await axios.get(biharUrl, { timeout: 30000 }); // Increased from 15000 to 30000
-      biharRecords = biharResponse.data?.records || [];
-    } catch (error) {
-      console.warn('Failed to fetch Bihar-specific data, will fetch all data:', error.message);
-    }
-
-    // Also fetch general data to get all states - reduce limit to prevent timeout
+    // Fetch a large sample to get all unique values
     const params = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
-      limit: '2000', // Reduced from 5000 to 2000
+      limit: '5000',
       offset: '0',
     });
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 30000 }); // Increased from 15000 to 30000
-    const allRecords = response.data?.records || [];
-
-    // Combine Bihar records with all records (Bihar first)
-    const records = [...biharRecords, ...allRecords];
+    const response = await axios.get(url, { timeout: 15000 });
+    const records = response.data?.records || [];
 
     const states = new Set();
     const districts = new Set();
@@ -513,9 +452,6 @@ router.get('/filters', async (req, res) => {
     const commodities = new Set();
     const varieties = new Set();
     const commodityGroups = new Set();
-
-    // Bihar districts list for default
-    const biharDistricts = ['Patna', 'Muzaffarpur', 'Gaya', 'Bhagalpur', 'Purnia', 'Darbhanga', 'Saran', 'Siwan', 'Vaishali', 'Samastipur', 'Madhubani', 'East Champaran', 'West Champaran', 'Sitamarhi', 'Begusarai', 'Nalanda', 'Bhojpur', 'Rohtas', 'Aurangabad', 'Nawada'];
 
     records.forEach(record => {
       const state = record.State || record.state || record.state_name;
@@ -534,29 +470,10 @@ router.get('/filters', async (req, res) => {
       if (variety) varieties.add(variety);
     });
 
-    // Ensure Bihar districts are included even if not in API response
-    biharDistricts.forEach(dist => districts.add(dist));
-
-    // Sort states with Bihar first
-    const sortedStates = Array.from(states).sort((a, b) => {
-      if (a === 'Bihar') return -1;
-      if (b === 'Bihar') return 1;
-      return a.localeCompare(b);
-    });
-
-    // Sort districts with Bihar districts first
-    const sortedDistricts = Array.from(districts).sort((a, b) => {
-      const aIsBihar = biharDistricts.some(d => a.includes(d) || d.includes(a));
-      const bIsBihar = biharDistricts.some(d => b.includes(d) || d.includes(b));
-      if (aIsBihar && !bIsBihar) return -1;
-      if (!aIsBihar && bIsBihar) return 1;
-      return a.localeCompare(b);
-    });
-
     return res.json({
       success: true,
-      states: sortedStates,
-      districts: sortedDistricts,
+      states: Array.from(states).sort(),
+      districts: Array.from(districts).sort(),
       markets: Array.from(markets).sort(),
       commodities: Array.from(commodities).sort(),
       varieties: Array.from(varieties).sort(),
@@ -568,361 +485,6 @@ router.get('/filters', async (req, res) => {
       success: false,
       error: 'Failed to fetch filter options',
       details: error.message,
-    });
-  }
-});
-
-// Season-wise endpoint: Grouped data by commodity with Kharif and Rabi marketing seasons
-router.get('/season-wise', async (req, res) => {
-  try {
-    if (!MANDI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: 'MANDI_API_KEY is not configured on the server'
-      });
-    }
-
-    const {
-      state = 'all',
-      district = 'all',
-      market = 'all',
-      commodity_group = 'all',
-      commodity = 'all',
-      variety = 'all',
-      grade = 'FAQ',
-      limit = 1000,
-      offset = 0,
-    } = req.query;
-
-    const params = new URLSearchParams({
-      'api-key': MANDI_API_KEY,
-      format: 'json',
-      limit: Math.min(Number(limit) || 1000, 5000).toString(),
-      offset: (Number(offset) || 0).toString(),
-    });
-
-    // Apply filters - use capitalized field names as per API spec
-    if (state && state !== 'all') params.append('filters[State]', state);
-    if (district && district !== 'all') params.append('filters[District]', district);
-    if (market && market !== 'all') params.append('filters[Market]', market);
-    if (commodity && commodity !== 'all') params.append('filters[Commodity]', commodity);
-    if (variety && variety !== 'all') params.append('filters[Variety]', variety);
-
-    const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
-    const response = await axios.get(url, { timeout: 30000 });
-
-    const records = response.data?.records || [];
-
-    // Helper to extract price
-    const extractPrice = (record) => {
-      const possibleKeys = [
-        'Modal_Price', 'modal_price', 'ModalPrice', 'modalprice',
-        'modal_price_rs_quintal', 'modal_price_rs_per_quintal',
-        'Price', 'price', 'Avg_Price', 'avg_price'
-      ];
-      
-      for (const key of possibleKeys) {
-        const value = record[key];
-        if (value !== undefined && value !== null && value !== '') {
-          const cleaned = String(value).replace(/,/g, '').trim();
-          const num = Number(cleaned);
-          if (!isNaN(num) && num > 0) {
-            return num;
-          }
-        }
-      }
-      return 0;
-    };
-
-    // Helper to extract arrival
-    const extractArrival = (record) => {
-      const possibleKeys = [
-        'Arrival', 'arrival', 'Arrival_Qty', 'arrival_qty',
-        'Arrival_in_qtl', 'arrival_in_qtl', 'Quantity', 'quantity'
-      ];
-      
-      for (const key of possibleKeys) {
-        const value = record[key];
-        if (value !== undefined && value !== null && value !== '') {
-          const cleaned = String(value).replace(/,/g, '').trim();
-          const num = Number(cleaned);
-          if (!isNaN(num) && num > 0) {
-            return num;
-          }
-        }
-      }
-      return 0;
-    };
-
-    // Helper to determine marketing season
-    // Kharif Marketing Season: 01 Oct - 30 Sep (Oct 1 of year Y to Sep 30 of year Y+1)
-    // Rabi Marketing Season: 01 Apr - 31 Mar (Apr 1 of year Y to Mar 31 of year Y+1)
-    const getMarketingSeason = (dateStr, commodityName = '') => {
-      if (!dateStr) return null;
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return null;
-      
-      const month = date.getMonth() + 1; // 1-12
-      const year = date.getFullYear();
-      
-      // Rabi crops primarily marketed in Rabi season (Apr-Mar)
-      const rabiCommodities = ['Wheat', 'Barley', 'Jau', 'Mustard', 'Gram', 'Lentil', 'Pea', 'Chana'];
-      const isRabiCommodity = rabiCommodities.some(c => commodityName && commodityName.includes(c));
-      
-      // Kharif Marketing Season: Oct 1 to Sep 30
-      if (month >= 10) {
-        // Oct-Dec: Start of Kharif season (year Y to Y+1)
-        return { season: 'Kharif', year: `${year}-${year + 1}` };
-      } else if (month <= 3) {
-        // Jan-Mar: End of Rabi season (year Y-1 to Y) for Rabi crops
-        // For Kharif crops, this is also end of Kharif (Y-1 to Y)
-        if (isRabiCommodity) {
-          return { season: 'Rabi', year: `${year - 1}-${year}` };
-        } else {
-          return { season: 'Kharif', year: `${year - 1}-${year}` };
-        }
-      } else {
-        // Apr-Sep: 
-        // - For Rabi crops: Start/Middle of Rabi season (year Y to Y+1)
-        // - For Kharif crops: End of Kharif season (year Y-1 to Y)
-        if (isRabiCommodity) {
-          return { season: 'Rabi', year: `${year}-${year + 1}` };
-        } else {
-          return { season: 'Kharif', year: `${year - 1}-${year}` };
-        }
-      }
-    };
-
-    // Group data by commodity and season
-    const grouped = {};
-    
-    records.forEach(record => {
-      const commodityName = record.Commodity || record.commodity || record.commodity_name || '';
-      const varietyName = record.Variety || record.variety || record.variety_name || '';
-      const dateStr = record.Arrival_Date || record.arrival_date || record.date || '';
-      
-      if (!commodityName) return;
-      
-      const key = varietyName ? `${commodityName} - ${varietyName}` : commodityName;
-      
-      if (!grouped[key]) {
-        grouped[key] = {
-          commodity_group: getCommodityGroup(commodityName),
-          commodity: commodityName,
-          variety: varietyName || '',
-          msp: getMSP(commodityName),
-          seasons: {
-            Kharif: { price: 0, arrival: 0, count: 0 },
-            Rabi: { price: 0, arrival: 0, count: 0 }
-          }
-        };
-      }
-      
-      const seasonInfo = getMarketingSeason(dateStr, commodityName);
-      if (seasonInfo && (seasonInfo.season === 'Kharif' || seasonInfo.season === 'Rabi')) {
-        const season = grouped[key].seasons[seasonInfo.season];
-        const price = extractPrice(record);
-        const arrival = extractArrival(record);
-        
-        if (price > 0) {
-          // Average price (weighted average)
-          if (season.count === 0) {
-            season.price = price;
-          } else {
-            season.price = (season.price * season.count + price) / (season.count + 1);
-          }
-        }
-        season.arrival += arrival;
-        season.count += 1;
-      }
-    });
-
-    // Convert to array and filter by commodity group
-    let result = Object.values(grouped);
-    
-    if (commodity_group && commodity_group !== 'all') {
-      result = result.filter(item => item.commodity_group === commodity_group);
-    }
-
-    // Sort by commodity group and commodity name
-    result.sort((a, b) => {
-      if (a.commodity_group !== b.commodity_group) {
-        return a.commodity_group.localeCompare(b.commodity_group);
-      }
-      return a.commodity.localeCompare(b.commodity);
-    });
-
-    return res.json({
-      success: true,
-      data: result,
-      filters: { state, district, market, commodity_group, commodity, variety, grade },
-      count: result.length
-    });
-  } catch (error) {
-    console.error('Season-wise API error:', error);
-    
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      return res.status(504).json({
-        success: false,
-        error: 'Request timeout - The API is taking too long to respond',
-        details: 'The data.gov.in API may be slow. Please try with more specific filters.',
-      });
-    }
-    
-    return res.status(error.response?.status || 500).json({
-      success: false,
-      error: 'Failed to fetch season-wise data',
-      details: error.response?.data || error.message,
-    });
-  }
-});
-
-// Test endpoint to check Mandi API configuration and connectivity (PUBLIC - no auth)
-// IMPORTANT: This must be BEFORE router.get('/:id') to avoid route matching issues
-router.get('/test', async (req, res) => {
-  try {
-    const testResults = {
-      timestamp: new Date().toISOString(),
-      apiConfiguration: {
-        hasApiKey: !!MANDI_API_KEY,
-        apiKeyLength: MANDI_API_KEY ? MANDI_API_KEY.length : 0,
-        apiKeyPreview: MANDI_API_KEY ? `${MANDI_API_KEY.substring(0, 8)}...` : 'NOT SET',
-        apiBase: MANDI_API_BASE,
-        resourceId: MANDI_RESOURCE_ID,
-      },
-      tests: []
-    };
-
-    // Test 1: Check if API key is configured
-    if (!MANDI_API_KEY || MANDI_API_KEY === 'your-data-gov-api-key') {
-      testResults.tests.push({
-        name: 'API Key Configuration',
-        status: 'FAILED',
-        message: 'MANDI_API_KEY is not set or is using placeholder value',
-        fix: 'Set MANDI_API_KEY in your environment variables with a valid data.gov.in API key'
-      });
-      return res.status(500).json({
-        success: false,
-        error: 'Mandi API is not configured',
-        details: testResults
-      });
-    }
-
-    testResults.tests.push({
-      name: 'API Key Configuration',
-      status: 'PASSED',
-      message: 'API key is configured'
-    });
-
-    // Test 2: Try a small API request
-    const testParams = new URLSearchParams({
-      'api-key': MANDI_API_KEY,
-      format: 'json',
-      limit: '10', // Small limit for testing
-      offset: '0',
-    });
-
-    // Add a commodity filter to reduce data
-    testParams.append('filters[Commodity]', 'Paddy');
-
-    const testUrl = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${testParams.toString()}`;
-    
-    console.log('🧪 Testing Mandi API:', testUrl.replace(MANDI_API_KEY, '***HIDDEN***'));
-
-    try {
-      const startTime = Date.now();
-      const response = await axios.get(testUrl, { 
-        timeout: 20000, // 20 second timeout for test
-        validateStatus: (status) => status < 500 // Don't throw on 4xx
-      });
-      const responseTime = Date.now() - startTime;
-
-      if (response.status === 200) {
-        const records = response.data?.records || [];
-        testResults.tests.push({
-          name: 'API Connectivity',
-          status: 'PASSED',
-          message: `Successfully connected to data.gov.in API`,
-          details: {
-            responseTime: `${responseTime}ms`,
-            recordsReturned: records.length,
-            totalRecords: response.data?.total || 'unknown'
-          }
-        });
-
-        // Test 3: Check if data structure is correct
-        if (records.length > 0) {
-          const sampleRecord = records[0];
-          const hasCommodity = !!(sampleRecord.Commodity || sampleRecord.commodity);
-          const hasPrice = !!(sampleRecord.Modal_Price || sampleRecord.modal_price || 
-                             sampleRecord.Price || sampleRecord.price);
-          
-          testResults.tests.push({
-            name: 'Data Structure',
-            status: hasCommodity && hasPrice ? 'PASSED' : 'WARNING',
-            message: hasCommodity && hasPrice 
-              ? 'Data structure looks correct' 
-              : 'Data structure may be different than expected',
-            details: {
-              sampleFields: Object.keys(sampleRecord).slice(0, 10),
-              hasCommodity,
-              hasPrice
-            }
-          });
-        } else {
-          testResults.tests.push({
-            name: 'Data Structure',
-            status: 'WARNING',
-            message: 'No records returned - API may be working but no data available',
-            details: {
-              responseData: response.data
-            }
-          });
-        }
-      } else {
-        testResults.tests.push({
-          name: 'API Connectivity',
-          status: 'FAILED',
-          message: `API returned status ${response.status}`,
-          details: {
-            status: response.status,
-            statusText: response.statusText,
-            data: response.data
-          }
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Mandi API test completed',
-        results: testResults
-      });
-
-    } catch (apiError) {
-      testResults.tests.push({
-        name: 'API Connectivity',
-        status: 'FAILED',
-        message: apiError.message,
-        details: {
-          code: apiError.code,
-          response: apiError.response?.data,
-          status: apiError.response?.status
-        }
-      });
-
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to connect to Mandi API',
-        details: testResults
-      });
-    }
-
-  } catch (error) {
-    console.error('Test endpoint error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Test endpoint error',
-      details: error.message
     });
   }
 });
@@ -978,4 +540,3 @@ router.post('/', authenticate, async (req, res) => {
 });
 
 export default router;
-

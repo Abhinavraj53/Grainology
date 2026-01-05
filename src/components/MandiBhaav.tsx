@@ -337,17 +337,21 @@ export default function MandiBhaav() {
     }
 
     // Default: Group data by commodity (Paddy, Maize, Wheat)
-    const paddyData = data.filter(item => 
-      item.commodity.toLowerCase().includes('paddy') || 
-      item.commodity.toLowerCase().includes('rice')
-    );
-    const maizeData = data.filter(item => 
-      item.commodity.toLowerCase().includes('maize') || 
-      item.commodity.toLowerCase().includes('corn')
-    );
-    const wheatData = data.filter(item => 
-      item.commodity.toLowerCase().includes('wheat')
-    );
+    // Filter by exact commodity name match (case-insensitive)
+    const paddyData = data.filter(item => {
+      const comm = item.commodity.toLowerCase();
+      return comm === 'paddy' || comm.includes('paddy') || comm.includes('rice') || comm === 'common paddy';
+    }).slice(0, 50); // Limit to first 50 to ensure variety
+    
+    const maizeData = data.filter(item => {
+      const comm = item.commodity.toLowerCase();
+      return comm === 'maize' || comm.includes('maize') || comm.includes('corn');
+    }).slice(0, 50); // Limit to first 50 to ensure variety
+    
+    const wheatData = data.filter(item => {
+      const comm = item.commodity.toLowerCase();
+      return comm === 'wheat' || comm.includes('wheat');
+    }).slice(0, 50); // Limit to first 50 to ensure variety
 
     // Calculate items per commodity per page (3 each)
     const startIndex = (currentPage - 1) * itemsPerCommodity;

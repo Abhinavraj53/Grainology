@@ -121,11 +121,12 @@ router.get('/agmarknet', async (req, res) => {
     });
 
     // Apply filters - handle 'all' values properly
-    if (state && state !== 'all') params.append('filters[state.keyword]', state);
-    if (district && district !== 'all') params.append('filters[district]', district);
-    if (market && market !== 'all') params.append('filters[market]', market);
-    if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
-    if (variety && variety !== 'all') params.append('filters[variety]', variety);
+    // Note: API uses filters[State], filters[Commodity] format (capitalized)
+    if (state && state !== 'all') params.append('filters[State]', state);
+    if (district && district !== 'all') params.append('filters[District]', district);
+    if (market && market !== 'all') params.append('filters[Market]', market);
+    if (commodity && commodity !== 'all') params.append('filters[Commodity]', commodity);
+    if (variety && variety !== 'all') params.append('filters[Variety]', variety);
     
     // If commodity_group is 'Cereals' and commodity is 'all', use smaller limit to prevent timeout
     if (commodity_group === 'Cereals' && commodity === 'all') {
@@ -295,11 +296,11 @@ router.get('/live', async (req, res) => {
       offset: (Number(offset) || 0).toString(),
     });
 
-    // Apply filters per data.gov.in spec
-    if (state) params.append('filters[state.keyword]', state);
-    if (district) params.append('filters[district]', district);
-    if (market) params.append('filters[market]', market);
-    if (commodity) params.append('filters[commodity]', commodity);
+    // Apply filters per data.gov.in spec - use capitalized field names
+    if (state) params.append('filters[State]', state);
+    if (district) params.append('filters[District]', district);
+    if (market) params.append('filters[Market]', market);
+    if (commodity) params.append('filters[Commodity]', commodity);
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
     const response = await axios.get(url, { timeout: 30000 }); // Increased from 10000 to 30000
@@ -477,7 +478,7 @@ router.get('/filters', async (req, res) => {
       format: 'json',
       limit: '2000', // Reduced from 5000 to 2000
       offset: '0',
-      'filters[state.keyword]': 'Bihar',
+      'filters[State]': 'Bihar',
     });
 
     const biharUrl = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${biharParams.toString()}`;
@@ -600,12 +601,12 @@ router.get('/season-wise', async (req, res) => {
       offset: (Number(offset) || 0).toString(),
     });
 
-    // Apply filters
-    if (state && state !== 'all') params.append('filters[state.keyword]', state);
-    if (district && district !== 'all') params.append('filters[district]', district);
-    if (market && market !== 'all') params.append('filters[market]', market);
-    if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
-    if (variety && variety !== 'all') params.append('filters[variety]', variety);
+    // Apply filters - use capitalized field names as per API spec
+    if (state && state !== 'all') params.append('filters[State]', state);
+    if (district && district !== 'all') params.append('filters[District]', district);
+    if (market && market !== 'all') params.append('filters[Market]', market);
+    if (commodity && commodity !== 'all') params.append('filters[Commodity]', commodity);
+    if (variety && variety !== 'all') params.append('filters[Variety]', variety);
 
     const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
     const response = await axios.get(url, { timeout: 30000 });
@@ -822,7 +823,7 @@ router.get('/test', async (req, res) => {
     });
 
     // Add a commodity filter to reduce data
-    testParams.append('filters[commodity]', 'Paddy');
+    testParams.append('filters[Commodity]', 'Paddy');
 
     const testUrl = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${testParams.toString()}`;
     

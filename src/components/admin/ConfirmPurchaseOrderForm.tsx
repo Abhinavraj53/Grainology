@@ -90,17 +90,6 @@ export default function ConfirmPurchaseOrderForm() {
     }
   }, [commodity]);
 
-  // Auto-populate supplier name when customer is selected
-  useEffect(() => {
-    if (customerId) {
-      const selectedCustomer = customers.find(c => c.id === customerId);
-      if (selectedCustomer) {
-        setSupplierName(selectedCustomer.name);
-      }
-    } else {
-      setSupplierName('');
-    }
-  }, [customerId, customers]);
 
   useEffect(() => {
     // Calculate net weight
@@ -218,6 +207,12 @@ export default function ConfirmPurchaseOrderForm() {
         otherDeductionsTotal;
 
       const netAmount = grossAmount - totalDeduction;
+
+      if (!customerId) {
+        showError('Please select a supplier name');
+        setSubmitting(false);
+        return;
+      }
 
       const orderData = {
         customer_id: customerId,
@@ -375,25 +370,6 @@ export default function ConfirmPurchaseOrderForm() {
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Customer <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="">Select Customer</option>
-                {customers.map((customer) => (
-                  <option key={customer.id} value={customer.id}>
-                    {customer.name} ({customer.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload File (CSV or Excel) <span className="text-red-500">*</span>
               </label>
               <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-400 transition-colors">
@@ -504,6 +480,7 @@ export default function ConfirmPurchaseOrderForm() {
                       const headers = [
                       'Date of Transaction',
                       'State',
+                      'Customer',
                       'Supplier Name',
                       'Location',
                       'Warehouse Name',
@@ -560,7 +537,8 @@ export default function ConfirmPurchaseOrderForm() {
                       const sampleRow1 = [
                         date1.toLocaleDateString('en-GB'),
                         sampleState,
-                        sampleSupplier1,
+                        sampleSupplier1, // Customer name
+                        sampleSupplier1, // Supplier Name (same as customer)
                         sampleLocation,
                         sampleWarehouse,
                         '16',
@@ -608,7 +586,8 @@ export default function ConfirmPurchaseOrderForm() {
                       const sampleRow2 = [
                         date2.toLocaleDateString('en-GB'),
                         sampleState,
-                        sampleSupplier2,
+                        sampleSupplier2, // Customer name
+                        sampleSupplier2, // Supplier Name (same as customer)
                         locations[1] || 'BUXAR',
                         warehousesData[1]?.name || warehouses[1] || 'SIDDHASHRAM WAREHOUSE',
                         '2',
@@ -686,10 +665,6 @@ export default function ConfirmPurchaseOrderForm() {
             <button
               type="button"
               onClick={async () => {
-                if (!customerId) {
-                  showError('Please select a customer first');
-                  return;
-                }
                 if (!uploadFile) {
                   showError('Please select a file to upload');
                   return;
@@ -708,7 +683,6 @@ export default function ConfirmPurchaseOrderForm() {
 
                   const formData = new FormData();
                   formData.append('file', uploadFile);
-                  formData.append('customer_id', customerId);
 
                   const response = await fetch(`${apiUrl}/confirmed-purchase-orders/bulk-upload`, {
                     method: 'POST',
@@ -732,7 +706,6 @@ export default function ConfirmPurchaseOrderForm() {
 
                   // Reset form
                   setUploadFile(null);
-                  setCustomerId('');
                   const fileInput = document.getElementById('file-upload-purchase') as HTMLInputElement;
                   if (fileInput) fileInput.value = '';
                 } catch (err: any) {
@@ -741,7 +714,7 @@ export default function ConfirmPurchaseOrderForm() {
                   setUploading(false);
                 }
               }}
-              disabled={uploading || !customerId || !uploadFile}
+              disabled={uploading || !uploadFile}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {uploading ? (
@@ -760,21 +733,25 @@ export default function ConfirmPurchaseOrderForm() {
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-8 space-y-8">
-        {/* Customer & Basic Info */}
+        {/* Basic Information */}
         <div className="border-b border-gray-200 pb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Customer & Basic Information</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">Basic Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Customer <span className="text-red-500">*</span>
+                Supplier Name <span className="text-red-500">*</span>
               </label>
               <select
                 value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
+                onChange={(e) => {
+                  const selectedCustomer = customers.find(c => c.id === e.target.value);
+                  setCustomerId(e.target.value);
+                  setSupplierName(selectedCustomer ? selectedCustomer.name : '');
+                }}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
-                <option value="">Select Customer</option>
+                <option value="">Select Supplier Name</option>
                 {customers.map((customer) => (
                   <option key={customer.id} value={customer.id}>
                     {customer.name} ({customer.email})
@@ -808,17 +785,6 @@ export default function ConfirmPurchaseOrderForm() {
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Supplier Name</label>
-              <input
-                type="text"
-                value={supplierName}
-                readOnly
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 font-semibold"
-                placeholder="Auto-populated from customer"
-              />
             </div>
 
             <div>

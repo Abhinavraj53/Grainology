@@ -82,8 +82,27 @@ router.get('/:id', async (req, res) => {
 router.post('/', requireAdmin, async (req, res) => {
   try {
     console.log('Creating confirmed sales order:', req.body);
+    
+    // If customer_id is not provided, find customer by seller_name
+    let customerId = req.body.customer_id;
+    if (!customerId && req.body.seller_name) {
+      const customer = await User.findOne({ 
+        name: req.body.seller_name,
+        role: { $ne: 'admin' }
+      });
+      if (!customer) {
+        return res.status(404).json({ error: `Customer not found with seller name: ${req.body.seller_name}` });
+      }
+      customerId = customer._id;
+    }
+    
+    if (!customerId) {
+      return res.status(400).json({ error: 'Customer ID or Seller Name is required' });
+    }
+
     const orderData = {
       ...req.body,
+      customer_id: customerId,
       created_by: req.userId
     };
 
@@ -172,17 +191,6 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
-    }
-
-    const { customer_id } = req.body;
-    if (!customer_id) {
-      return res.status(400).json({ error: 'Customer ID is required' });
-    }
-
-    // Verify customer exists
-    const customer = await User.findById(customer_id);
-    if (!customer) {
-      return res.status(404).json({ error: 'Customer not found' });
     }
 
     // Parse the file
@@ -275,9 +283,23 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           return isNaN(parsed) ? defaultValue : parsed;
         };
 
+        // Get customer from CSV - Customer column or Seller Name column
+        const customerName = record['Customer'] || record.customer || record['Seller Name'] || record.seller_name || record['Seller'] || '';
+        if (!customerName) {
+          errors.push(`Row ${rowNum}: Customer is required. Please specify Customer in the CSV.`);
+          continue;
+        }
+
+        // Find customer by name
+        const customer = allCustomers.find(c => c.name === customerName);
+        if (!customer) {
+          errors.push(`Row ${rowNum}: Customer "${customerName}" not found. Please use a valid customer name.`);
+          continue;
+        }
+
         // Validate against master data
         const state = record['State'] || record.state || '';
-        const sellerName = record['Seller Name'] || record.seller_name || record['Seller'] || customer.name;
+        const sellerName = record['Seller Name'] || record.seller_name || record['Seller'] || customerName;
         const location = record['Location'] || record.location || '';
         const warehouseName = record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '';
         const commodity = record['Commodity'] || record.commodity || 'Paddy';
@@ -289,8 +311,8 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         }
 
         // Validate seller name matches customer
-        if (sellerName && sellerName !== customer.name) {
-          errors.push(`Row ${rowNum}: Seller Name "${sellerName}" does not match customer "${customer.name}". Seller Name must be the same as Customer.`);
+        if (sellerName && sellerName !== customerName) {
+          errors.push(`Row ${rowNum}: Seller Name "${sellerName}" does not match Customer "${customerName}". Seller Name must be the same as Customer.`);
         }
 
         // Validate location
@@ -317,7 +339,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         }
 
         const orderData = {
-          customer_id: customer_id,
+          customer_id: customer._id,
           invoice_number: record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}`,
           transaction_date: transactionDate,
           state: state,

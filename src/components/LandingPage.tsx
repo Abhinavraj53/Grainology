@@ -6,6 +6,7 @@ import {
   Calendar, Building2, CheckCircle, LogIn, Truck, ChevronDown, Quote
 } from 'lucide-react';
 import MandiBhaav from './MandiBhaav';
+import MandiSeasonWise from './MandiSeasonWise';
 import LogisticsOverview from './LogisticsOverview';
 import Weathersonu from './weathersonu';
 import { MandiCache } from '../lib/sessionStorage';
@@ -181,6 +182,11 @@ export default function LandingPage() {
             <LogisticsOverview showFullDetails={false} />
           </div>
 
+          {/* Crop Season Wise Price & Arrival Component */}
+          <div className="mt-8" id="mandi-season-wise-section">
+            <MandiSeasonWise />
+          </div>
+          
           {/* Full Mandi Bhav Component with all filters */}
           <div className="mt-8" id="mandi-bhav-section">
             <MandiBhaav />

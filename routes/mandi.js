@@ -571,6 +571,211 @@ router.get('/filters', async (req, res) => {
   }
 });
 
+// Season-wise endpoint: Grouped data by commodity with Kharif and Rabi marketing seasons
+router.get('/season-wise', async (req, res) => {
+  try {
+    if (!MANDI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'MANDI_API_KEY is not configured on the server'
+      });
+    }
+
+    const {
+      state = 'all',
+      district = 'all',
+      market = 'all',
+      commodity_group = 'all',
+      commodity = 'all',
+      variety = 'all',
+      grade = 'FAQ',
+      limit = 1000,
+      offset = 0,
+    } = req.query;
+
+    const params = new URLSearchParams({
+      'api-key': MANDI_API_KEY,
+      format: 'json',
+      limit: Math.min(Number(limit) || 1000, 5000).toString(),
+      offset: (Number(offset) || 0).toString(),
+    });
+
+    // Apply filters
+    if (state && state !== 'all') params.append('filters[state.keyword]', state);
+    if (district && district !== 'all') params.append('filters[district]', district);
+    if (market && market !== 'all') params.append('filters[market]', market);
+    if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
+    if (variety && variety !== 'all') params.append('filters[variety]', variety);
+
+    const url = `${MANDI_API_BASE}/resource/${MANDI_RESOURCE_ID}?${params.toString()}`;
+    const response = await axios.get(url, { timeout: 30000 });
+
+    const records = response.data?.records || [];
+
+    // Helper to extract price
+    const extractPrice = (record) => {
+      const possibleKeys = [
+        'Modal_Price', 'modal_price', 'ModalPrice', 'modalprice',
+        'modal_price_rs_quintal', 'modal_price_rs_per_quintal',
+        'Price', 'price', 'Avg_Price', 'avg_price'
+      ];
+      
+      for (const key of possibleKeys) {
+        const value = record[key];
+        if (value !== undefined && value !== null && value !== '') {
+          const cleaned = String(value).replace(/,/g, '').trim();
+          const num = Number(cleaned);
+          if (!isNaN(num) && num > 0) {
+            return num;
+          }
+        }
+      }
+      return 0;
+    };
+
+    // Helper to extract arrival
+    const extractArrival = (record) => {
+      const possibleKeys = [
+        'Arrival', 'arrival', 'Arrival_Qty', 'arrival_qty',
+        'Arrival_in_qtl', 'arrival_in_qtl', 'Quantity', 'quantity'
+      ];
+      
+      for (const key of possibleKeys) {
+        const value = record[key];
+        if (value !== undefined && value !== null && value !== '') {
+          const cleaned = String(value).replace(/,/g, '').trim();
+          const num = Number(cleaned);
+          if (!isNaN(num) && num > 0) {
+            return num;
+          }
+        }
+      }
+      return 0;
+    };
+
+    // Helper to determine marketing season
+    // Kharif Marketing Season: 01 Oct - 30 Sep (Oct 1 of year Y to Sep 30 of year Y+1)
+    // Rabi Marketing Season: 01 Apr - 31 Mar (Apr 1 of year Y to Mar 31 of year Y+1)
+    const getMarketingSeason = (dateStr, commodityName = '') => {
+      if (!dateStr) return null;
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return null;
+      
+      const month = date.getMonth() + 1; // 1-12
+      const year = date.getFullYear();
+      
+      // Rabi crops primarily marketed in Rabi season (Apr-Mar)
+      const rabiCommodities = ['Wheat', 'Barley', 'Jau', 'Mustard', 'Gram', 'Lentil', 'Pea', 'Chana'];
+      const isRabiCommodity = rabiCommodities.some(c => commodityName && commodityName.includes(c));
+      
+      // Kharif Marketing Season: Oct 1 to Sep 30
+      if (month >= 10) {
+        // Oct-Dec: Start of Kharif season (year Y to Y+1)
+        return { season: 'Kharif', year: `${year}-${year + 1}` };
+      } else if (month <= 3) {
+        // Jan-Mar: End of Rabi season (year Y-1 to Y) for Rabi crops
+        // For Kharif crops, this is also end of Kharif (Y-1 to Y)
+        if (isRabiCommodity) {
+          return { season: 'Rabi', year: `${year - 1}-${year}` };
+        } else {
+          return { season: 'Kharif', year: `${year - 1}-${year}` };
+        }
+      } else {
+        // Apr-Sep: 
+        // - For Rabi crops: Start/Middle of Rabi season (year Y to Y+1)
+        // - For Kharif crops: End of Kharif season (year Y-1 to Y)
+        if (isRabiCommodity) {
+          return { season: 'Rabi', year: `${year}-${year + 1}` };
+        } else {
+          return { season: 'Kharif', year: `${year - 1}-${year}` };
+        }
+      }
+    };
+
+    // Group data by commodity and season
+    const grouped = {};
+    
+    records.forEach(record => {
+      const commodityName = record.Commodity || record.commodity || record.commodity_name || '';
+      const varietyName = record.Variety || record.variety || record.variety_name || '';
+      const dateStr = record.Arrival_Date || record.arrival_date || record.date || '';
+      
+      if (!commodityName) return;
+      
+      const key = varietyName ? `${commodityName} - ${varietyName}` : commodityName;
+      
+      if (!grouped[key]) {
+        grouped[key] = {
+          commodity_group: getCommodityGroup(commodityName),
+          commodity: commodityName,
+          variety: varietyName || '',
+          msp: getMSP(commodityName),
+          seasons: {
+            Kharif: { price: 0, arrival: 0, count: 0 },
+            Rabi: { price: 0, arrival: 0, count: 0 }
+          }
+        };
+      }
+      
+      const seasonInfo = getMarketingSeason(dateStr, commodityName);
+      if (seasonInfo && (seasonInfo.season === 'Kharif' || seasonInfo.season === 'Rabi')) {
+        const season = grouped[key].seasons[seasonInfo.season];
+        const price = extractPrice(record);
+        const arrival = extractArrival(record);
+        
+        if (price > 0) {
+          // Average price (weighted average)
+          if (season.count === 0) {
+            season.price = price;
+          } else {
+            season.price = (season.price * season.count + price) / (season.count + 1);
+          }
+        }
+        season.arrival += arrival;
+        season.count += 1;
+      }
+    });
+
+    // Convert to array and filter by commodity group
+    let result = Object.values(grouped);
+    
+    if (commodity_group && commodity_group !== 'all') {
+      result = result.filter(item => item.commodity_group === commodity_group);
+    }
+
+    // Sort by commodity group and commodity name
+    result.sort((a, b) => {
+      if (a.commodity_group !== b.commodity_group) {
+        return a.commodity_group.localeCompare(b.commodity_group);
+      }
+      return a.commodity.localeCompare(b.commodity);
+    });
+
+    return res.json({
+      success: true,
+      data: result,
+      filters: { state, district, market, commodity_group, commodity, variety, grade },
+      count: result.length
+    });
+  } catch (error) {
+    console.error('Season-wise API error:', error);
+    
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.status(504).json({
+        success: false,
+        error: 'Request timeout - The API is taking too long to respond',
+        details: 'The data.gov.in API may be slow. Please try with more specific filters.',
+      });
+    }
+    
+    return res.status(error.response?.status || 500).json({
+      success: false,
+      error: 'Failed to fetch season-wise data',
+      details: error.response?.data || error.message,
+    });
+  }
+});
+
 // Test endpoint to check Mandi API configuration and connectivity (PUBLIC - no auth)
 // IMPORTANT: This must be BEFORE router.get('/:id') to avoid route matching issues
 router.get('/test', async (req, res) => {

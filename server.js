@@ -77,8 +77,9 @@ const corsOptions = {
     // Log all CORS requests for debugging
     console.log(`🌐 CORS Request from origin: ${origin || 'no origin header'}`);
     console.log(`   Allowed origins list: ${allowedOrigins.join(', ')}`);
+    console.log(`   FRONTEND_URL env: ${process.env.FRONTEND_URL || 'not set'}`);
     
-    // ALWAYS allow the request - no restrictions for now
+    // ALWAYS allow the request - no restrictions
     // This ensures grainologyagri.com and all other origins work
     callback(null, true);
   },

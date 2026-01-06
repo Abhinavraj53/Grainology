@@ -71,29 +71,12 @@ if (process.env.FRONTEND_URL) {
 // Log allowed origins on startup
 console.log('🌐 CORS Allowed Origins:', allowedOrigins);
 
-// Enhanced CORS configuration
+// Enhanced CORS configuration - TEMPORARILY ALLOW ALL ORIGINS FOR DEBUGGING
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // Normalize the origin (remove trailing slash and convert to lowercase for comparison)
-    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
-    const normalizedAllowedOrigins = allowedOrigins.map(o => o.toLowerCase());
-    
-    // Check if origin is in allowed list (case-insensitive)
-    if (normalizedAllowedOrigins.includes(normalizedOrigin)) {
-      callback(null, true);
-    } else {
-      console.warn(`⚠️  CORS: Origin not in allowed list: ${origin}`);
-      console.log(`   Normalized: ${normalizedOrigin}`);
-      console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
-      // Temporarily allow all origins for debugging - REMOVE THIS IN PRODUCTION
-      console.log(`   ⚠️  Temporarily allowing for debugging`);
-      callback(null, true);
-    }
+    // TEMPORARILY ALLOW ALL ORIGINS - Remove this in production and use allowedOrigins list
+    console.log(`🌐 CORS Request from origin: ${origin || 'no origin'}`);
+    callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -106,6 +89,38 @@ const corsOptions = {
 
 // Apply CORS middleware FIRST (before any other middleware)
 app.use(cors(corsOptions));
+
+// Additional explicit CORS headers middleware (fallback to ensure headers are always set)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Always set CORS headers - allow the requesting origin
+  if (origin) {
+    // Check if origin is in allowed list (case-insensitive)
+    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
+    const normalizedAllowedOrigins = allowedOrigins.map(o => o.toLowerCase());
+    
+    // Allow if in list OR temporarily allow all for debugging
+    if (normalizedAllowedOrigins.includes(normalizedOrigin) || true) { // Temporarily allow all
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+  } else {
+    // No origin header - allow from any origin (for non-browser requests)
+    res.header('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Max-Age', '86400');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  
+  next();
+});
 
 // Body parsing middleware (must come after CORS)
 app.use(express.json({ limit: '10mb' }));

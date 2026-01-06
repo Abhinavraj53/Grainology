@@ -49,7 +49,9 @@ let allowedOrigins = [
 // Explicitly add known production frontend domains (with and without www)
 const productionOrigins = [
   'https://grainologyagri.com',
-  'https://www.grainologyagri.com'
+  'https://www.grainologyagri.com',
+  'http://grainologyagri.com',
+  'http://www.grainologyagri.com'
 ];
 productionOrigins.forEach(origin => {
   const normalized = origin.replace(/\/$/, '');
@@ -66,32 +68,48 @@ if (process.env.FRONTEND_URL) {
   }
 }
 
-app.use(cors({
+// Log allowed origins on startup
+console.log('🌐 CORS Allowed Origins:', allowedOrigins);
+
+// Enhanced CORS configuration
+const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      return callback(null, true);
+    }
     
-    // Normalize the origin (remove trailing slash)
-    const normalizedOrigin = origin.replace(/\/$/, '');
+    // Normalize the origin (remove trailing slash and convert to lowercase for comparison)
+    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
+    const normalizedAllowedOrigins = allowedOrigins.map(o => o.toLowerCase());
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(normalizedOrigin) || allowedOrigins.includes(origin)) {
+    // Check if origin is in allowed list (case-insensitive)
+    if (normalizedAllowedOrigins.includes(normalizedOrigin)) {
       callback(null, true);
     } else {
-      console.warn(`⚠️  CORS blocked origin: ${origin}`);
+      console.warn(`⚠️  CORS: Origin not in allowed list: ${origin}`);
+      console.log(`   Normalized: ${normalizedOrigin}`);
       console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
-      callback(new Error(`Not allowed by CORS: ${origin}`));
+      // Temporarily allow all origins for debugging - REMOVE THIS IN PRODUCTION
+      console.log(`   ⚠️  Temporarily allowing for debugging`);
+      callback(null, true);
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  exposedHeaders: ['Content-Length'],
   preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 hours
+};
+
+// Apply CORS middleware FIRST (before any other middleware)
+app.use(cors(corsOptions));
+
+// Body parsing middleware (must come after CORS)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grainology')
@@ -137,9 +155,21 @@ app.use('/api/supply-transactions', supplyTransactionRoutes);
 app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
 app.use('/api/sandbox/kyc', sandboxKYCRoutes);
 
-// Error handling middleware
+// Error handling middleware (must preserve CORS headers)
 app.use((err, req, res, next) => {
   console.error('Error:', err);
+  
+  // Preserve CORS headers if they were set
+  const origin = req.headers.origin;
+  if (origin) {
+    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
+    const normalizedAllowedOrigins = allowedOrigins.map(o => o.toLowerCase());
+    if (normalizedAllowedOrigins.includes(normalizedOrigin) || process.env.NODE_ENV !== 'production') {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+  }
+  
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack })

@@ -141,6 +141,17 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Grainology API is running' });
 });
 
+// CORS test endpoint
+app.get('/api/cors-test', (req, res) => {
+  const origin = req.headers.origin;
+  res.json({ 
+    status: 'ok', 
+    message: 'CORS is working',
+    origin: origin || 'no origin header',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);

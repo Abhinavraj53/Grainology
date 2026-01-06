@@ -94,21 +94,13 @@ app.use(cors(corsOptions));
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
-  // Always set CORS headers - allow the requesting origin
+  // ALWAYS set CORS headers - allow the requesting origin
   if (origin) {
-    // Check if origin is in allowed list (case-insensitive)
-    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
-    const normalizedAllowedOrigins = allowedOrigins.map(o => o.toLowerCase());
-    
-    // Allow if in list OR temporarily allow all for debugging
-    if (normalizedAllowedOrigins.includes(normalizedOrigin) || true) { // Temporarily allow all
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Access-Control-Allow-Credentials', 'true');
-    }
-  } else {
-    // No origin header - allow from any origin (for non-browser requests)
-    res.header('Access-Control-Allow-Origin', '*');
+    // Temporarily allow ALL origins for debugging
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
   }
+  // Note: When credentials: true, we cannot use '*' - must use specific origin
   
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
@@ -139,8 +131,13 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grainolog
   // This allows testing other endpoints
 });
 
-// Health check endpoint
+// Health check endpoint (with CORS headers)
 app.get('/health', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
   res.json({ status: 'ok', message: 'Grainology API is running' });
 });
 
@@ -174,16 +171,14 @@ app.use('/api/sandbox/kyc', sandboxKYCRoutes);
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   
-  // Preserve CORS headers if they were set
+  // ALWAYS set CORS headers on errors
   const origin = req.headers.origin;
   if (origin) {
-    const normalizedOrigin = origin.replace(/\/$/, '').toLowerCase();
-    const normalizedAllowedOrigins = allowedOrigins.map(o => o.toLowerCase());
-    if (normalizedAllowedOrigins.includes(normalizedOrigin) || process.env.NODE_ENV !== 'production') {
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Access-Control-Allow-Credentials', 'true');
-    }
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
   }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
@@ -191,8 +186,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
+// 404 handler (must also set CORS headers)
 app.use((req, res) => {
+  // ALWAYS set CORS headers on 404
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  
   res.status(404).json({ error: 'Route not found' });
 });
 

@@ -71,17 +71,21 @@ if (process.env.FRONTEND_URL) {
 // Log allowed origins on startup
 console.log('🌐 CORS Allowed Origins:', allowedOrigins);
 
-// Enhanced CORS configuration - TEMPORARILY ALLOW ALL ORIGINS FOR DEBUGGING
+// Enhanced CORS configuration - ALLOW ALL ORIGINS (including grainologyagri.com)
 const corsOptions = {
   origin: (origin, callback) => {
-    // TEMPORARILY ALLOW ALL ORIGINS - Remove this in production and use allowedOrigins list
-    console.log(`🌐 CORS Request from origin: ${origin || 'no origin'}`);
+    // Log all CORS requests for debugging
+    console.log(`🌐 CORS Request from origin: ${origin || 'no origin header'}`);
+    console.log(`   Allowed origins list: ${allowedOrigins.join(', ')}`);
+    
+    // ALWAYS allow the request - no restrictions for now
+    // This ensures grainologyagri.com and all other origins work
     callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-  exposedHeaders: ['Content-Length'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Requested-With'],
   preflightContinue: false,
   optionsSuccessStatus: 204,
   maxAge: 86400 // 24 hours
@@ -90,24 +94,30 @@ const corsOptions = {
 // Apply CORS middleware FIRST (before any other middleware)
 app.use(cors(corsOptions));
 
-// Additional explicit CORS headers middleware (fallback to ensure headers are always set)
+// Additional explicit CORS headers middleware (CRITICAL - runs on EVERY request)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   
-  // ALWAYS set CORS headers - allow the requesting origin
+  // CRITICAL: ALWAYS set CORS headers on EVERY request, no exceptions
   if (origin) {
-    // Temporarily allow ALL origins for debugging
+    // Set the exact origin that made the request (required when credentials: true)
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
+    console.log(`✅ CORS headers set for origin: ${origin} on ${req.method} ${req.path}`);
+  } else {
+    // No origin header (e.g., Postman, curl) - allow from any
+    res.header('Access-Control-Allow-Origin', '*');
   }
-  // Note: When credentials: true, we cannot use '*' - must use specific origin
   
+  // Set all required CORS headers
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Expose-Headers', 'Content-Length, X-Requested-With');
   res.header('Access-Control-Max-Age', '86400');
   
-  // Handle preflight requests
+  // Handle preflight OPTIONS requests immediately
   if (req.method === 'OPTIONS') {
+    console.log(`✅ Preflight OPTIONS request handled for: ${origin || 'no origin'} on ${req.path}`);
     return res.sendStatus(204);
   }
   

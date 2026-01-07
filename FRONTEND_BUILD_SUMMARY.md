@@ -89,7 +89,7 @@ The build uses these environment variables from `.env`:
 
 ```
 VITE_API_URL=http://localhost:3001/api  (for local dev)
-VITE_API_URL=https://grainology-production.up.railway.app/api  (for production)
+VITE_API_URL=https://grainology-rmg1.onrender.com/api  (for production)
 ```
 
 To change the API URL for production, update `.env` and rebuild:
@@ -159,7 +159,7 @@ npm run preview -- --host 0.0.0.0
 Check `.env` file - make sure `VITE_API_URL` points to your backend:
 ```
 VITE_API_URL=http://localhost:3001/api  (local)
-VITE_API_URL=https://grainology-production.up.railway.app/api  (production)
+VITE_API_URL=https://grainology-rmg1.onrender.com/api  (production)
 ```
 
 ---

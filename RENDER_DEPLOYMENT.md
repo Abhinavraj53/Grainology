@@ -1,12 +1,11 @@
-# Railway.com Deployment Guide
+# Render.com Deployment Guide
 
 ## Backend URL
-**Production Backend**: https://grainology-production.up.railway.app
-**Internal Service URL**: grainology.railway.internal (for service-to-service communication only)
+**Production Backend**: https://grainology-rmg1.onrender.com
 
-## Environment Variables for Railway
+## Environment Variables for Render
 
-Set these in your Railway dashboard (Variables tab):
+Set these in your Render dashboard (Settings → Environment):
 
 ### Required Variables
 ```env
@@ -33,17 +32,17 @@ DIDIT_BASE_URL=https://verification.didit.me
 DIDIT_WORKFLOW_ID=your-workflow-id-here
 ```
 
-## Railway Settings
+## Render Settings
 
 - **Build Command**: `npm install`
-- **Start Command**: `npm start` or `node server.js`
+- **Start Command**: `npm start`
 - **Health Check Path**: `/health`
-- **Auto-Deploy**: Yes (if connected to GitHub)
+- **Auto-Deploy**: Yes
 
 ## Important Notes
 
 1. **MongoDB Atlas**: 
-   - Make sure to whitelist Railway's IP addresses in MongoDB Atlas
+   - Make sure to whitelist Render's IP addresses in MongoDB Atlas
    - Or allow all IPs (`0.0.0.0/0`) for testing
 
 2. **CORS**: 
@@ -51,32 +50,23 @@ DIDIT_WORKFLOW_ID=your-workflow-id-here
    - Update `FRONTEND_URL` if your frontend domain changes
 
 3. **Health Check**:
-   - Test your deployment: `https://grainology-production.up.railway.app/health`
+   - Test your deployment: `https://grainology-rmg1.onrender.com/health`
    - Should return: `{"status":"ok","message":"Grainology API is running"}`
-
-4. **Internal vs Public URLs**:
-   - `grainology.railway.internal` - Use for internal service-to-service communication
-   - `grainology-production.up.railway.app` - Use for frontend/external API calls
 
 ## Testing the Deployment
 
 ```bash
 # Test health endpoint
-curl https://grainology-production.up.railway.app/health
+curl https://grainology-rmg1.onrender.com/health
 
 # Test API endpoint
-curl https://grainology-production.up.railway.app/api/auth/session
+curl https://grainology-rmg1.onrender.com/api/auth/session
 ```
 
 ## Frontend Configuration
 
 Update your frontend `.env` file:
 ```env
-VITE_API_URL=https://grainology-production.up.railway.app/api
-```
-
-Or if using a custom domain:
-```env
-VITE_API_URL=https://api.grainologyagri.com/api
+VITE_API_URL=https://grainology-rmg1.onrender.com/api
 ```
 

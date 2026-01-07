@@ -223,13 +223,13 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Railway requires binding to 0.0.0.0 (not localhost) and using PORT env variable
-// Reference: https://docs.railway.com/reference/errors/application-failed-to-respond
+// Render/Railway requires binding to 0.0.0.0 (not localhost) and using PORT env variable
+// This works for both Render and Railway platforms
 app.listen(PORT, "0.0.0.0", function () {
   console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
   console.log(`📡 API available at http://0.0.0.0:${PORT}/api`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 CORS Allowed Origins: ${allowedOrigins.join(', ')}`);
-  console.log(`✅ Server is listening on the correct host and port for Railway`);
+  console.log(`✅ Server is listening on the correct host and port`);
 });
 

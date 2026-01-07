@@ -14,7 +14,7 @@
 - VITE_API_URL=http://localhost:3001/api
 
 # After (Production)
-+ VITE_API_URL=https://grainology-production.up.railway.app/api
++ VITE_API_URL=https://grainology-rmg1.onrender.com/api
 ```
 
 ### **2. Fresh Build Created**
@@ -48,7 +48,7 @@
 
 ### **Current Environment:**
 ```
-VITE_API_URL=https://grainology-production.up.railway.app/api
+VITE_API_URL=https://grainology-rmg1.onrender.com/api
 ```
 
 ### **API Endpoints Connected:**
@@ -150,7 +150,7 @@ npm run dev
 
 **Production (Current):**
 ```
-VITE_API_URL=https://grainology-production.up.railway.app/api
+VITE_API_URL=https://grainology-rmg1.onrender.com/api
 npm run build
 ```
 

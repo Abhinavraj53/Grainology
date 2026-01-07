@@ -2,7 +2,7 @@
 
 ## Base URL
 ```
-Production: https://grainology-production.up.railway.app/api
+Production: https://grainology-rmg1.onrender.com/api
 Development: http://localhost:3001/api
 ```
 

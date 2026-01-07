@@ -1,8 +1,8 @@
 # Railway.com Deployment Guide
 
 ## Backend URL
-**Production Backend**: https://grainology-production.up.railway.app
-**Internal Service URL**: grainology.railway.internal (for service-to-service communication only)
+**Production Backend**: `https://grainology-production.up.railway.app`  
+**Internal Service URL**: `grainology.railway.internal` (for service-to-service communication only)
 
 ## Environment Variables for Railway
 
@@ -11,7 +11,7 @@ Set these in your Railway dashboard (Variables tab):
 ### Required Variables
 ```env
 NODE_ENV=production
-PORT=10000
+PORT=3001
 MONGODB_URI=your_mongodb_atlas_connection_string
 JWT_SECRET=your-strong-jwt-secret-key-here
 JWT_EXPIRES_IN=7d
@@ -57,6 +57,7 @@ DIDIT_WORKFLOW_ID=your-workflow-id-here
 4. **Internal vs Public URLs**:
    - `grainology.railway.internal` - Use for internal service-to-service communication
    - `grainology-production.up.railway.app` - Use for frontend/external API calls
+   - You can also set up a custom domain in Railway settings
 
 ## Testing the Deployment
 
@@ -79,4 +80,11 @@ Or if using a custom domain:
 ```env
 VITE_API_URL=https://api.grainologyagri.com/api
 ```
+
+## Custom Domain Setup
+
+1. Go to Railway dashboard → Your Service → Settings → Networking
+2. Add your custom domain (e.g., `api.grainologyagri.com`)
+3. Update DNS records as instructed by Railway
+4. Update `VITE_API_URL` in frontend `.env` to use the custom domain
 

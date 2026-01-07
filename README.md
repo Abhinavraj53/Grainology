@@ -56,8 +56,10 @@ FRONTEND_URL=http://localhost:5173
 
 Create `.env` in root (for frontend):
 ```env
-# Production (Render backend)
-VITE_API_URL=https://grainology.onrender.com/api
+# Production (Railway backend)
+VITE_API_URL=https://grainology-production.up.railway.app/api
+# Or if using custom domain:
+# VITE_API_URL=https://api.grainologyagri.com/api
 
 # Local development
 # VITE_API_URL=http://localhost:3001/api

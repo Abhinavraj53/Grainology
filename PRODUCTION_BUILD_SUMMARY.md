@@ -14,7 +14,7 @@
 - VITE_API_URL=http://localhost:3001/api
 
 # After (Production)
-+ VITE_API_URL=https://grainology.onrender.com/api
++ VITE_API_URL=https://grainology-production.up.railway.app/api
 ```
 
 ### **2. Fresh Build Created**
@@ -48,7 +48,7 @@
 
 ### **Current Environment:**
 ```
-VITE_API_URL=https://grainology.onrender.com/api
+VITE_API_URL=https://grainology-production.up.railway.app/api
 ```
 
 ### **API Endpoints Connected:**
@@ -150,13 +150,13 @@ npm run dev
 
 **Production (Current):**
 ```
-VITE_API_URL=https://grainology.onrender.com/api
+VITE_API_URL=https://grainology-production.up.railway.app/api
 npm run build
 ```
 
 ### **API Connection:**
 - Frontend now points to **production Render backend**
-- All API calls go to: `https://grainology.onrender.com/api`
+- All API calls go to: `https://grainology-production.up.railway.app/api`
 - Authentication tokens work across both apps
 
 ### **Testing Production Build:**

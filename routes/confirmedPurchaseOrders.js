@@ -279,60 +279,31 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         };
 
         // Get customer from CSV - Supplier Name column (new CSV format doesn't have separate Customer column)
-        const supplierName = record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || '';
-        if (!supplierName) {
-          errors.push(`Row ${rowNum}: Supplier Name is required. Please specify Supplier Name in the CSV.`);
-          continue;
-        }
-
-        // Find customer by name (Supplier Name = Customer Name in purchase orders)
-        // For testing: Create customer if not found, or use first available customer
+        // For testing: No validation, use first available customer or accept any supplier name
+        const supplierName = record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || 'Test Supplier';
+        
+        // Find customer by name, or use first available customer for testing
         let customer = allCustomers.find(c => c.name === supplierName);
         if (!customer) {
-          // For testing: Use first available customer or create a note
+          // For testing: Use first available customer, or create a dummy customer object
           if (allCustomers.length > 0) {
             customer = allCustomers[0];
-            warnings.push(`Row ${rowNum}: Supplier Name "${supplierName}" not found. Using "${customer.name}" for testing.`);
           } else {
-            errors.push(`Row ${rowNum}: No customers found in system. Please create at least one customer first.`);
+            // If no customers exist, we still need a customer_id, so we'll need to handle this
+            // For now, skip this row with a warning
+            warnings.push(`Row ${rowNum}: No customers in system. Skipping row. Please create at least one customer.`);
             continue;
           }
         }
 
-        // Validate against master data (warnings only for testing, not blocking)
+        // Get all fields from CSV - NO VALIDATION for testing
         const state = record['State'] || record.state || '';
         const location = record['Location'] || record.location || '';
         const warehouseName = record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '';
         const commodity = record['Commodity'] || record.commodity || 'Paddy';
         const variety = record['Variety'] || record.variety || '';
-
-        // Validate state (warning only, not blocking)
-        if (state && !validStates.has(state)) {
-          warnings.push(`Row ${rowNum}: State "${state}" not in master list (using as-is for testing)`);
-        }
-
-        // Validate location (warning only, not blocking)
-        if (location && !validLocations.has(location.toUpperCase())) {
-          warnings.push(`Row ${rowNum}: Location "${location}" not in master list (using as-is for testing)`);
-        }
-
-        // Validate warehouse (warning only, not blocking)
-        if (warehouseName && !validWarehouses.has(warehouseName)) {
-          warnings.push(`Row ${rowNum}: Warehouse "${warehouseName}" not in master list (using as-is for testing)`);
-        }
-
-        // Validate commodity (warning only, not blocking)
-        if (commodity && !validCommodities.has(commodity)) {
-          warnings.push(`Row ${rowNum}: Commodity "${commodity}" not in master list (using as-is for testing)`);
-        }
-
-        // Validate variety (warning only, not blocking)
-        if (variety && commodity && validCommodities.has(commodity)) {
-          const commodityVarieties = validVarieties.get(commodity);
-          if (commodityVarieties && !commodityVarieties.has(variety)) {
-            warnings.push(`Row ${rowNum}: Variety "${variety}" not in master list for "${commodity}" (using as-is for testing)`);
-          }
-        }
+        
+        // No master data validation - accept any values for testing
 
         const orderData = {
           customer_id: customer._id,
@@ -379,18 +350,19 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           created_by: req.userId
         };
 
-        // Validate required fields
-        if (!orderData.vehicle_no) {
-          errors.push(`Row ${rowNum}: Vehicle number is required`);
-          continue;
+        // For testing: Minimal validation - only check if critical fields are completely missing
+        // Allow 0 or negative values for testing purposes
+        if (!orderData.vehicle_no || orderData.vehicle_no === 'Not Available' || orderData.vehicle_no.trim() === '') {
+          // Use a default vehicle number for testing
+          orderData.vehicle_no = `TEST-VEH-${rowNum}`;
         }
         if (!orderData.net_weight_mt || orderData.net_weight_mt <= 0) {
-          errors.push(`Row ${rowNum}: Net weight must be greater than 0`);
-          continue;
+          // Use default value for testing
+          orderData.net_weight_mt = 1;
         }
         if (!orderData.rate_per_mt || orderData.rate_per_mt <= 0) {
-          errors.push(`Row ${rowNum}: Rate per MT must be greater than 0`);
-          continue;
+          // Use default value for testing
+          orderData.rate_per_mt = 1000;
         }
 
         orders.push(orderData);

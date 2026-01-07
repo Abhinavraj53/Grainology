@@ -222,8 +222,13 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 API available at http://localhost:${PORT}/api`);
+// Railway requires binding to 0.0.0.0, not just localhost
+const HOST = process.env.HOST || '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 Server running on ${HOST}:${PORT}`);
+  console.log(`📡 API available at http://${HOST}:${PORT}/api`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 CORS Allowed Origins: ${allowedOrigins.join(', ')}`);
 });
 

@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+
 import authRoutes from './routes/auth.js';
 import profileRoutes from './routes/profiles.js';
 import offerRoutes from './routes/offers.js';
@@ -30,141 +31,71 @@ import sandboxKYCRoutes from './routes/sandboxKYC.js';
 dotenv.config();
 
 const app = express();
-// Use PORT provided in environment or default to 3001
 const PORT = process.env.PORT || 3001;
 
-// Middleware - CORS configuration
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-// Normalize URL - remove trailing slash for CORS matching
-const normalizedFrontendUrl = frontendUrl.replace(/\/$/, '');
+// -----------------------------
+// CORS CONFIG
+// -----------------------------
 
-// Core allowed origins - always include localhost for development
-let allowedOrigins = [
-  'http://localhost:5173',
+const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:3001',
-  normalizedFrontendUrl,
-  frontendUrl
-].filter(Boolean).map(url => url.replace(/\/$/, '')); // Remove duplicates and trailing slashes
-
-// Explicitly add known production frontend domains (with and without www)
-const productionOrigins = [
+  'http://localhost:5173',
   'https://grainologyagri.com',
   'https://www.grainologyagri.com',
-  'http://grainologyagri.com',
-  'http://www.grainologyagri.com'
-];
-productionOrigins.forEach(origin => {
-  const normalized = origin.replace(/\/$/, '');
-  if (!allowedOrigins.includes(normalized)) {
-    allowedOrigins.push(normalized);
-  }
-});
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
-// Add FRONTEND_URL from env again if somehow different after normalization
-if (process.env.FRONTEND_URL) {
-  const envFrontend = process.env.FRONTEND_URL.replace(/\/$/, '');
-  if (!allowedOrigins.includes(envFrontend)) {
-    allowedOrigins.push(envFrontend);
-  }
-}
+console.log("CORS allowed origins:", allowedOrigins);
 
-// Log allowed origins on startup
-console.log('🌐 CORS Allowed Origins:', allowedOrigins);
+app.use(
+  cors({
+    origin(origin, callback) {
+      // allow requests with no origin (mobile apps / curl / postman)
+      if (!origin) return callback(null, true);
 
-// Enhanced CORS configuration - ALLOW ALL ORIGINS (including grainologyagri.com)
-const corsOptions = {
-  origin: (origin, callback) => {
-    // Log all CORS requests for debugging
-    console.log(`🌐 CORS Request from origin: ${origin || 'no origin header'}`);
-    console.log(`   Allowed origins list: ${allowedOrigins.join(', ')}`);
-    console.log(`   FRONTEND_URL env: ${process.env.FRONTEND_URL || 'not set'}`);
-    
-    // ALWAYS allow the request - no restrictions
-    // This ensures grainologyagri.com and all other origins work
-    callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'X-Requested-With'],
-  exposedHeaders: ['Content-Length', 'X-Requested-With'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-  maxAge: 86400 // 24 hours
-};
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
 
-// Apply CORS middleware FIRST (before any other middleware)
-app.use(cors(corsOptions));
+      console.log('❌ Blocked CORS origin:', origin);
+      return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  })
+);
 
-// Additional explicit CORS headers middleware (CRITICAL - runs on EVERY request)
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  
-  // CRITICAL: ALWAYS set CORS headers on EVERY request, no exceptions
-  if (origin) {
-    // Set the exact origin that made the request (required when credentials: true)
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    console.log(`✅ CORS headers set for origin: ${origin} on ${req.method} ${req.path}`);
-  } else {
-    // No origin header (e.g., Postman, curl) - allow from any
-    res.header('Access-Control-Allow-Origin', '*');
-  }
-  
-  // Set all required CORS headers
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  res.header('Access-Control-Expose-Headers', 'Content-Length, X-Requested-With');
-  res.header('Access-Control-Max-Age', '86400');
-  
-  // Handle preflight OPTIONS requests immediately
-  if (req.method === 'OPTIONS') {
-    console.log(`✅ Preflight OPTIONS request handled for: ${origin || 'no origin'} on ${req.path}`);
-    return res.sendStatus(204);
-  }
-  
-  next();
-});
+// trust render proxy for cookies
+app.set('trust proxy', 1);
 
-// Body parsing middleware (must come after CORS)
+// handle OPTIONS preflight
+app.options('*', cors());
+
+// -----------------------------
+// BODY PARSER
+// -----------------------------
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/grainology')
-.then(() => {
-  console.log('✅ Connected to MongoDB');
-})
-.catch((error) => {
-  console.error('❌ MongoDB connection error:', error.message);
-  console.error('⚠️  Server will continue but database operations may fail.');
-  console.error('💡 Tip: Check your MongoDB Atlas IP whitelist or connection string');
-  // Don't exit - let server start even if DB connection fails
-  // This allows testing other endpoints
-});
+// -----------------------------
+// DB CONNECT
+// -----------------------------
+mongoose
+  .connect(process.env.MONGODB_URI)
+  .then(() => console.log('Mongo connected'))
+  .catch(err => console.error('Mongo error:', err.message));
 
-// Health check endpoint (with CORS headers)
+// -----------------------------
+// HEALTH CHECK
+// -----------------------------
 app.get('/health', (req, res) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  res.json({ status: 'ok', message: 'Grainology API is running' });
+  res.json({ status: 'ok' });
 });
 
-// CORS test endpoint
-app.get('/api/cors-test', (req, res) => {
-  const origin = req.headers.origin;
-  res.json({ 
-    status: 'ok', 
-    message: 'CORS is working',
-    origin: origin || 'no origin header',
-    timestamp: new Date().toISOString()
-  });
-});
-
-// API Routes
+// -----------------------------
+// API ROUTES
+// -----------------------------
 app.use('/api/auth', authRoutes);
 app.use('/api/profiles', profileRoutes);
 app.use('/api/offers', offerRoutes);
@@ -190,46 +121,22 @@ app.use('/api/supply-transactions', supplyTransactionRoutes);
 app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
 app.use('/api/sandbox/kyc', sandboxKYCRoutes);
 
-// Error handling middleware (must preserve CORS headers)
+// -----------------------------
+// ERROR HANDLER
+// -----------------------------
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  
-  // ALWAYS set CORS headers on errors
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-  });
+  console.error('SERVER ERROR:', err.message);
+  res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
-// 404 handler (must also set CORS headers)
-app.use((req, res) => {
-  // ALWAYS set CORS headers on 404
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-  }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-  
-  res.status(404).json({ error: 'Route not found' });
-});
+// -----------------------------
+// 404
+// -----------------------------
+app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
 
-// Render/Railway requires binding to 0.0.0.0 (not localhost) and using PORT env variable
-// This works for both Render and Railway platforms
-app.listen(PORT, "0.0.0.0", function () {
-  console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
-  console.log(`📡 API available at http://0.0.0.0:${PORT}/api`);
-  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 CORS Allowed Origins: ${allowedOrigins.join(', ')}`);
-  console.log(`✅ Server is listening on the correct host and port`);
+// -----------------------------
+// START SERVER
+// -----------------------------
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`API running on ${PORT}`);
 });
-

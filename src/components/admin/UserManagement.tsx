@@ -287,15 +287,23 @@ export default function UserManagement({ users, onRefresh }: UserManagementProps
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-600">Name:</span>
-                      <p className="font-medium text-gray-900">{selectedUser.name}</p>
+                      <p className="font-medium text-gray-900">{selectedUser.name || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Email:</span>
-                      <p className="text-gray-900">{selectedUser.email}</p>
+                      <p className="text-gray-900">{selectedUser.email || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Mobile Number:</span>
+                      <p className="text-gray-900">{selectedUser.mobile_number || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Preferred Language:</span>
+                      <p className="text-gray-900">{selectedUser.preferred_language || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">Entity Type:</span>
-                      <p className="capitalize text-gray-900">{selectedUser.entity_type}</p>
+                      <p className="capitalize text-gray-900">{selectedUser.entity_type || 'N/A'}</p>
                     </div>
                     {selectedUser.entity_type === 'company' && (
                       <>
@@ -315,28 +323,100 @@ export default function UserManagement({ users, onRefresh }: UserManagementProps
                 </div>
 
                 <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">Address Information</h4>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Address Line 1:</span>
+                      <p className="text-gray-900">{selectedUser.address_line1 || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Address Line 2:</span>
+                      <p className="text-gray-900">{selectedUser.address_line2 || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">District:</span>
+                      <p className="text-gray-900">{selectedUser.district || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">State:</span>
+                      <p className="text-gray-900">{selectedUser.state || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Country:</span>
+                      <p className="text-gray-900">{selectedUser.country || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Pincode:</span>
+                      <p className="text-gray-900">{selectedUser.pincode || 'N/A'}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-4">
                   <h4 className="font-semibold text-gray-800 mb-3">Account Status</h4>
-                  <div className="space-y-3 text-sm">
+                  <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-600">Current Role:</span>
-                      <p className="capitalize font-medium text-gray-900">{selectedUser.role}</p>
+                      <p className="capitalize font-medium text-gray-900">{selectedUser.role || 'N/A'}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">KYC Status:</span>
-                      <p className="capitalize font-medium text-gray-900">{selectedUser.kyc_status}</p>
+                      <p className="capitalize font-medium text-gray-900">{selectedUser.kyc_status || 'N/A'}</p>
                     </div>
                     <div>
-                      <span className="text-gray-600">Joined:</span>
-                      <p className="text-gray-900">{new Date(selectedUser.created_at).toLocaleString()}</p>
+                      <span className="text-gray-600">Created At:</span>
+                      <p className="text-gray-900">{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleString() : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Updated At:</span>
+                      <p className="text-gray-900">{(selectedUser as any).updatedAt ? new Date((selectedUser as any).updatedAt).toLocaleString() : 'N/A'}</p>
                     </div>
                     {selectedUser.kyc_verified_at && (
                       <div>
-                        <span className="text-gray-600">KYC Verified:</span>
+                        <span className="text-gray-600">KYC Verified At:</span>
                         <p className="text-gray-900">{new Date(selectedUser.kyc_verified_at).toLocaleString()}</p>
                       </div>
                     )}
                   </div>
                 </div>
+
+                {(selectedUser as any).verification_documents && (
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <h4 className="font-semibold text-gray-800 mb-3">Verification Documents</h4>
+                    <div className="space-y-2 text-sm">
+                      {(selectedUser as any).verification_documents?.aadhaar_number && (
+                        <div>
+                          <span className="text-gray-600">Aadhaar Number:</span>
+                          <p className="text-gray-900 font-mono">{(selectedUser as any).verification_documents.aadhaar_number}</p>
+                        </div>
+                      )}
+                      {(selectedUser as any).verification_documents?.pan_number && (
+                        <div>
+                          <span className="text-gray-600">PAN Number:</span>
+                          <p className="text-gray-900 font-mono">{(selectedUser as any).verification_documents.pan_number}</p>
+                        </div>
+                      )}
+                      {(selectedUser as any).verification_documents?.gstin && (
+                        <div>
+                          <span className="text-gray-600">GSTIN:</span>
+                          <p className="text-gray-900 font-mono">{(selectedUser as any).verification_documents.gstin}</p>
+                        </div>
+                      )}
+                      {(selectedUser as any).verification_documents?.cin && (
+                        <div>
+                          <span className="text-gray-600">CIN:</span>
+                          <p className="text-gray-900 font-mono">{(selectedUser as any).verification_documents.cin}</p>
+                        </div>
+                      )}
+                      {!(selectedUser as any).verification_documents?.aadhaar_number && 
+                       !(selectedUser as any).verification_documents?.pan_number && 
+                       !(selectedUser as any).verification_documents?.gstin && 
+                       !(selectedUser as any).verification_documents?.cin && (
+                        <p className="text-gray-500">No verification documents</p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {selectedUser.kyc_data && (

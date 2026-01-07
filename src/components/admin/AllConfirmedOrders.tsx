@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, Filter, X, Download } from 'lucide-react';
+import { Eye, Filter, X, Download, Edit, Trash2 } from 'lucide-react';
 import { generateOrderPDF } from '../../utils/pdfGenerator';
 
 interface ConfirmedSalesOrder {
@@ -111,6 +111,8 @@ export default function AllConfirmedOrders() {
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<ConfirmedOrder | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'sales' | 'purchase'>('all');
+  const [editingOrder, setEditingOrder] = useState<ConfirmedOrder | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; type: 'sales' | 'purchase' } | null>(null);
 
   useEffect(() => {
     fetchOrders();
@@ -191,6 +193,48 @@ export default function AllConfirmedOrders() {
       currency: 'INR',
       maximumFractionDigits: 2,
     }).format(amount);
+  };
+
+  const handleDelete = async (orderId: string, orderType: 'sales' | 'purchase') => {
+    try {
+      setLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
+        setError('Authentication required');
+        return;
+      }
+
+      const endpoint = orderType === 'sales' 
+        ? `${apiUrl}/confirmed-sales-orders/${orderId}`
+        : `${apiUrl}/confirmed-purchase-orders/${orderId}`;
+
+      const response = await fetch(endpoint, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete order');
+      }
+
+      // Refresh orders
+      await fetchOrders();
+      setDeleteConfirm(null);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (order: ConfirmedOrder) => {
+    setEditingOrder(order);
+    setSelectedOrder(null);
   };
 
   if (loading) {
@@ -310,13 +354,32 @@ export default function AllConfirmedOrders() {
                       {formatCurrency(order.net_amount)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      <button
-                        onClick={() => setSelectedOrder(order)}
-                        className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1"
-                      >
-                        <Eye className="w-4 h-4" />
-                        View
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSelectedOrder(order)}
+                          className="text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+                          title="View Details"
+                        >
+                          <Eye className="w-4 h-4" />
+                          View
+                        </button>
+                        <button
+                          onClick={() => handleEdit(order)}
+                          className="text-green-600 hover:text-green-800 font-medium flex items-center gap-1"
+                          title="Edit Order"
+                        >
+                          <Edit className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirm({ id: order.id, type: order.orderType })}
+                          className="text-red-600 hover:text-red-800 font-medium flex items-center gap-1"
+                          title="Delete Order"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -506,7 +569,7 @@ export default function AllConfirmedOrders() {
                 </div>
 
                 {/* Quality Parameters */}
-                {(selectedOrder.hlw_wheat || selectedOrder.moisture_moi || selectedOrder.bdoi || (selectedOrder as ConfirmedPurchaseOrder).bddi) && (
+                {(selectedOrder.hlw_wheat || selectedOrder.moisture_moi || (selectedOrder as any).bdoi || (selectedOrder as any).bddi) && (
                   <div className="col-span-3 border-b border-gray-200 pb-4 mb-4">
                     <h3 className="text-lg font-semibold text-gray-800 mb-3">Quality Parameters</h3>
                     <div className="grid grid-cols-3 gap-4">
@@ -538,16 +601,16 @@ export default function AllConfirmedOrders() {
                           </div>
                         </>
                       )}
-                      {(selectedOrder.bdoi || (selectedOrder as ConfirmedPurchaseOrder).bddi) && (
+                      {((selectedOrder as any).bdoi || (selectedOrder as any).bddi) && (
                         <>
                           <div>
                             <label className="text-sm font-medium text-gray-600">
                               {selectedOrder.orderType === 'sales' ? 'BDOI' : 'BDDI'}
                             </label>
                             <p className="text-gray-900">
-                              {selectedOrder.orderType === 'sales' 
-                                ? (selectedOrder as ConfirmedSalesOrder).bdoi || 'N/A'
-                                : (selectedOrder as ConfirmedPurchaseOrder).bddi || 'N/A'}
+                              {selectedOrder.orderType === 'sales'
+                                ? ((selectedOrder as any).bdoi || 'N/A')
+                                : ((selectedOrder as any).bddi || 'N/A')}
                             </p>
                           </div>
                           <div>
@@ -626,6 +689,63 @@ export default function AllConfirmedOrders() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Confirm Delete</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to delete this {deleteConfirm.type === 'sales' ? 'sales' : 'purchase'} order? 
+                This action cannot be undone.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleDelete(deleteConfirm.id, deleteConfirm.type)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal - Placeholder for now */}
+      {editingOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-gray-900">Edit Order</h3>
+                <button
+                  onClick={() => setEditingOrder(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <p className="text-gray-600 mb-4">
+                Edit functionality will be implemented here. For now, please use the backend API directly or update the form component.
+              </p>
+              <button
+                onClick={() => setEditingOrder(null)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

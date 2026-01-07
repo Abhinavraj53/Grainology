@@ -2,6 +2,10 @@ import express from 'express';
 import User from '../models/User.js';
 import Order from '../models/Order.js';
 import Offer from '../models/Offer.js';
+import PurchaseOrder from '../models/PurchaseOrder.js';
+import SaleOrder from '../models/SaleOrder.js';
+import ConfirmedSalesOrder from '../models/ConfirmedSalesOrder.js';
+import ConfirmedPurchaseOrder from '../models/ConfirmedPurchaseOrder.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -18,25 +22,31 @@ router.get('/stats', async (req, res) => {
       totalFarmers,
       totalTraders,
       verifiedUsers,
-      activeOffers,
-      totalOrders,
-      pendingOrders,
-      completedOrders
+      totalPurchaseOrders,
+      totalSaleOrders,
+      totalConfirmedSalesOrders,
+      totalConfirmedPurchaseOrders
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ role: 'farmer' }),
       User.countDocuments({ role: 'trader' }),
       User.countDocuments({ kyc_status: 'verified' }),
-      Offer.countDocuments({ status: 'Active' }),
-      Order.countDocuments(),
-      Order.countDocuments({ status: 'Pending Approval' }),
-      Order.countDocuments({ status: 'Completed' })
+      PurchaseOrder.countDocuments(),
+      SaleOrder.countDocuments(),
+      ConfirmedSalesOrder.countDocuments(),
+      ConfirmedPurchaseOrder.countDocuments()
     ]);
 
-    const completedOrdersList = await Order.find({ status: 'Completed' });
-    const totalRevenue = completedOrdersList.reduce((sum, order) => {
-      const deduction = order.deduction_amount || 0;
-      return sum + (order.quantity_mt * 10 * order.final_price_per_quintal - deduction);
+    // Calculate total amounts for confirmed orders
+    const confirmedSalesOrders = await ConfirmedSalesOrder.find({});
+    const confirmedPurchaseOrders = await ConfirmedPurchaseOrder.find({});
+    
+    const totalConfirmedSalesAmount = confirmedSalesOrders.reduce((sum, order) => {
+      return sum + (order.net_amount || 0);
+    }, 0);
+    
+    const totalConfirmedPurchaseAmount = confirmedPurchaseOrders.reduce((sum, order) => {
+      return sum + (order.net_amount || 0);
     }, 0);
 
     res.json({
@@ -44,11 +54,12 @@ router.get('/stats', async (req, res) => {
       totalFarmers,
       totalTraders,
       verifiedUsers,
-      activeOffers,
-      totalOrders,
-      pendingOrders,
-      completedOrders,
-      totalRevenue
+      totalPurchaseOrders,
+      totalSaleOrders,
+      totalConfirmedSalesOrders,
+      totalConfirmedPurchaseOrders,
+      totalConfirmedSalesAmount,
+      totalConfirmedPurchaseAmount
     });
   } catch (error) {
     console.error('Get admin stats error:', error);

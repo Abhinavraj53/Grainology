@@ -25,6 +25,15 @@ interface EnhancedDashboardProps {
 export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardProps) {
   const [vendorPerformance, setVendorPerformance] = useState<any[]>([]);
 
+  // Add safety checks for stats
+  if (!stats) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-500">Loading dashboard data...</div>
+      </div>
+    );
+  }
+
   const formatDate = (dateStr: string | undefined) => {
     if (!dateStr) return '-';
     try {
@@ -118,9 +127,9 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">All Users</p>
-              <p className="text-4xl font-bold mt-2">{stats.totalUsers}</p>
+              <p className="text-4xl font-bold mt-2">{stats?.totalUsers || 0}</p>
               <p className="text-xs opacity-75 mt-1">
-                {stats.totalFarmers} Farmers | {stats.totalTraders} Traders
+                {stats?.totalFarmers || 0} Farmers | {stats?.totalTraders || 0} Traders
               </p>
             </div>
             <Users className="w-12 h-12 opacity-30" />
@@ -131,7 +140,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Purchase Orders</p>
-              <p className="text-4xl font-bold mt-2">{stats.totalPurchaseOrders}</p>
+              <p className="text-4xl font-bold mt-2">{stats?.totalPurchaseOrders || 0}</p>
               <p className="text-xs opacity-75 mt-1">All purchase orders</p>
             </div>
             <Package className="w-12 h-12 opacity-30" />
@@ -142,7 +151,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Sales Orders</p>
-              <p className="text-4xl font-bold mt-2">{stats.totalSaleOrders}</p>
+              <p className="text-4xl font-bold mt-2">{stats?.totalSaleOrders || 0}</p>
               <p className="text-xs opacity-75 mt-1">All sales orders</p>
             </div>
             <ShoppingCart className="w-12 h-12 opacity-30" />
@@ -153,7 +162,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Confirmed Sales Orders</p>
-              <p className="text-4xl font-bold mt-2">{stats.totalConfirmedSalesOrders}</p>
+              <p className="text-4xl font-bold mt-2">{stats?.totalConfirmedSalesOrders || 0}</p>
               <p className="text-xs opacity-75 mt-1">Total confirmed</p>
             </div>
             <CheckCircle className="w-12 h-12 opacity-30" />
@@ -167,7 +176,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Confirmed Purchase Orders</p>
-              <p className="text-4xl font-bold mt-2">{stats.totalConfirmedPurchaseOrders}</p>
+              <p className="text-4xl font-bold mt-2">{stats?.totalConfirmedPurchaseOrders || 0}</p>
               <p className="text-xs opacity-75 mt-1">Total confirmed</p>
             </div>
             <CheckCircle className="w-12 h-12 opacity-30" />
@@ -178,7 +187,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Confirmed Sales Amount</p>
-              <p className="text-3xl font-bold mt-2">₹{stats.totalConfirmedSalesAmount.toLocaleString('en-IN')}</p>
+              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedSalesAmount || 0).toLocaleString('en-IN')}</p>
               <p className="text-xs opacity-75 mt-2">All confirmed sales orders</p>
             </div>
             <DollarSign className="w-16 h-16 opacity-30" />
@@ -189,7 +198,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Confirmed Purchase Amount</p>
-              <p className="text-3xl font-bold mt-2">₹{stats.totalConfirmedPurchaseAmount.toLocaleString('en-IN')}</p>
+              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedPurchaseAmount || 0).toLocaleString('en-IN')}</p>
               <p className="text-xs opacity-75 mt-2">All confirmed purchase orders</p>
             </div>
             <DollarSign className="w-16 h-16 opacity-30" />

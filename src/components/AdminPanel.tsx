@@ -56,11 +56,12 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
     totalFarmers: 0,
     totalTraders: 0,
     verifiedUsers: 0,
-    activeOffers: 0,
-    totalOrders: 0,
-    pendingOrders: 0,
-    completedOrders: 0,
-    totalRevenue: 0,
+    totalPurchaseOrders: 0,
+    totalSaleOrders: 0,
+    totalConfirmedSalesOrders: 0,
+    totalConfirmedPurchaseOrders: 0,
+    totalConfirmedSalesAmount: 0,
+    totalConfirmedPurchaseAmount: 0,
   });
 
   useEffect(() => {
@@ -103,11 +104,36 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         console.log('Stats received:', statsData);
-        setStats(statsData);
+        // Ensure all required fields are present with defaults
+        setStats({
+          totalUsers: statsData.totalUsers || 0,
+          totalFarmers: statsData.totalFarmers || 0,
+          totalTraders: statsData.totalTraders || 0,
+          verifiedUsers: statsData.verifiedUsers || 0,
+          totalPurchaseOrders: statsData.totalPurchaseOrders || 0,
+          totalSaleOrders: statsData.totalSaleOrders || 0,
+          totalConfirmedSalesOrders: statsData.totalConfirmedSalesOrders || 0,
+          totalConfirmedPurchaseOrders: statsData.totalConfirmedPurchaseOrders || 0,
+          totalConfirmedSalesAmount: statsData.totalConfirmedSalesAmount || 0,
+          totalConfirmedPurchaseAmount: statsData.totalConfirmedPurchaseAmount || 0,
+        });
       } else {
         const errorData = await statsResponse.json().catch(() => ({}));
         console.error('Stats fetch error:', statsResponse.status, errorData);
-        setErrorMessage('Unable to load dashboard stats. Please check API/auth.');
+        setErrorMessage(`Unable to load dashboard stats (${statsResponse.status}). Please check API/auth.`);
+        // Set default stats to prevent crashes
+        setStats({
+          totalUsers: 0,
+          totalFarmers: 0,
+          totalTraders: 0,
+          verifiedUsers: 0,
+          totalPurchaseOrders: 0,
+          totalSaleOrders: 0,
+          totalConfirmedSalesOrders: 0,
+          totalConfirmedPurchaseOrders: 0,
+          totalConfirmedSalesAmount: 0,
+          totalConfirmedPurchaseAmount: 0,
+        });
       }
 
       // Fetch users from backend API

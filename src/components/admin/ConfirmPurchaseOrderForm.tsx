@@ -18,6 +18,7 @@ export default function ConfirmPurchaseOrderForm() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
+  const [isDragging, setIsDragging] = useState(false);
   const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
   const [varieties, setVarieties] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<string[]>([]);
@@ -372,7 +373,41 @@ export default function ConfirmPurchaseOrderForm() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload File (CSV or Excel) <span className="text-red-500">*</span>
               </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-400 transition-colors">
+              <div
+                className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors ${
+                  isDragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-400'
+                }`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    const file = files[0];
+                    const ext = file.name.split('.').pop()?.toLowerCase();
+                    if (['csv', 'xlsx', 'xls'].includes(ext || '')) {
+                      setUploadFile(file);
+                    } else {
+                      showError('Please select a CSV or Excel file (.csv, .xlsx, .xls)');
+                    }
+                  }
+                }}
+              >
                 <div className="space-y-1 text-center">
                   <Upload className="mx-auto h-12 w-12 text-gray-400" />
                   <div className="flex text-sm text-gray-600">
@@ -476,57 +511,48 @@ export default function ConfirmPurchaseOrderForm() {
                       const finalVariety1 = sampleVarieties1[0] || 'Hybrid';
                       const finalVariety2 = sampleVarieties2[0] || 'Dara';
 
-                      // Create sample CSV matching Excel format exactly (with Supplier Name instead of Seller Name)
+                      // Create sample CSV matching Excel format exactly - 39 columns as per image
                       const headers = [
-                      'Date of Transaction',
-                      'State',
-                      'Customer',
-                      'Supplier Name',
-                      'Location',
-                      'Warehouse Name',
-                      'Chamber No.',
-                      'Commodity',
-                      'Variety',
-                      'Gate Pass No.',
-                      'Vehicle No.',
-                      'Weight Slip No.',
-                      'Gross Weight in MT (Vehicle + Goods)',
-                      'Tare Weight of Vehicle',
-                      'No. of Bags',
-                      'Net Weight in MT',
-                      'Rate Per MT',
-                      'Gross Amount',
-                      'HLW (Hectolitre Weight) in Wheat',
-                      'Excess HLW',
-                      'Deduction Amount Rs. (HLW)',
-                      'Moisture (MOI)',
-                      'Excess Moisture',
-                      'Broken, Damage, Discolour, Immature (BDDI)',
-                      'Excess BDDI',
-                      'MOI+BDDI',
-                      'Weight Deduction in KG (MOI+BDDI)',
-                      'Deduction Amount Rs. (MOI+BDDI)',
-                      'Other Deduction 1',
-                      'Other Deduction 1 Remarks',
-                      'Other Deduction 2',
-                      'Other Deduction 2 Remarks',
-                      'Other Deduction 3',
-                      'Other Deduction 3 Remarks',
-                      'Other Deduction 4',
-                      'Other Deduction 4 Remarks',
-                      'Other Deduction 5',
-                      'Other Deduction 5 Remarks',
-                      'Other Deduction 6',
-                      'Other Deduction 6 Remarks',
-                      'Other Deduction 7',
-                      'Other Deduction 7 Remarks',
-                      'Other Deduction 8',
-                      'Other Deduction 8 Remarks',
-                      'Other Deduction 9',
-                      'Other Deduction 9 Remarks',
-                      'Net Amount',
-                      'Remarks'
-                    ];
+                        'Date of Transaction',
+                        'State',
+                        'Supplier Name',
+                        'Location',
+                        'Warehouse Name',
+                        'Chamber No.',
+                        'Commodity',
+                        'Variety',
+                        'Gate Pass No.',
+                        'Vehicle No.',
+                        'Weight Slip No.',
+                        'Gross Weight in MT (Vehicle + Goods)',
+                        'Tare Weight of Vehicle',
+                        'No. of Bags',
+                        'Net Weight in MT',
+                        'Rate Per MT',
+                        'Gross Amount',
+                        'HLW (Hectolitre Weight) in Wheat',
+                        'Excess HLW',
+                        'Deduction Amount Rs. (HLW)',
+                        'Moisture (MOI)',
+                        'Excess Moisture',
+                        'Broken, Damage, Discolour, Immature (BDOI)',
+                        'Excess BDOI',
+                        'MOI+BDOI',
+                        'Weight Deduction in KG',
+                        'Deduction Amount Rs. (MOI+BDOI)',
+                        'Other Deduction 1',
+                        'Other Deduction 2',
+                        'Other Deduction 3',
+                        'Other Deduction 4',
+                        'Other Deduction 5',
+                        'Other Deduction 6',
+                        'Other Deduction 7',
+                        'Other Deduction 8',
+                        'Other Deduction 9',
+                        'Other Deduction 10',
+                        'Net Amount',
+                        'Remarks'
+                      ];
                     
                       const today = new Date();
                       const date1 = new Date(today);
@@ -537,8 +563,7 @@ export default function ConfirmPurchaseOrderForm() {
                       const sampleRow1 = [
                         date1.toLocaleDateString('en-GB'),
                         sampleState,
-                        sampleSupplier1, // Customer name
-                        sampleSupplier1, // Supplier Name (same as customer)
+                        sampleSupplier1, // Supplier Name
                         sampleLocation,
                         sampleWarehouse,
                         '16',
@@ -573,12 +598,6 @@ export default function ConfirmPurchaseOrderForm() {
                       '-',
                       '-',
                       '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
                       '130575.97',
                       ''
                     ];
@@ -586,8 +605,7 @@ export default function ConfirmPurchaseOrderForm() {
                       const sampleRow2 = [
                         date2.toLocaleDateString('en-GB'),
                         sampleState,
-                        sampleSupplier2, // Customer name
-                        sampleSupplier2, // Supplier Name (same as customer)
+                        sampleSupplier2, // Supplier Name
                         locations[1] || 'BUXAR',
                         warehousesData[1]?.name || warehouses[1] || 'SIDDHASHRAM WAREHOUSE',
                         '2',
@@ -610,14 +628,6 @@ export default function ConfirmPurchaseOrderForm() {
                       '0.00',
                       '0.00',
                       '0.00',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
-                      '-',
                       '-',
                       '-',
                       '-',

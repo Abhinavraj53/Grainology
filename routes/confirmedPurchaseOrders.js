@@ -252,18 +252,17 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           transactionDate = new Date().toISOString().split('T')[0];
         }
 
-        // Parse other deductions from columns Other Deduction 1-9 with remarks
+        // Parse other deductions from columns Other Deduction 1-10 (no separate remarks columns in new CSV format)
         const otherDeductions = [];
-        for (let j = 1; j <= 9; j++) {
+        for (let j = 1; j <= 10; j++) {
           const dedAmount = record[`Other Deduction ${j}`] || record[`other_deduction_${j}`] || '';
-          const dedRemarks = record[`Other Deduction ${j} Remarks`] || record[`other_deduction_${j}_remarks`] || '';
           
           if (dedAmount && dedAmount !== '-' && dedAmount !== 'Not Available' && dedAmount.trim() !== '') {
             const amount = parseFloat(dedAmount) || 0;
             if (amount > 0) {
               otherDeductions.push({
                 amount: amount,
-                remarks: dedRemarks || ''
+                remarks: '' // No separate remarks column in new CSV format
               });
             }
           }
@@ -278,23 +277,22 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           return isNaN(parsed) ? defaultValue : parsed;
         };
 
-        // Get customer from CSV - Customer column or Supplier Name column
-        const customerName = record['Customer'] || record.customer || record['Supplier Name'] || record.supplier_name || record['Supplier'] || '';
-        if (!customerName) {
-          errors.push(`Row ${rowNum}: Customer is required. Please specify Customer in the CSV.`);
+        // Get customer from CSV - Supplier Name column (new CSV format doesn't have separate Customer column)
+        const supplierName = record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || '';
+        if (!supplierName) {
+          errors.push(`Row ${rowNum}: Supplier Name is required. Please specify Supplier Name in the CSV.`);
           continue;
         }
 
-        // Find customer by name
-        const customer = allCustomers.find(c => c.name === customerName);
+        // Find customer by name (Supplier Name = Customer Name in purchase orders)
+        const customer = allCustomers.find(c => c.name === supplierName);
         if (!customer) {
-          errors.push(`Row ${rowNum}: Customer "${customerName}" not found. Please use a valid customer name.`);
+          errors.push(`Row ${rowNum}: Supplier Name "${supplierName}" not found. Please use a valid supplier/customer name.`);
           continue;
         }
 
         // Validate against master data
         const state = record['State'] || record.state || '';
-        const supplierName = record['Supplier Name'] || record.supplier_name || record['Supplier'] || customerName;
         const location = record['Location'] || record.location || '';
         const warehouseName = record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '';
         const commodity = record['Commodity'] || record.commodity || 'Paddy';
@@ -305,10 +303,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           errors.push(`Row ${rowNum}: Invalid state "${state}". Must be one of the valid Indian states.`);
         }
 
-        // Validate supplier name matches customer
-        if (supplierName && supplierName !== customerName) {
-          errors.push(`Row ${rowNum}: Supplier Name "${supplierName}" does not match Customer "${customerName}". Supplier Name must be the same as Customer.`);
-        }
+        // Supplier Name is already validated above (it's used to find the customer)
 
         // Validate location
         if (location && !validLocations.has(location.toUpperCase())) {
@@ -362,7 +357,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           bddi: parseNumeric(record['Broken, Damage, Discolour, Immature (BDDI)'] || record['BDDI'] || record.bddi),
           excess_bddi: parseNumeric(record['Excess BDDI'] || record.excess_bddi),
           moi_bddi: parseNumeric(record['MOI+BDDI'] || record.moi_bddi),
-          weight_deduction_kg: parseNumeric(record['Weight Deduction in KG (MOI+BDDI)'] || record['Weight Deduction (KG)'] || record.weight_deduction_kg),
+          weight_deduction_kg: parseNumeric(record['Weight Deduction in KG'] || record['Weight Deduction in KG (MOI+BDDI)'] || record['Weight Deduction (KG)'] || record.weight_deduction_kg),
           deduction_amount_moi_bddi: parseNumeric(record['Deduction Amount Rs. (MOI+BDDI)'] || record['Deduction Amount MOI+BDDI'] || record.deduction_amount_moi_bddi),
           other_deductions: otherDeductions,
           quality_report: {},

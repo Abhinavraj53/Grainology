@@ -704,10 +704,18 @@ export default function ConfirmSalesOrderForm() {
                     throw new Error(result.error || result.message || 'Upload failed');
                   }
 
-                  if (result.errors && result.errors.length > 0) {
-                    showError(`Upload completed with ${result.count} orders. Some errors: ${result.errors.slice(0, 3).join(', ')}`);
+                  // Only show error if upload actually failed (no orders saved)
+                  if (result.success && result.count > 0) {
+                    // Upload was successful - show success message
+                    const warningMsg = result.warnings && result.warnings.length > 0 
+                      ? ` (${result.warnings.length} warnings)` 
+                      : '';
+                    showSuccess(`Successfully uploaded ${result.count} confirmed sales orders!${warningMsg}`);
+                  } else if (result.errors && result.errors.length > 0 && (!result.count || result.count === 0)) {
+                    // Only show error if no orders were saved
+                    showError(`Upload failed: ${result.errors.slice(0, 3).join(', ')}`);
                   } else {
-                    showSuccess(`Successfully uploaded ${result.count} confirmed sales orders!`);
+                    showSuccess(`Successfully uploaded ${result.count || 0} confirmed sales orders!`);
                   }
 
                   // Reset form

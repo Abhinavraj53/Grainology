@@ -291,7 +291,7 @@ export default function AllConfirmedOrders() {
                   Date
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                  Customer
+                  Supplier / Seller
                 </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                   Commodity
@@ -337,7 +337,12 @@ export default function AllConfirmedOrders() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       <div>
-                        <div className="font-medium">{order.customer_id?.name || 'N/A'}</div>
+                        <div className="font-medium">
+                          {order.orderType === 'purchase' 
+                            ? (order.supplier_name || order.customer_id?.name || 'N/A')
+                            : (order.seller_name || order.customer_id?.name || 'N/A')
+                          }
+                        </div>
                         <div className="text-xs text-gray-500">{order.customer_id?.email || ''}</div>
                       </div>
                     </td>
@@ -429,11 +434,20 @@ export default function AllConfirmedOrders() {
               <div className="grid grid-cols-3 gap-6">
                 {/* Customer Information */}
                 <div className="col-span-3 border-b border-gray-200 pb-4 mb-4">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-3">Customer Information</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                    {selectedOrder.orderType === 'purchase' ? 'Supplier Information' : 'Customer Information'}
+                  </h3>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Customer Name</label>
-                      <p className="text-gray-900 font-medium">{selectedOrder.customer_id?.name || 'N/A'}</p>
+                      <label className="text-sm font-medium text-gray-600">
+                        {selectedOrder.orderType === 'purchase' ? 'Supplier Name' : 'Customer Name'}
+                      </label>
+                      <p className="text-gray-900 font-medium">
+                        {selectedOrder.orderType === 'purchase'
+                          ? ((selectedOrder as ConfirmedPurchaseOrder).supplier_name || selectedOrder.customer_id?.name || 'N/A')
+                          : ((selectedOrder as ConfirmedSalesOrder).seller_name || selectedOrder.customer_id?.name || 'N/A')
+                        }
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Email</label>

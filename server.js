@@ -30,6 +30,7 @@ import sandboxKYCRoutes from './routes/sandboxKYC.js';
 dotenv.config();
 
 const app = express();
+// Use PORT provided in environment or default to 3001
 const PORT = process.env.PORT || 3001;
 
 // Middleware - CORS configuration
@@ -222,13 +223,13 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Railway requires binding to 0.0.0.0, not just localhost
-const HOST = process.env.HOST || '0.0.0.0';
-
-app.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running on ${HOST}:${PORT}`);
-  console.log(`📡 API available at http://${HOST}:${PORT}/api`);
+// Railway requires binding to 0.0.0.0 (not localhost) and using PORT env variable
+// Reference: https://docs.railway.com/reference/errors/application-failed-to-respond
+app.listen(PORT, "0.0.0.0", function () {
+  console.log(`🚀 Server running on 0.0.0.0:${PORT}`);
+  console.log(`📡 API available at http://0.0.0.0:${PORT}/api`);
   console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🌐 CORS Allowed Origins: ${allowedOrigins.join(', ')}`);
+  console.log(`✅ Server is listening on the correct host and port for Railway`);
 });
 

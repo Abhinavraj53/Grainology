@@ -397,12 +397,13 @@ router.post('/signup', async (req, res) => {
     
     // Handle duplicate key error (MongoDB unique constraint)
     if (error.code === 11000 || error.code === 11001) {
+      const requestEmail = req.body.email || req.body.emailRaw;
       console.log('Duplicate key error:', {
         keyPattern: error.keyPattern,
         keyValue: error.keyValue,
-        emailProvided: !!email,
-        emailValue: email ? `${email.substring(0, 3)}***` : 'not provided',
-        requestBodyEmail: req.body.email ? `${String(req.body.email).substring(0, 3)}***` : 'not in request'
+        emailProvided: !!requestEmail,
+        emailValue: requestEmail ? `${String(requestEmail).substring(0, 3)}***` : 'not provided',
+        requestBodyEmail: requestEmail ? `${String(requestEmail).substring(0, 3)}***` : 'not in request'
       });
       
       // Check which field caused the duplicate - prioritize mobile_number
@@ -418,11 +419,14 @@ router.post('/signup', async (req, res) => {
         return res.status(400).json({ error: 'User with this CIN already exists' });
       } else if (error.keyPattern?.email) {
         // Only show email error if email was actually provided in the request
-        if (email) {
+        const requestEmail = req.body.email || req.body.emailRaw;
+        if (requestEmail && String(requestEmail).trim()) {
           return res.status(400).json({ error: 'User with this email already exists' });
         } else {
-          // Email field in error but email wasn't provided - this shouldn't happen, but handle gracefully
+          // Email field in error but email wasn't provided - likely a null email conflict
           console.warn('Email duplicate error but email was not provided in request. KeyValue:', error.keyValue);
+          // This happens when there are multiple users with email: null in the database
+          // Just return a generic message and let the user proceed (mobile uniqueness will catch real duplicates)
           return res.status(400).json({ error: 'A user with this information already exists. Please check your mobile number or verification document.' });
         }
       }

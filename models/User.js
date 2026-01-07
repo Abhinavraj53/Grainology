@@ -5,8 +5,8 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     required: false, // Made optional - users can register without email
-    unique: true,
-    sparse: true, // Allows multiple null values
+    // Note: unique index is created separately below with sparse: true
+    // Do NOT use 'unique: true' here as it creates a non-sparse index
     lowercase: true,
     trim: true
   },
@@ -103,6 +103,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Create indexes for verification documents to ensure uniqueness
+userSchema.index({ email: 1 }, { unique: true, sparse: true }); // sparse allows multiple null/undefined
 userSchema.index({ 'verification_documents.aadhaar_number': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.pan_number': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.gstin': 1 }, { unique: true, sparse: true });

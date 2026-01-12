@@ -23,11 +23,19 @@ const parseCSV = (buffer) => {
   try {
     const records = parse(buffer.toString(), {
       columns: true,
-      skip_empty_lines: true,
+      skip_empty_lines: false, // PRESERVE ALL ROWS - don't skip empty lines
       trim: true,
-      cast: true
+      cast: true,
+      relax_column_count: true // Allow rows with different column counts
     });
-    return records;
+    // Filter out only completely empty rows (all values are empty/null/undefined)
+    return records.filter(record => {
+      return Object.values(record).some(val => {
+        if (val === null || val === undefined) return false;
+        const str = String(val).trim();
+        return str !== '';
+      });
+    });
   } catch (error) {
     throw new Error(`CSV parsing error: ${error.message}`);
   }

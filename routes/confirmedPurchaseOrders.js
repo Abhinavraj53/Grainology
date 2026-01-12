@@ -226,7 +226,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     ]);
     const validSupplierNames = new Set(allCustomers.map(c => c.name));
 
-    // Transform and validate records
+    // Transform and validate records - PRESERVE ALL ROWS IN ORIGINAL ORDER
     const orders = [];
     const errors = [];
     const warnings = []; // For non-blocking validation warnings
@@ -234,21 +234,44 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
 
     // Helper function to convert empty/blank values to "N/A"
     const toNA = (value) => {
-      if (!value || value === '' || value === '-' || value === 'Not Available' || String(value).trim() === '') {
+      if (value === null || value === undefined || value === '' || value === '-' || value === 'Not Available' || String(value).trim() === '') {
         return 'N/A';
       }
       return String(value).trim();
     };
 
+    // Ensure we have at least one customer - create a fallback if needed
+    let fallbackCustomer = allCustomers.length > 0 ? allCustomers[0] : null;
+    if (!fallbackCustomer) {
+      // Try to find any user (even admin) as fallback
+      const anyUser = await User.findOne();
+      if (anyUser) {
+        fallbackCustomer = anyUser;
+        warnings.push('No customers found. Using first available user as fallback.');
+      } else {
+        return res.status(400).json({ 
+          error: 'No users found in system. Please create at least one user before uploading orders.' 
+        });
+      }
+    }
+
+    console.log(`Processing ${records.length} rows from file. Starting bulk upload...`);
+
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
 
-      // Skip completely empty rows
-      const hasData = Object.values(record).some(val => val && String(val).trim() !== '');
+      // Only skip rows that are COMPLETELY empty (all values are null, undefined, or empty string)
+      const hasData = Object.values(record).some(val => {
+        if (val === null || val === undefined) return false;
+        const str = String(val).trim();
+        return str !== '' && str !== '-' && str !== 'N/A';
+      });
+      
       if (!hasData) {
-        warnings.push(`Row ${rowNum}: Empty row skipped`);
-        continue;
+        // Still create an order with N/A values to preserve sequence
+        warnings.push(`Row ${rowNum}: Appears empty, but creating order with N/A values to preserve sequence`);
+        // Continue to process this row with N/A values
       }
 
       try {
@@ -295,22 +318,16 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         };
 
         // Get customer from CSV - Supplier Name column (new CSV format doesn't have separate Customer column)
-        // For testing: No validation, use first available customer or accept any supplier name
-        const supplierName = toNA(record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || 'Test Supplier');
+        // ALWAYS use a customer - never skip rows due to customer lookup
+        const supplierName = toNA(record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || 'N/A');
         
-        // Find customer by name, or use first available customer for testing
+        // Find customer by name, or use fallback customer - NEVER SKIP ROW
         let customer = allCustomers.find(c => c.name === supplierName);
         if (!customer) {
-          // For testing: Use first available customer, or create a dummy customer object
-          if (allCustomers.length > 0) {
-            customer = allCustomers[0];
+          // Always use fallback customer - never skip the row
+          customer = fallbackCustomer;
+          if (supplierName !== 'N/A') {
             warnings.push(`Row ${rowNum}: Supplier Name "${supplierName}" not found. Using "${customer.name}" instead.`);
-          } else {
-            // If no customers exist, we still need a customer_id, so we'll need to handle this
-            // Don't skip - create a warning but use a fallback
-            errors.push(`Row ${rowNum}: No customers in system. Cannot process this row. Please create at least one customer.`);
-            skippedRows.push(rowNum);
-            continue; // Skip this row but continue processing others
           }
         }
 
@@ -324,9 +341,11 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         
         // No master data validation - accept any values for testing
 
+        // Create order data - preserve ALL data as-is from CSV, use N/A for blanks
+        // Add row_sequence to preserve original order
         const orderData = {
           customer_id: customer._id,
-          invoice_number: toNA(record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}`),
+          invoice_number: toNA(record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}-${rowNum}`),
           transaction_date: transactionDate,
           state: state,
           supplier_name: supplierName,
@@ -344,7 +363,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           net_weight_mt: parseNumeric(record['Net Weight in MT'] || record['Net Weight (MT)'] || record.net_weight_mt || record['Net Weight']),
           rate_per_mt: parseNumeric(record['Rate Per MT'] || record['Rate per MT'] || record.rate_per_mt || record['Rate']),
           gross_amount: parseNumeric(record['Gross Amount'] || record.gross_amount),
-          // Quality parameters - all manual
+          // Quality parameters - all manual, use N/A for blanks
           hlw_wheat: parseNumeric(record['HLW (Hectolitre Weight) in Wheat'] || record['HLW'] || record.hlw_wheat || record['Hectolitre Weight']),
           excess_hlw: parseNumeric(record['Excess HLW'] || record.excess_hlw),
           deduction_amount_hlw: parseNumeric(record['Deduction Amount Rs. (HLW)'] || record['Deduction Amount HLW'] || record.deduction_amount_hlw),
@@ -366,40 +385,85 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             parseNumeric(record['Deduction Amount Rs. (MOI+BDDI)'] || record.deduction_amount_moi_bddi) +
             otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0)
           ),
-          created_by: req.userId
+          created_by: req.userId,
+          row_sequence: i, // Preserve original row order from CSV
+          uploaded_at: new Date()
         };
 
-        // For testing: Minimal validation - only check if critical fields are completely missing
-        // Allow 0 or negative values for testing purposes
-        if (!orderData.vehicle_no || orderData.vehicle_no === 'Not Available' || orderData.vehicle_no.trim() === '') {
-          // Use a default vehicle number for testing
-          orderData.vehicle_no = `TEST-VEH-${rowNum}`;
+        // Ensure vehicle_no is never empty (required field)
+        if (!orderData.vehicle_no || orderData.vehicle_no === 'N/A' || orderData.vehicle_no.trim() === '') {
+          orderData.vehicle_no = `VEH-${rowNum}`;
         }
-        if (!orderData.net_weight_mt || orderData.net_weight_mt <= 0) {
-          // Use default value for testing
-          orderData.net_weight_mt = 1;
+        // Ensure numeric fields have valid defaults (but preserve 0 values from CSV)
+        if (orderData.net_weight_mt === null || orderData.net_weight_mt === undefined || isNaN(orderData.net_weight_mt)) {
+          orderData.net_weight_mt = 0;
         }
-        if (!orderData.rate_per_mt || orderData.rate_per_mt <= 0) {
-          // Use default value for testing
-          orderData.rate_per_mt = 1000;
+        if (orderData.rate_per_mt === null || orderData.rate_per_mt === undefined || isNaN(orderData.rate_per_mt)) {
+          orderData.rate_per_mt = 0;
         }
 
         orders.push(orderData);
       } catch (error) {
-        // Log detailed error for debugging
+        // Log detailed error for debugging but STILL CREATE ORDER with N/A values
         console.error(`Error processing row ${rowNum}:`, error);
-        errors.push(`Row ${rowNum}: ${error.message || 'Unknown error'}`);
-        skippedRows.push(rowNum);
-        // Continue processing other rows instead of stopping
+        errors.push(`Row ${rowNum}: ${error.message || 'Unknown error'} - Creating order with default values`);
+        
+        // Create a minimal order even on error to preserve sequence
+        try {
+          const errorOrderData = {
+            customer_id: fallbackCustomer._id,
+            invoice_number: `INV-ERROR-${Date.now()}-${i}-${rowNum}`,
+            transaction_date: new Date().toISOString().split('T')[0],
+            state: 'N/A',
+            supplier_name: 'N/A',
+            location: 'N/A',
+            warehouse_name: 'N/A',
+            chamber_no: 'N/A',
+            commodity: 'N/A',
+            variety: 'N/A',
+            gate_pass_no: 'N/A',
+            vehicle_no: `VEH-ERROR-${rowNum}`,
+            weight_slip_no: 'N/A',
+            gross_weight_mt: 0,
+            tare_weight_mt: 0,
+            no_of_bags: 0,
+            net_weight_mt: 0,
+            rate_per_mt: 0,
+            gross_amount: 0,
+            hlw_wheat: 0,
+            excess_hlw: 0,
+            deduction_amount_hlw: 0,
+            moisture_moi: 0,
+            excess_moisture: 0,
+            bddi: 0,
+            excess_bddi: 0,
+            moi_bddi: 0,
+            weight_deduction_kg: 0,
+            deduction_amount_moi_bddi: 0,
+            other_deductions: [],
+            quality_report: {},
+            delivery_location: 'N/A',
+            remarks: `ERROR: ${error.message}`,
+            net_amount: 0,
+            total_deduction: 0,
+            created_by: req.userId,
+            row_sequence: i,
+            uploaded_at: new Date()
+          };
+          orders.push(errorOrderData);
+        } catch (fallbackError) {
+          console.error(`Failed to create fallback order for row ${rowNum}:`, fallbackError);
+          skippedRows.push(rowNum);
+        }
       }
     }
 
     // Log summary before insertion
-    console.log(`Processing ${records.length} rows: ${orders.length} valid orders, ${errors.length} errors, ${skippedRows.length} skipped rows`);
+    console.log(`Processing ${records.length} rows: ${orders.length} orders prepared, ${errors.length} errors, ${skippedRows.length} skipped rows`);
 
     if (orders.length === 0) {
       return res.status(400).json({ 
-        error: 'No valid orders found in file',
+        error: 'No orders could be created from file',
         errors: errors,
         warnings: warnings.length > 0 ? warnings : undefined,
         totalRows: records.length,
@@ -407,56 +471,67 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       });
     }
 
-    // Insert orders with better error handling
+    // Insert orders one by one to preserve order and track failures
     let savedOrders = [];
     let insertErrors = [];
+    let successCount = 0;
+    let failCount = 0;
     
-    try {
-      // Use insertMany with ordered: false to continue on errors
-      savedOrders = await ConfirmedPurchaseOrder.insertMany(orders, { 
-        ordered: false, // Continue inserting even if some fail
-        rawResult: false // Return array of documents
-      });
+    console.log(`Starting to insert ${orders.length} orders...`);
+    
+    // Insert in batches to preserve order and handle errors better
+    const batchSize = 100;
+    for (let batchStart = 0; batchStart < orders.length; batchStart += batchSize) {
+      const batch = orders.slice(batchStart, batchStart + batchSize);
       
-      console.log(`Successfully inserted ${savedOrders.length} orders out of ${orders.length} attempted`);
-    } catch (insertError: any) {
-      // Handle partial insertions
-      if (insertError.writeErrors && insertError.writeErrors.length > 0) {
-        // Some documents failed
-        const failedCount = insertError.writeErrors.length;
-        const successCount = insertError.insertedCount || 0;
-        
-        insertError.writeErrors.forEach((err: any) => {
-          const failedIndex = err.index;
-          insertErrors.push(`Row ${failedIndex + 2}: ${err.errmsg || 'Insert failed'}`);
+      try {
+        // Try batch insert first (faster)
+        const batchResult = await ConfirmedPurchaseOrder.insertMany(batch, { 
+          ordered: false, // Continue on errors
+          rawResult: false
         });
         
-        // Try to get successfully inserted documents
-        if (successCount > 0) {
+        savedOrders.push(...batchResult);
+        successCount += batchResult.length;
+        console.log(`Batch ${Math.floor(batchStart / batchSize) + 1}: Inserted ${batchResult.length} orders`);
+      } catch (batchError) {
+        // If batch fails, try individual inserts to preserve all possible orders
+        console.log(`Batch insert failed, trying individual inserts for batch starting at row ${batchStart + 2}...`);
+        
+        for (let j = 0; j < batch.length; j++) {
+          const order = batch[j];
+          const rowNum = batchStart + j + 2;
+          
           try {
-            savedOrders = await ConfirmedPurchaseOrder.find({
-              created_by: req.userId
-            }).sort({ createdAt: -1 }).limit(successCount);
-          } catch (e) {
-            console.error('Error fetching inserted orders:', e);
+            const savedOrder = await ConfirmedPurchaseOrder.create(order);
+            savedOrders.push(savedOrder);
+            successCount++;
+          } catch (individualError) {
+            failCount++;
+            insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+            console.error(`Failed to insert row ${rowNum}:`, individualError.message);
           }
         }
-        
-        console.error(`Partial insertion: ${successCount} succeeded, ${failedCount} failed`);
-      } else {
-        // Complete failure
-        throw insertError;
       }
     }
+    
+    console.log(`Insertion complete: ${successCount} succeeded, ${failCount} failed out of ${orders.length} total`);
     
     const totalProcessed = records.length;
     const totalSaved = savedOrders.length;
     const totalSkipped = skippedRows.length;
     const totalErrors = errors.length + insertErrors.length;
     
+    // Sort saved orders by row_sequence to preserve original order
+    savedOrders.sort((a, b) => {
+      const seqA = a.row_sequence !== undefined ? a.row_sequence : 999999;
+      const seqB = b.row_sequence !== undefined ? b.row_sequence : 999999;
+      return seqA - seqB;
+    });
+    
     res.json({
       success: true,
-      message: `Processed ${totalProcessed} rows: ${totalSaved} orders saved, ${totalSkipped} rows skipped`,
+      message: `Processed ${totalProcessed} rows from file: ${totalSaved} orders saved successfully${totalSkipped > 0 ? `, ${totalSkipped} rows skipped` : ''}${totalErrors > 0 ? `, ${totalErrors} errors` : ''}`,
       count: totalSaved,
       totalRows: totalProcessed,
       savedRows: totalSaved,

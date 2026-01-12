@@ -230,10 +230,26 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     const orders = [];
     const errors = [];
     const warnings = []; // For non-blocking validation warnings
+    const skippedRows = []; // Track skipped rows
+
+    // Helper function to convert empty/blank values to "N/A"
+    const toNA = (value) => {
+      if (!value || value === '' || value === '-' || value === 'Not Available' || String(value).trim() === '') {
+        return 'N/A';
+      }
+      return String(value).trim();
+    };
 
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
+
+      // Skip completely empty rows
+      const hasData = Object.values(record).some(val => val && String(val).trim() !== '');
+      if (!hasData) {
+        warnings.push(`Row ${rowNum}: Empty row skipped`);
+        continue;
+      }
 
       try {
         // Map CSV/Excel columns to order fields - ALL FIELDS MANUAL, NO AUTO-CALCULATION
@@ -280,7 +296,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
 
         // Get customer from CSV - Supplier Name column (new CSV format doesn't have separate Customer column)
         // For testing: No validation, use first available customer or accept any supplier name
-        const supplierName = record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || 'Test Supplier';
+        const supplierName = toNA(record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || 'Test Supplier');
         
         // Find customer by name, or use first available customer for testing
         let customer = allCustomers.find(c => c.name === supplierName);
@@ -288,37 +304,40 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           // For testing: Use first available customer, or create a dummy customer object
           if (allCustomers.length > 0) {
             customer = allCustomers[0];
+            warnings.push(`Row ${rowNum}: Supplier Name "${supplierName}" not found. Using "${customer.name}" instead.`);
           } else {
             // If no customers exist, we still need a customer_id, so we'll need to handle this
-            // For now, skip this row with a warning
-            warnings.push(`Row ${rowNum}: No customers in system. Skipping row. Please create at least one customer.`);
-            continue;
+            // Don't skip - create a warning but use a fallback
+            errors.push(`Row ${rowNum}: No customers in system. Cannot process this row. Please create at least one customer.`);
+            skippedRows.push(rowNum);
+            continue; // Skip this row but continue processing others
           }
         }
 
         // Get all fields from CSV - NO VALIDATION for testing
-        const state = record['State'] || record.state || '';
-        const location = record['Location'] || record.location || '';
-        const warehouseName = record['Warehouse Name'] || record.warehouse_name || record['Warehouse'] || '';
-        const commodity = record['Commodity'] || record.commodity || 'Paddy';
-        const variety = record['Variety'] || record.variety || '';
+        // Use toNA() to convert blank cells to "N/A"
+        const state = toNA(record['State'] || record.state);
+        const location = toNA(record['Location'] || record.location);
+        const warehouseName = toNA(record['Warehouse Name'] || record.warehouse_name || record['Warehouse']);
+        const commodity = toNA(record['Commodity'] || record.commodity || 'Paddy');
+        const variety = toNA(record['Variety'] || record.variety);
         
         // No master data validation - accept any values for testing
 
         const orderData = {
           customer_id: customer._id,
-          invoice_number: record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}`,
+          invoice_number: toNA(record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}`),
           transaction_date: transactionDate,
           state: state,
           supplier_name: supplierName,
           location: location,
           warehouse_name: warehouseName,
-          chamber_no: record['Chamber No.'] || record['Chamber No'] || record.chamber_no || record['Chamber'] || '',
+          chamber_no: toNA(record['Chamber No.'] || record['Chamber No'] || record.chamber_no || record['Chamber']),
           commodity: commodity,
           variety: variety,
-          gate_pass_no: record['Gate Pass No.'] || record['Gate Pass No'] || record.gate_pass_no || record['Gate Pass'] || '',
-          vehicle_no: record['Vehicle No.'] || record['Vehicle No'] || record.vehicle_no || record['Vehicle Number'] || record['Truck No'] || '',
-          weight_slip_no: record['Weight Slip No.'] || record['Weight Slip No'] || record.weight_slip_no || record['Weight Slip'] || '',
+          gate_pass_no: toNA(record['Gate Pass No.'] || record['Gate Pass No'] || record.gate_pass_no || record['Gate Pass']),
+          vehicle_no: toNA(record['Vehicle No.'] || record['Vehicle No'] || record.vehicle_no || record['Vehicle Number'] || record['Truck No']),
+          weight_slip_no: toNA(record['Weight Slip No.'] || record['Weight Slip No'] || record.weight_slip_no || record['Weight Slip']),
           gross_weight_mt: parseNumeric(record['Gross Weight in MT (Vehicle + Goods)'] || record['Gross Weight (MT)'] || record.gross_weight_mt || record['Gross Weight']),
           tare_weight_mt: parseNumeric(record['Tare Weight of Vehicle'] || record['Tare Weight (MT)'] || record.tare_weight_mt || record['Tare Weight']),
           no_of_bags: parseInt(record['No. of Bags'] || record['No of Bags'] || record.no_of_bags || record['Bags'] || 0),
@@ -338,8 +357,8 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           deduction_amount_moi_bddi: parseNumeric(record['Deduction Amount Rs. (MOI+BDDI)'] || record['Deduction Amount MOI+BDDI'] || record.deduction_amount_moi_bddi),
           other_deductions: otherDeductions,
           quality_report: {},
-          delivery_location: record['Delivery Location'] || record.delivery_location || '',
-          remarks: record['Remarks'] || record.remarks || '',
+          delivery_location: toNA(record['Delivery Location'] || record.delivery_location),
+          remarks: toNA(record['Remarks'] || record.remarks),
           // Net Amount and Total Deduction - take from CSV, do not calculate
           net_amount: parseNumeric(record['Net Amount'] || record.net_amount),
           total_deduction: parseNumeric(record['Total Deduction'] || record.total_deduction,
@@ -367,28 +386,84 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
 
         orders.push(orderData);
       } catch (error) {
-        errors.push(`Row ${rowNum}: ${error.message}`);
+        // Log detailed error for debugging
+        console.error(`Error processing row ${rowNum}:`, error);
+        errors.push(`Row ${rowNum}: ${error.message || 'Unknown error'}`);
+        skippedRows.push(rowNum);
+        // Continue processing other rows instead of stopping
       }
     }
+
+    // Log summary before insertion
+    console.log(`Processing ${records.length} rows: ${orders.length} valid orders, ${errors.length} errors, ${skippedRows.length} skipped rows`);
 
     if (orders.length === 0) {
       return res.status(400).json({ 
         error: 'No valid orders found in file',
         errors: errors,
-        warnings: warnings.length > 0 ? warnings : undefined
+        warnings: warnings.length > 0 ? warnings : undefined,
+        totalRows: records.length,
+        skippedRows: skippedRows
       });
     }
 
-    // Insert orders
-    const savedOrders = await ConfirmedPurchaseOrder.insertMany(orders, { ordered: false });
+    // Insert orders with better error handling
+    let savedOrders = [];
+    let insertErrors = [];
+    
+    try {
+      // Use insertMany with ordered: false to continue on errors
+      savedOrders = await ConfirmedPurchaseOrder.insertMany(orders, { 
+        ordered: false, // Continue inserting even if some fail
+        rawResult: false // Return array of documents
+      });
+      
+      console.log(`Successfully inserted ${savedOrders.length} orders out of ${orders.length} attempted`);
+    } catch (insertError: any) {
+      // Handle partial insertions
+      if (insertError.writeErrors && insertError.writeErrors.length > 0) {
+        // Some documents failed
+        const failedCount = insertError.writeErrors.length;
+        const successCount = insertError.insertedCount || 0;
+        
+        insertError.writeErrors.forEach((err: any) => {
+          const failedIndex = err.index;
+          insertErrors.push(`Row ${failedIndex + 2}: ${err.errmsg || 'Insert failed'}`);
+        });
+        
+        // Try to get successfully inserted documents
+        if (successCount > 0) {
+          try {
+            savedOrders = await ConfirmedPurchaseOrder.find({
+              created_by: req.userId
+            }).sort({ createdAt: -1 }).limit(successCount);
+          } catch (e) {
+            console.error('Error fetching inserted orders:', e);
+          }
+        }
+        
+        console.error(`Partial insertion: ${successCount} succeeded, ${failedCount} failed`);
+      } else {
+        // Complete failure
+        throw insertError;
+      }
+    }
+    
+    const totalProcessed = records.length;
+    const totalSaved = savedOrders.length;
+    const totalSkipped = skippedRows.length;
+    const totalErrors = errors.length + insertErrors.length;
     
     res.json({
       success: true,
-      message: `Successfully uploaded ${savedOrders.length} confirmed purchase orders`,
-      count: savedOrders.length,
-      errors: errors.length > 0 ? errors : undefined,
+      message: `Processed ${totalProcessed} rows: ${totalSaved} orders saved, ${totalSkipped} rows skipped`,
+      count: totalSaved,
+      totalRows: totalProcessed,
+      savedRows: totalSaved,
+      skippedRows: skippedRows.length > 0 ? skippedRows : undefined,
+      errors: totalErrors > 0 ? [...errors, ...insertErrors] : undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
-      orders: savedOrders
+      orders: savedOrders.slice(0, 10) // Return first 10 for preview
     });
   } catch (error) {
     console.error('Bulk upload confirmed purchase orders error:', error);

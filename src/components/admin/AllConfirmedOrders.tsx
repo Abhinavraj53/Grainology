@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Eye, Filter, X, Download, Edit, Trash2 } from 'lucide-react';
+import { Eye, Filter, X, Download, Edit, Trash2, FileDown } from 'lucide-react';
 import { generateOrderPDF } from '../../utils/pdfGenerator';
 
 interface ConfirmedSalesOrder {
@@ -161,6 +161,269 @@ export default function AllConfirmedOrders() {
     }
   };
 
+  const handleExportToCSV = () => {
+    try {
+      // Helper functions for CSV export (different from display formatting)
+      const exportFormatDate = (dateStr: string | undefined) => {
+        if (!dateStr) return '';
+        try {
+          const date = new Date(dateStr);
+          if (isNaN(date.getTime())) return dateStr;
+          return date.toLocaleDateString('en-GB');
+        } catch {
+          return dateStr;
+        }
+      };
+
+      const exportFormatCurrency = (amount: number | undefined) => {
+        if (amount === undefined || amount === null) return '0.00';
+        return amount.toFixed(2);
+      };
+
+      const ordersToExport = filteredOrders;
+      
+      if (ordersToExport.length === 0) {
+        alert('No orders to export');
+        return;
+      }
+
+      // Separate sales and purchase orders
+      const salesOrdersToExport = ordersToExport.filter(o => o.orderType === 'sales') as ConfirmedSalesOrder[];
+      const purchaseOrdersToExport = ordersToExport.filter(o => o.orderType === 'purchase') as ConfirmedPurchaseOrder[];
+
+      let csvContent = '';
+      let filename = '';
+
+      // Export Purchase Orders (39 columns - no separate remarks for other deductions)
+      if (purchaseOrdersToExport.length > 0) {
+        const purchaseHeaders = [
+          'Date of Transaction',
+          'State',
+          'Supplier Name',
+          'Location',
+          'Warehouse Name',
+          'Chamber No.',
+          'Commodity',
+          'Variety',
+          'Gate Pass No.',
+          'Vehicle No.',
+          'Weight Slip No.',
+          'Gross Weight in MT (Vehicle + Goods)',
+          'Tare Weight of Vehicle',
+          'No. of Bags',
+          'Net Weight in MT',
+          'Rate Per MT',
+          'Gross Amount',
+          'HLW (Hectolitre Weight) in Wheat',
+          'Excess HLW',
+          'Deduction Amount Rs. (HLW)',
+          'Moisture (MOI)',
+          'Excess Moisture',
+          'Broken, Damage, Discolour, Immature (BDDI)',
+          'Excess BDDI',
+          'MOI+BDDI',
+          'Weight Deduction in KG',
+          'Deduction Amount Rs. (MOI+BDDI)',
+          'Other Deduction 1',
+          'Other Deduction 2',
+          'Other Deduction 3',
+          'Other Deduction 4',
+          'Other Deduction 5',
+          'Other Deduction 6',
+          'Other Deduction 7',
+          'Other Deduction 8',
+          'Other Deduction 9',
+          'Other Deduction 10',
+          'Net Amount',
+          'Remarks'
+        ];
+
+        const purchaseRows = purchaseOrdersToExport.map(order => {
+          // Get other deductions (up to 10)
+          const otherDeductions = order.other_deductions || [];
+          const deductionValues = Array(10).fill('-').map((_, idx) => {
+            if (otherDeductions[idx]) {
+              return formatCurrency(otherDeductions[idx].amount);
+            }
+            return '-';
+          });
+
+          return [
+            formatDate(order.transaction_date),
+            order.state || '',
+            order.supplier_name || order.customer_id?.name || '',
+            order.location || '',
+            order.warehouse_name || '',
+            order.chamber_no || '',
+            order.commodity || '',
+            order.variety || '',
+            order.gate_pass_no || '',
+            order.vehicle_no || '',
+            order.weight_slip_no || '',
+            exportFormatCurrency(order.gross_weight_mt),
+            exportFormatCurrency(order.tare_weight_mt),
+            (order.no_of_bags || 0).toString(),
+            exportFormatCurrency(order.net_weight_mt),
+            exportFormatCurrency(order.rate_per_mt),
+            exportFormatCurrency(order.gross_amount),
+            exportFormatCurrency(order.hlw_wheat) || 'Not Applicable',
+            exportFormatCurrency(order.excess_hlw) || 'Not Applicable',
+            exportFormatCurrency(order.deduction_amount_hlw) || '0.00',
+            exportFormatCurrency(order.moisture_moi) || '',
+            exportFormatCurrency(order.excess_moisture) || '',
+            exportFormatCurrency(order.bddi) || '',
+            exportFormatCurrency(order.excess_bddi) || '',
+            exportFormatCurrency(order.moi_bddi) || '',
+            exportFormatCurrency(order.weight_deduction_kg) || '',
+            exportFormatCurrency(order.deduction_amount_moi_bddi) || '',
+            ...deductionValues,
+            exportFormatCurrency(order.net_amount),
+            order.remarks || ''
+          ];
+        });
+
+        csvContent = [purchaseHeaders, ...purchaseRows]
+          .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+          .join('\n');
+        
+        filename = filterType === 'all' 
+          ? `all_confirmed_orders_${new Date().toISOString().split('T')[0]}.csv`
+          : `confirmed_purchase_orders_${new Date().toISOString().split('T')[0]}.csv`;
+      }
+
+      // Export Sales Orders (with separate remarks columns for other deductions)
+      if (salesOrdersToExport.length > 0) {
+        const salesHeaders = [
+          'Date of Transaction',
+          'State',
+          'Customer',
+          'Seller Name',
+          'Location',
+          'Warehouse Name',
+          'Chamber No.',
+          'Commodity',
+          'Variety',
+          'Gate Pass No.',
+          'Vehicle No.',
+          'Weight Slip No.',
+          'Gross Weight in MT (Vehicle + Goods)',
+          'Tare Weight of Vehicle',
+          'No. of Bags',
+          'Net Weight in MT',
+          'Rate Per MT',
+          'Gross Amount',
+          'HLW (Hectolitre Weight) in Wheat',
+          'Excess HLW',
+          'Deduction Amount Rs. (HLW)',
+          'Moisture (MOI)',
+          'Excess Moisture',
+          'Broken, Damage, Discolour, Immature (BDOI)',
+          'Excess BDOI',
+          'MOI+BDOI',
+          'Weight Deduction in KG (MOI+BDOI)',
+          'Deduction Amount Rs. (MOI+BDOI)',
+          'Other Deduction 1',
+          'Other Deduction 1 Remarks',
+          'Other Deduction 2',
+          'Other Deduction 2 Remarks',
+          'Other Deduction 3',
+          'Other Deduction 3 Remarks',
+          'Other Deduction 4',
+          'Other Deduction 4 Remarks',
+          'Other Deduction 5',
+          'Other Deduction 5 Remarks',
+          'Other Deduction 6',
+          'Other Deduction 6 Remarks',
+          'Other Deduction 7',
+          'Other Deduction 7 Remarks',
+          'Other Deduction 8',
+          'Other Deduction 8 Remarks',
+          'Other Deduction 9',
+          'Other Deduction 9 Remarks',
+          'Net Amount',
+          'Remarks'
+        ];
+
+        const salesRows = salesOrdersToExport.map(order => {
+          // Get other deductions (up to 9) with remarks
+          const otherDeductions = order.other_deductions || [];
+          const deductionPairs = Array(9).fill(null).map((_, idx) => {
+            if (otherDeductions[idx]) {
+              return [
+                exportFormatCurrency(otherDeductions[idx].amount),
+                otherDeductions[idx].remarks || ''
+              ];
+            }
+            return ['-', '-'];
+          }).flat();
+
+          return [
+            exportFormatDate(order.transaction_date),
+            order.state || '',
+            order.customer_id?.name || '',
+            order.seller_name || order.customer_id?.name || '',
+            order.location || '',
+            order.warehouse_name || '',
+            order.chamber_no || '',
+            order.commodity || '',
+            order.variety || '',
+            order.gate_pass_no || '',
+            order.vehicle_no || '',
+            order.weight_slip_no || '',
+            exportFormatCurrency(order.gross_weight_mt),
+            exportFormatCurrency(order.tare_weight_mt),
+            (order.no_of_bags || 0).toString(),
+            exportFormatCurrency(order.net_weight_mt),
+            exportFormatCurrency(order.rate_per_mt),
+            exportFormatCurrency(order.gross_amount),
+            exportFormatCurrency(order.hlw_wheat) || 'Not Applicable',
+            exportFormatCurrency(order.excess_hlw) || 'Not Applicable',
+            exportFormatCurrency(order.deduction_amount_hlw) || '0.00',
+            exportFormatCurrency(order.moisture_moi) || '',
+            exportFormatCurrency(order.excess_moisture) || '',
+            exportFormatCurrency(order.bdoi) || '',
+            exportFormatCurrency(order.excess_bdoi) || '',
+            exportFormatCurrency(order.moi_bdoi) || '',
+            exportFormatCurrency(order.weight_deduction_kg) || '',
+            exportFormatCurrency(order.deduction_amount_moi_bdoi) || '',
+            ...deductionPairs,
+            exportFormatCurrency(order.net_amount),
+            order.remarks || ''
+          ];
+        });
+
+        if (csvContent) {
+          // If we already have purchase orders, add sales orders to the same file
+          csvContent += '\n\n'; // Add separator
+          csvContent += [salesHeaders, ...salesRows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+          filename = `all_confirmed_orders_${new Date().toISOString().split('T')[0]}.csv`;
+        } else {
+          csvContent = [salesHeaders, ...salesRows]
+            .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+            .join('\n');
+          filename = `confirmed_sales_orders_${new Date().toISOString().split('T')[0]}.csv`;
+        }
+      }
+
+      // Download the CSV file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Export error:', error);
+      alert('Failed to export orders: ' + (error.message || 'Unknown error'));
+    }
+  };
+
   const allOrders: ConfirmedOrder[] = [
     ...salesOrders.map(order => ({ ...order, orderType: 'sales' as const })),
     ...purchaseOrders.map(order => ({ ...order, orderType: 'purchase' as const })),
@@ -261,6 +524,14 @@ export default function AllConfirmedOrders() {
           <p className="text-gray-600">View all confirmed sales and purchase orders</p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={handleExportToCSV}
+            className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
+            title="Download all orders as CSV/Excel"
+          >
+            <FileDown className="w-5 h-5" />
+            Download {filterType === 'all' ? 'All Orders' : filterType === 'sales' ? 'Sales Orders' : 'Purchase Orders'} (CSV/Excel)
+          </button>
           <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 p-2">
             <Filter className="w-5 h-5 text-gray-500" />
             <select

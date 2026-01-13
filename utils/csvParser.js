@@ -28,14 +28,9 @@ const parseCSV = (buffer) => {
       cast: true,
       relax_column_count: true // Allow rows with different column counts
     });
-    // Filter out only completely empty rows (all values are empty/null/undefined)
-    return records.filter(record => {
-      return Object.values(record).some(val => {
-        if (val === null || val === undefined) return false;
-        const str = String(val).trim();
-        return str !== '';
-      });
-    });
+    // DO NOT FILTER - Return ALL rows as-is to preserve sequence and ensure no rows are missed
+    // Even completely empty rows will be processed and stored with N/A values
+    return records || [];
   } catch (error) {
     throw new Error(`CSV parsing error: ${error.message}`);
   }
@@ -49,11 +44,14 @@ const parseExcel = (buffer) => {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0]; // Get first sheet
     const worksheet = workbook.Sheets[sheetName];
+    // Parse with defval: null to preserve empty cells, and blankRows: false to include all rows
     const records = XLSX.utils.sheet_to_json(worksheet, {
       defval: null,
-      raw: false
+      raw: false,
+      blankrows: true // Include blank rows to preserve all rows from Excel
     });
-    return records;
+    // DO NOT FILTER - Return ALL rows as-is to preserve sequence and ensure no rows are missed
+    return records || [];
   } catch (error) {
     throw new Error(`Excel parsing error: ${error.message}`);
   }

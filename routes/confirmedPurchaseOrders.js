@@ -258,11 +258,12 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     console.log(`Processing ${records.length} rows from file. Starting bulk upload...`);
 
     for (let i = 0; i < records.length; i++) {
-      const record = records[i];
+      const record = records[i] || {}; // Handle undefined/null records
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
 
-      // Only skip rows that are COMPLETELY empty (all values are null, undefined, or empty string)
-      const hasData = Object.values(record).some(val => {
+      // Process ALL rows - even if completely empty, create order with N/A values to preserve sequence
+      // This ensures no rows are skipped and original order is maintained
+      const hasData = record && Object.values(record).some(val => {
         if (val === null || val === undefined) return false;
         const str = String(val).trim();
         return str !== '' && str !== '-' && str !== 'N/A';
@@ -507,9 +508,26 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             savedOrders.push(savedOrder);
             successCount++;
           } catch (individualError) {
-            failCount++;
-            insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+            // Try to create a fallback order with error info - NEVER SKIP A ROW
             console.error(`Failed to insert row ${rowNum}:`, individualError.message);
+            try {
+              // Create a minimal order with error information to preserve the row
+              const fallbackOrder = {
+                ...order,
+                invoice_number: order.invoice_number || `INV-FALLBACK-${Date.now()}-${rowNum}`,
+                remarks: `[INSERT ERROR: ${individualError.message}] ${order.remarks || ''}`.trim(),
+                vehicle_no: order.vehicle_no || `VEH-FALLBACK-${rowNum}`
+              };
+              const savedFallback = await ConfirmedPurchaseOrder.create(fallbackOrder);
+              savedOrders.push(savedFallback);
+              successCount++;
+              insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'} - Created fallback order`);
+            } catch (fallbackError) {
+              // Last resort: log but still count as processed
+              failCount++;
+              insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'} - Fallback also failed: ${fallbackError.message}`);
+              console.error(`Failed to create fallback order for row ${rowNum}:`, fallbackError.message);
+            }
           }
         }
       }

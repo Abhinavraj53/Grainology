@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { FileText, Save, Upload, FileSpreadsheet, Download } from 'lucide-react';
+import { FileText, Save, Upload, FileSpreadsheet, Download, Map } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToastContext } from '../../contexts/ToastContext';
+import ColumnMappingDialog from './ColumnMappingDialog';
 
 interface User {
   id: string;
@@ -18,6 +19,10 @@ export default function ConfirmSalesOrderForm() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [showMappingDialog, setShowMappingDialog] = useState(false);
+  const [availableColumns, setAvailableColumns] = useState<string[]>([]);
+  const [previewRows, setPreviewRows] = useState<Array<Record<string, any>>>([]);
   const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
   const [varieties, setVarieties] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<string[]>([]);
@@ -668,6 +673,57 @@ export default function ConfirmSalesOrderForm() {
               </ul>
             </div>
 
+            {uploadFile && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!uploadFile) {
+                      showError('Please select a file first');
+                      return;
+                    }
+
+                    try {
+                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+                      const token = localStorage.getItem('auth_token');
+
+                      if (!token) {
+                        showError('Authentication required. Please sign in again.');
+                        return;
+                      }
+
+                      const formData = new FormData();
+                      formData.append('file', uploadFile);
+
+                      const response = await fetch(`${apiUrl}/confirmed-sales-orders/bulk-upload/preview`, {
+                        method: 'POST',
+                        headers: {
+                          'Authorization': `Bearer ${token}`,
+                        },
+                        body: formData,
+                      });
+
+                      const result = await response.json();
+
+                      if (!response.ok) {
+                        throw new Error(result.error || result.message || 'Preview failed');
+                      }
+
+                      setAvailableColumns(result.columns || []);
+                      setPreviewRows(result.previewRows || []);
+                      setShowMappingDialog(true);
+                    } catch (err: any) {
+                      showError(err.message || 'Failed to preview file. Please try again.');
+                    }
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Map className="w-5 h-5" />
+                  Map Columns
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={async () => {
@@ -689,6 +745,9 @@ export default function ConfirmSalesOrderForm() {
 
                   const formData = new FormData();
                   formData.append('file', uploadFile);
+                  if (Object.keys(columnMapping).length > 0) {
+                    formData.append('columnMapping', JSON.stringify(columnMapping));
+                  }
 
                   const response = await fetch(`${apiUrl}/confirmed-sales-orders/bulk-upload`, {
                     method: 'POST',
@@ -720,6 +779,7 @@ export default function ConfirmSalesOrderForm() {
 
                   // Reset form
                   setUploadFile(null);
+                  setColumnMapping({});
                   const fileInput = document.getElementById('file-upload-sales') as HTMLInputElement;
                   if (fileInput) fileInput.value = '';
                 } catch (err: any) {
@@ -1274,6 +1334,53 @@ export default function ConfirmSalesOrderForm() {
         </div>
       </form>
       )}
+
+      <ColumnMappingDialog
+        isOpen={showMappingDialog}
+        onClose={() => setShowMappingDialog(false)}
+        onConfirm={(mapping) => {
+          setColumnMapping(mapping);
+          setShowMappingDialog(false);
+          showSuccess('Column mapping saved! You can now upload the file.');
+        }}
+        availableColumns={availableColumns}
+        requiredFields={[
+          { key: 'customer_name', label: 'Customer Name', required: true },
+          { key: 'transaction_date', label: 'Transaction Date', required: false },
+          { key: 'invoice_number', label: 'Invoice Number', required: false },
+          { key: 'state', label: 'State', required: false },
+          { key: 'seller_name', label: 'Seller Name', required: false },
+          { key: 'location', label: 'Location', required: false },
+          { key: 'warehouse_name', label: 'Warehouse Name', required: false },
+          { key: 'chamber_no', label: 'Chamber No', required: false },
+          { key: 'commodity', label: 'Commodity', required: false },
+          { key: 'variety', label: 'Variety', required: false },
+          { key: 'gate_pass_no', label: 'Gate Pass No', required: false },
+          { key: 'vehicle_no', label: 'Vehicle No', required: true },
+          { key: 'weight_slip_no', label: 'Weight Slip No', required: false },
+          { key: 'gross_weight_mt', label: 'Gross Weight (MT)', required: false },
+          { key: 'tare_weight_mt', label: 'Tare Weight (MT)', required: false },
+          { key: 'no_of_bags', label: 'No. of Bags', required: false },
+          { key: 'net_weight_mt', label: 'Net Weight (MT)', required: true },
+          { key: 'rate_per_mt', label: 'Rate Per MT', required: true },
+          { key: 'gross_amount', label: 'Gross Amount', required: false },
+          { key: 'hlw_wheat', label: 'HLW (Wheat)', required: false },
+          { key: 'excess_hlw', label: 'Excess HLW', required: false },
+          { key: 'deduction_amount_hlw', label: 'Deduction Amount (HLW)', required: false },
+          { key: 'moisture_moi', label: 'Moisture (MOI)', required: false },
+          { key: 'excess_moisture', label: 'Excess Moisture', required: false },
+          { key: 'bdoi', label: 'BDOI', required: false },
+          { key: 'excess_bdoi', label: 'Excess BDOI', required: false },
+          { key: 'moi_bdoi', label: 'MOI+BDOI', required: false },
+          { key: 'weight_deduction_kg', label: 'Weight Deduction (KG)', required: false },
+          { key: 'deduction_amount_moi_bdoi', label: 'Deduction Amount (MOI+BDOI)', required: false },
+          { key: 'net_amount', label: 'Net Amount', required: false },
+          { key: 'total_deduction', label: 'Total Deduction', required: false },
+          { key: 'delivery_location', label: 'Delivery Location', required: false },
+          { key: 'remarks', label: 'Remarks', required: false },
+        ]}
+        previewRows={previewRows}
+      />
     </div>
   );
 }

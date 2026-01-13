@@ -7,6 +7,7 @@ import WarehouseMaster from '../models/WarehouseMaster.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import { parseFile } from '../utils/csvParser.js';
+import { getMappedValue, parseDate, parseNumeric, toNA, getAvailableColumns } from '../utils/columnMapper.js';
 
 const router = express.Router();
 
@@ -181,11 +182,56 @@ router.delete('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Get available columns from uploaded file (for column mapping UI)
+router.post('/bulk-upload/preview', requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Parse the file
+    const records = parseFile(req.file.buffer, req.file.originalname);
+    
+    if (!records || records.length === 0) {
+      return res.status(400).json({ error: 'File is empty or invalid' });
+    }
+
+    // Get available columns and first few rows for preview
+    const columns = getAvailableColumns(records);
+    const previewRows = records.slice(0, 5); // First 5 rows for preview
+
+    res.json({
+      success: true,
+      columns: columns,
+      previewRows: previewRows,
+      totalRows: records.length
+    });
+  } catch (error) {
+    console.error('Preview file error:', error);
+    res.status(500).json({ 
+      error: 'Preview failed',
+      message: error.message || 'Failed to preview file'
+    });
+  }
+});
+
 // Bulk upload confirmed purchase orders from CSV/Excel (admin only)
 router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Parse column mappings from request body (if provided)
+    let columnMapping = {};
+    try {
+      if (req.body.columnMapping) {
+        columnMapping = typeof req.body.columnMapping === 'string' 
+          ? JSON.parse(req.body.columnMapping) 
+          : req.body.columnMapping;
+      }
+    } catch (e) {
+      console.warn('Failed to parse column mapping, using defaults:', e.message);
     }
 
     // Parse the file
@@ -276,30 +322,29 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       }
 
       try {
-        // Map CSV/Excel columns to order fields - ALL FIELDS MANUAL, NO AUTO-CALCULATION
-        // Parse date - handle DD/MM/YY format
-        let transactionDate = record['Date of Transaction'] || record.transaction_date || record['Transaction Date'] || record['Date'] || '';
-        if (transactionDate && transactionDate.includes('/')) {
-          // Convert DD/MM/YY to YYYY-MM-DD
-          const parts = transactionDate.split('/');
-          if (parts.length === 3) {
-            const day = parts[0].padStart(2, '0');
-            const month = parts[1].padStart(2, '0');
-            const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
-            transactionDate = `${year}-${month}-${day}`;
-          }
-        }
-        if (!transactionDate) {
-          transactionDate = new Date().toISOString().split('T')[0];
-        }
+        // Map CSV/Excel columns to order fields using column mapping or fallback to default names
+        // Parse date using column mapping
+        const transactionDateValue = getMappedValue(
+          record,
+          columnMapping.transaction_date,
+          ['Date of Transaction', 'transaction_date', 'Transaction Date', 'Date'],
+          ''
+        );
+        const transactionDate = parseDate(transactionDateValue);
 
-        // Parse other deductions from columns Other Deduction 1-10 (no separate remarks columns in new CSV format)
+        // Parse other deductions from columns Other Deduction 1-10
         const otherDeductions = [];
         for (let j = 1; j <= 10; j++) {
-          const dedAmount = record[`Other Deduction ${j}`] || record[`other_deduction_${j}`] || '';
+          const dedMappingKey = `other_deduction_${j}`;
+          const dedAmount = getMappedValue(
+            record,
+            columnMapping[dedMappingKey],
+            [`Other Deduction ${j}`, `other_deduction_${j}`],
+            ''
+          );
           
-          if (dedAmount && dedAmount !== '-' && dedAmount !== 'Not Available' && dedAmount.trim() !== '') {
-            const amount = parseFloat(dedAmount) || 0;
+          if (dedAmount && dedAmount !== '-' && dedAmount !== 'Not Available' && String(dedAmount).trim() !== '') {
+            const amount = parseNumeric(dedAmount);
             if (amount > 0) {
               otherDeductions.push({
                 amount: amount,
@@ -309,18 +354,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           }
         }
 
-        // Helper function to parse numeric values, handling "Not Available", "-", etc.
-        const parseNumeric = (value, defaultValue = 0) => {
-          if (!value || value === '-' || value === 'Not Available' || value === 'Not Applicable' || String(value).trim() === '') {
-            return defaultValue;
-          }
-          const parsed = parseFloat(value);
-          return isNaN(parsed) ? defaultValue : parsed;
-        };
-
-        // Get customer from CSV - Supplier Name column (new CSV format doesn't have separate Customer column)
+        // Get customer from CSV - Supplier Name column
         // ALWAYS use a customer - never skip rows due to customer lookup
-        const supplierName = toNA(record['Supplier Name'] || record.supplier_name || record['Supplier'] || record['Customer'] || record.customer || 'N/A');
+        const supplierName = toNA(getMappedValue(
+          record,
+          columnMapping.supplier_name,
+          ['Supplier Name', 'supplier_name', 'Supplier', 'Customer', 'customer'],
+          'N/A'
+        ));
         
         // Find customer by name, or use fallback customer - NEVER SKIP ROW
         let customer = allCustomers.find(c => c.name === supplierName);
@@ -332,64 +373,70 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           }
         }
 
-        // Get all fields from CSV - NO VALIDATION for testing
-        // Use toNA() to convert blank cells to "N/A"
-        const state = toNA(record['State'] || record.state);
-        const location = toNA(record['Location'] || record.location);
-        const warehouseName = toNA(record['Warehouse Name'] || record.warehouse_name || record['Warehouse']);
-        const commodity = toNA(record['Commodity'] || record.commodity || 'Paddy');
-        const variety = toNA(record['Variety'] || record.variety);
-        
-        // No master data validation - accept any values for testing
+        // Get all fields from CSV using column mapping with fallbacks
+        const state = toNA(getMappedValue(record, columnMapping.state, ['State', 'state'], ''));
+        const location = toNA(getMappedValue(record, columnMapping.location, ['Location', 'location'], ''));
+        const warehouseName = toNA(getMappedValue(record, columnMapping.warehouse_name, ['Warehouse Name', 'warehouse_name', 'Warehouse'], ''));
+        const commodity = toNA(getMappedValue(record, columnMapping.commodity, ['Commodity', 'commodity'], 'Paddy'));
+        const variety = toNA(getMappedValue(record, columnMapping.variety, ['Variety', 'variety'], ''));
 
         // Create order data - preserve ALL data as-is from CSV, use N/A for blanks
         // Add row_sequence to preserve original order
         const orderData = {
           customer_id: customer._id,
-          invoice_number: toNA(record['Invoice Number'] || record.invoice_number || record['Invoice No'] || `INV-${Date.now()}-${i}-${rowNum}`),
+          invoice_number: toNA(getMappedValue(
+            record,
+            columnMapping.invoice_number,
+            ['Invoice Number', 'invoice_number', 'Invoice No'],
+            `INV-${Date.now()}-${i}-${rowNum}`
+          )),
           transaction_date: transactionDate,
           state: state,
           supplier_name: supplierName,
           location: location,
           warehouse_name: warehouseName,
-          chamber_no: toNA(record['Chamber No.'] || record['Chamber No'] || record.chamber_no || record['Chamber']),
+          chamber_no: toNA(getMappedValue(record, columnMapping.chamber_no, ['Chamber No.', 'Chamber No', 'chamber_no', 'Chamber'], '')),
           commodity: commodity,
           variety: variety,
-          gate_pass_no: toNA(record['Gate Pass No.'] || record['Gate Pass No'] || record.gate_pass_no || record['Gate Pass']),
-          vehicle_no: toNA(record['Vehicle No.'] || record['Vehicle No'] || record.vehicle_no || record['Vehicle Number'] || record['Truck No']),
-          weight_slip_no: toNA(record['Weight Slip No.'] || record['Weight Slip No'] || record.weight_slip_no || record['Weight Slip']),
-          gross_weight_mt: parseNumeric(record['Gross Weight in MT (Vehicle + Goods)'] || record['Gross Weight (MT)'] || record.gross_weight_mt || record['Gross Weight']),
-          tare_weight_mt: parseNumeric(record['Tare Weight of Vehicle'] || record['Tare Weight (MT)'] || record.tare_weight_mt || record['Tare Weight']),
-          no_of_bags: parseInt(record['No. of Bags'] || record['No of Bags'] || record.no_of_bags || record['Bags'] || 0),
-          net_weight_mt: parseNumeric(record['Net Weight in MT'] || record['Net Weight (MT)'] || record.net_weight_mt || record['Net Weight']),
-          rate_per_mt: parseNumeric(record['Rate Per MT'] || record['Rate per MT'] || record.rate_per_mt || record['Rate']),
-          gross_amount: parseNumeric(record['Gross Amount'] || record.gross_amount),
-          // Quality parameters - all manual, use N/A for blanks
-          hlw_wheat: parseNumeric(record['HLW (Hectolitre Weight) in Wheat'] || record['HLW'] || record.hlw_wheat || record['Hectolitre Weight']),
-          excess_hlw: parseNumeric(record['Excess HLW'] || record.excess_hlw),
-          deduction_amount_hlw: parseNumeric(record['Deduction Amount Rs. (HLW)'] || record['Deduction Amount HLW'] || record.deduction_amount_hlw),
-          moisture_moi: parseNumeric(record['Moisture (MOI)'] || record['Moisture'] || record.moisture_moi),
-          excess_moisture: parseNumeric(record['Excess Moisture'] || record.excess_moisture),
-          bddi: parseNumeric(record['Broken, Damage, Discolour, Immature (BDDI)'] || record['BDDI'] || record.bddi),
-          excess_bddi: parseNumeric(record['Excess BDDI'] || record.excess_bddi),
-          moi_bddi: parseNumeric(record['MOI+BDDI'] || record.moi_bddi),
-          weight_deduction_kg: parseNumeric(record['Weight Deduction in KG'] || record['Weight Deduction in KG (MOI+BDDI)'] || record['Weight Deduction (KG)'] || record.weight_deduction_kg),
-          deduction_amount_moi_bddi: parseNumeric(record['Deduction Amount Rs. (MOI+BDDI)'] || record['Deduction Amount MOI+BDDI'] || record.deduction_amount_moi_bddi),
+          gate_pass_no: toNA(getMappedValue(record, columnMapping.gate_pass_no, ['Gate Pass No.', 'Gate Pass No', 'gate_pass_no', 'Gate Pass'], '')),
+          vehicle_no: toNA(getMappedValue(record, columnMapping.vehicle_no, ['Vehicle No.', 'Vehicle No', 'vehicle_no', 'Vehicle Number', 'Truck No'], `VEH-${rowNum}`)),
+          weight_slip_no: toNA(getMappedValue(record, columnMapping.weight_slip_no, ['Weight Slip No.', 'Weight Slip No', 'weight_slip_no', 'Weight Slip'], '')),
+          gross_weight_mt: parseNumeric(getMappedValue(record, columnMapping.gross_weight_mt, ['Gross Weight in MT (Vehicle + Goods)', 'Gross Weight (MT)', 'gross_weight_mt', 'Gross Weight'], 0)),
+          tare_weight_mt: parseNumeric(getMappedValue(record, columnMapping.tare_weight_mt, ['Tare Weight of Vehicle', 'Tare Weight (MT)', 'tare_weight_mt', 'Tare Weight'], 0)),
+          no_of_bags: parseInt(getMappedValue(record, columnMapping.no_of_bags, ['No. of Bags', 'No of Bags', 'no_of_bags', 'Bags'], 0) || 0),
+          net_weight_mt: parseNumeric(getMappedValue(record, columnMapping.net_weight_mt, ['Net Weight in MT', 'Net Weight (MT)', 'net_weight_mt', 'Net Weight'], 0)),
+          rate_per_mt: parseNumeric(getMappedValue(record, columnMapping.rate_per_mt, ['Rate Per MT', 'Rate per MT', 'rate_per_mt', 'Rate'], 0)),
+          gross_amount: parseNumeric(getMappedValue(record, columnMapping.gross_amount, ['Gross Amount', 'gross_amount'], 0)),
+          // Quality parameters
+          hlw_wheat: parseNumeric(getMappedValue(record, columnMapping.hlw_wheat, ['HLW (Hectolitre Weight) in Wheat', 'HLW', 'hlw_wheat', 'Hectolitre Weight'], 0)),
+          excess_hlw: parseNumeric(getMappedValue(record, columnMapping.excess_hlw, ['Excess HLW', 'excess_hlw'], 0)),
+          deduction_amount_hlw: parseNumeric(getMappedValue(record, columnMapping.deduction_amount_hlw, ['Deduction Amount Rs. (HLW)', 'Deduction Amount HLW', 'deduction_amount_hlw'], 0)),
+          moisture_moi: parseNumeric(getMappedValue(record, columnMapping.moisture_moi, ['Moisture (MOI)', 'Moisture', 'moisture_moi'], 0)),
+          excess_moisture: parseNumeric(getMappedValue(record, columnMapping.excess_moisture, ['Excess Moisture', 'excess_moisture'], 0)),
+          bddi: parseNumeric(getMappedValue(record, columnMapping.bddi, ['Broken, Damage, Discolour, Immature (BDDI)', 'BDDI', 'bddi'], 0)),
+          excess_bddi: parseNumeric(getMappedValue(record, columnMapping.excess_bddi, ['Excess BDDI', 'excess_bddi'], 0)),
+          moi_bddi: parseNumeric(getMappedValue(record, columnMapping.moi_bddi, ['MOI+BDDI', 'moi_bddi'], 0)),
+          weight_deduction_kg: parseNumeric(getMappedValue(record, columnMapping.weight_deduction_kg, ['Weight Deduction in KG', 'Weight Deduction in KG (MOI+BDDI)', 'Weight Deduction (KG)', 'weight_deduction_kg'], 0)),
+          deduction_amount_moi_bddi: parseNumeric(getMappedValue(record, columnMapping.deduction_amount_moi_bddi, ['Deduction Amount Rs. (MOI+BDDI)', 'Deduction Amount MOI+BDDI', 'deduction_amount_moi_bddi'], 0)),
           other_deductions: otherDeductions,
           quality_report: {},
-          delivery_location: toNA(record['Delivery Location'] || record.delivery_location),
-          remarks: toNA(record['Remarks'] || record.remarks),
+          delivery_location: toNA(getMappedValue(record, columnMapping.delivery_location, ['Delivery Location', 'delivery_location'], '')),
+          remarks: toNA(getMappedValue(record, columnMapping.remarks, ['Remarks', 'remarks'], '')),
           // Net Amount and Total Deduction - take from CSV, do not calculate
-          net_amount: parseNumeric(record['Net Amount'] || record.net_amount),
-          total_deduction: parseNumeric(record['Total Deduction'] || record.total_deduction,
-            parseNumeric(record['Deduction Amount Rs. (HLW)'] || record.deduction_amount_hlw) +
-            parseNumeric(record['Deduction Amount Rs. (MOI+BDDI)'] || record.deduction_amount_moi_bddi) +
-            otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0)
-          ),
+          net_amount: parseNumeric(getMappedValue(record, columnMapping.net_amount, ['Net Amount', 'net_amount'], 0)),
           created_by: req.userId,
           row_sequence: i, // Preserve original row order from CSV
           uploaded_at: new Date()
         };
+
+        // Calculate total deduction - use mapped value if provided, otherwise calculate
+        const mappedTotalDeduction = parseNumeric(getMappedValue(record, columnMapping.total_deduction, ['Total Deduction', 'total_deduction'], null));
+        if (mappedTotalDeduction !== null && mappedTotalDeduction !== 0) {
+          orderData.total_deduction = mappedTotalDeduction;
+        } else {
+          orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bddi + 
+            otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+        }
 
         // Ensure vehicle_no is never empty (required field)
         if (!orderData.vehicle_no || orderData.vehicle_no === 'N/A' || orderData.vehicle_no.trim() === '') {

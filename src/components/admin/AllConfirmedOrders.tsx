@@ -176,8 +176,8 @@ export default function AllConfirmedOrders() {
       };
 
       const exportFormatCurrency = (amount: number | undefined) => {
-        if (amount === undefined || amount === null) return '0.00';
-        return amount.toFixed(2);
+        if (amount === undefined || amount === null) return '0.0000';
+        return amount.toFixed(4);
       };
 
       const ordersToExport = filteredOrders;
@@ -454,7 +454,8 @@ export default function AllConfirmedOrders() {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
     }).format(amount);
   };
 

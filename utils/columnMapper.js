@@ -87,9 +87,13 @@ export const parseNumeric = (value, defaultValue = 0) => {
   // Remove any currency symbols or spaces
   cleanValue = cleanValue.replace(/[₹$€£¥\s]/g, '');
   
-  // Parse as float
+  // Parse as float and preserve precision (round to 4 decimal places)
   const parsed = parseFloat(cleanValue);
-  return isNaN(parsed) ? defaultValue : parsed;
+  if (isNaN(parsed)) {
+    return defaultValue;
+  }
+  // Round to 4 decimal places to preserve precision
+  return Math.round(parsed * 10000) / 10000;
 };
 
 /**

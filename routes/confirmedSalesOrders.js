@@ -277,9 +277,10 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     ]);
     const validSellerNames = new Set(allCustomers.map(c => c.name));
 
-    // Transform and validate records
+    // Transform and validate records - NO VALIDATION for CSV uploader (only warnings)
     const orders = [];
     const errors = [];
+    const warnings = []; // For CSV uploader, use warnings instead of errors
 
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
@@ -296,14 +297,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         );
         const transactionDate = parseDate(transactionDateValue);
 
-        // Parse other deductions from columns Other Deduction 1-9 with remarks
+        // Parse other deductions from columns Other Deduction 1-9 with remarks using column mapping
         const otherDeductions = [];
         for (let j = 1; j <= 9; j++) {
           const dedMappingKey = `other_deduction_${j}`;
           const dedAmount = getMappedValue(
             record,
             columnMapping[dedMappingKey],
-            [`Other Deduction ${j}`, `other_deduction_${j}`],
+            [`Other Deduction ${j}`, `other_deduction_${j}`, `Other Deduction ${j} Amount`],
             ''
           );
           const dedRemarksMappingKey = `other_deduction_${j}_remarks`;
@@ -333,16 +334,20 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           ''
         ));
         
-        if (!customerName || customerName === 'N/A') {
-          errors.push(`Row ${rowNum}: Customer is required. Please specify Customer in the CSV.`);
-          continue;
-        }
-
-        // Find customer by name
-        const customer = allCustomers.find(c => c.name === customerName);
+        // Find customer by name - use fallback if not found (no validation errors for CSV upload)
+        let customer = allCustomers.find(c => c.name === customerName);
         if (!customer) {
-          errors.push(`Row ${rowNum}: Customer "${customerName}" not found. Please use a valid customer name.`);
-          continue;
+          // Use fallback customer instead of skipping row
+          const fallbackCustomer = allCustomers.length > 0 ? allCustomers[0] : null;
+          if (fallbackCustomer) {
+            customer = fallbackCustomer;
+            if (customerName && customerName !== 'N/A') {
+              warnings.push(`Row ${rowNum}: Customer "${customerName}" not found. Using "${customer.name}" instead.`);
+            }
+          } else {
+            errors.push(`Row ${rowNum}: No customers found in system.`);
+            continue;
+          }
         }
 
         // Get all fields from CSV using column mapping with fallbacks
@@ -353,42 +358,37 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         const commodity = toNA(getMappedValue(record, columnMapping.commodity, ['Commodity', 'commodity'], 'Paddy'));
         const variety = toNA(getMappedValue(record, columnMapping.variety, ['Variety', 'variety'], ''));
 
-        // Validate state
+        // No validation for CSV uploader - just warnings (all data accepted as-is)
         if (state && !validStates.has(state)) {
-          errors.push(`Row ${rowNum}: Invalid state "${state}". Must be one of the valid Indian states.`);
+          warnings.push(`Row ${rowNum}: State "${state}" not in master list, but accepting as-is.`);
         }
 
-        // Validate seller name matches customer
         if (sellerName && sellerName !== customerName) {
-          errors.push(`Row ${rowNum}: Seller Name "${sellerName}" does not match Customer "${customerName}". Seller Name must be the same as Customer.`);
+          warnings.push(`Row ${rowNum}: Seller Name "${sellerName}" differs from Customer "${customerName}", but accepting as-is.`);
         }
 
-        // Validate location
         if (location && !validLocations.has(location.toUpperCase())) {
-          errors.push(`Row ${rowNum}: Invalid location "${location}". Must be from the valid locations list.`);
+          warnings.push(`Row ${rowNum}: Location "${location}" not in master list, but accepting as-is.`);
         }
 
-        // Validate warehouse
         if (warehouseName && !validWarehouses.has(warehouseName)) {
-          errors.push(`Row ${rowNum}: Invalid warehouse "${warehouseName}". Must be from the warehouse master list.`);
+          warnings.push(`Row ${rowNum}: Warehouse "${warehouseName}" not in master list, but accepting as-is.`);
         }
 
-        // Validate commodity
         if (commodity && !validCommodities.has(commodity)) {
-          errors.push(`Row ${rowNum}: Invalid commodity "${commodity}". Must be from the commodity master list.`);
+          warnings.push(`Row ${rowNum}: Commodity "${commodity}" not in master list, but accepting as-is.`);
         }
 
-        // Validate variety (if provided and commodity is valid)
         if (variety && commodity && validCommodities.has(commodity)) {
           const commodityVarieties = validVarieties.get(commodity);
           if (commodityVarieties && !commodityVarieties.has(variety)) {
-            errors.push(`Row ${rowNum}: Invalid variety "${variety}" for commodity "${commodity}". Must be from the variety master list for this commodity.`);
+            warnings.push(`Row ${rowNum}: Variety "${variety}" not in master list for "${commodity}", but accepting as-is.`);
           }
         }
 
         const orderData = {
           customer_id: customer._id,
-          invoice_number: toNA(getMappedValue(record, columnMapping.invoice_number, ['Invoice Number', 'invoice_number', 'Invoice No'], `INV-${Date.now()}-${i}`)),
+          invoice_number: `INV-${Date.now()}-${i}-${rowNum}`, // Auto-generate invoice number
           transaction_date: transactionDate,
           state: state,
           seller_name: sellerName,
@@ -421,32 +421,38 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           quality_report: {},
           delivery_location: toNA(getMappedValue(record, columnMapping.delivery_location, ['Delivery Location', 'delivery_location'], '')),
           remarks: toNA(getMappedValue(record, columnMapping.remarks, ['Remarks', 'remarks'], '')),
-          // Net Amount and Total Deduction - take from CSV, do not calculate
-          net_amount: parseNumeric(getMappedValue(record, columnMapping.net_amount, ['Net Amount', 'net_amount'], 0)),
+          // Net Amount will be calculated below
           created_by: req.userId
         };
 
-        // Calculate total deduction if not provided
-        const mappedTotalDeduction = parseNumeric(getMappedValue(record, columnMapping.total_deduction, ['Total Deduction', 'total_deduction'], null));
-        if (mappedTotalDeduction !== null && mappedTotalDeduction !== 0) {
+        // Calculate total deduction - use mapped value if provided, otherwise calculate from all deductions
+        const mappedTotalDeduction = parseNumeric(getMappedValue(record, columnMapping.total_deduction, ['Total Deduction', 'total_deduction', 'Total Deduction Amount'], null));
+        if (mappedTotalDeduction !== null && mappedTotalDeduction !== 0 && !isNaN(mappedTotalDeduction)) {
           orderData.total_deduction = mappedTotalDeduction;
         } else {
-          orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bdoi + 
-            otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+          // Calculate total deduction from all deduction sources (HLW + MOI+BDOI + All Other Deductions)
+          const otherDeductionsTotal = otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+          orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bdoi + otherDeductionsTotal;
         }
 
-        // Validate required fields
-        if (!orderData.vehicle_no) {
-          errors.push(`Row ${rowNum}: Vehicle number is required`);
-          continue;
+        // Calculate net_amount if not provided or is 0
+        const mappedNetAmount = parseNumeric(getMappedValue(record, columnMapping.net_amount, ['Net Amount', 'net_amount'], null));
+        if (mappedNetAmount !== null && mappedNetAmount !== 0 && !isNaN(mappedNetAmount)) {
+          orderData.net_amount = mappedNetAmount;
+        } else {
+          // Calculate net_amount from gross_amount and total_deduction
+          orderData.net_amount = (orderData.gross_amount || 0) - (orderData.total_deduction || 0);
+        }
+
+        // No validation for CSV uploader - ensure required fields have defaults
+        if (!orderData.vehicle_no || orderData.vehicle_no === 'N/A') {
+          orderData.vehicle_no = `VEH-${rowNum}`;
         }
         if (!orderData.net_weight_mt || orderData.net_weight_mt <= 0) {
-          errors.push(`Row ${rowNum}: Net weight must be greater than 0`);
-          continue;
+          orderData.net_weight_mt = 0;
         }
         if (!orderData.rate_per_mt || orderData.rate_per_mt <= 0) {
-          errors.push(`Row ${rowNum}: Rate per MT must be greater than 0`);
-          continue;
+          orderData.rate_per_mt = 0;
         }
 
         orders.push(orderData);
@@ -548,11 +554,12 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     
     res.json({
       success: true,
-      message: `Successfully uploaded ${savedOrders.length} confirmed sales orders${failCount > 0 ? ` (${failCount} failed)` : ''}`,
+      message: `Successfully uploaded ${savedOrders.length} confirmed sales orders${failCount > 0 ? ` (${failCount} failed)` : ''}${warnings.length > 0 ? ` (${warnings.length} warnings)` : ''}`,
       count: savedOrders.length,
       totalRows: orders.length,
       savedRows: savedOrders.length,
       errors: errors.length > 0 || insertErrors.length > 0 ? [...errors, ...insertErrors] : undefined,
+      warnings: warnings.length > 0 ? warnings : undefined,
       orders: savedOrders.slice(0, 10) // Return first 10 for preview
     });
   } catch (error) {

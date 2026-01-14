@@ -105,7 +105,8 @@ export default function ConfirmedPurchaseOrderHistory({ userId, userName }: Conf
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
     }).format(amount);
   };
 

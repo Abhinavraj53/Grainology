@@ -369,14 +369,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         );
         const transactionDate = parseDate(transactionDateValue);
 
-        // Parse other deductions from columns Other Deduction 1-10
+        // Parse other deductions from columns Other Deduction 1-10 using column mapping
         const otherDeductions = [];
         for (let j = 1; j <= 10; j++) {
           const dedMappingKey = `other_deduction_${j}`;
           const dedAmount = getMappedValue(
             record,
             columnMapping[dedMappingKey],
-            [`Other Deduction ${j}`, `other_deduction_${j}`],
+            [`Other Deduction ${j}`, `other_deduction_${j}`, `Other Deduction ${j} Amount`],
             ''
           );
           
@@ -421,12 +421,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         // Add row_sequence to preserve original order
         const orderData = {
           customer_id: customer._id,
-          invoice_number: toNA(getMappedValue(
-            record,
-            columnMapping.invoice_number,
-            ['Invoice Number', 'invoice_number', 'Invoice No'],
-            `INV-${Date.now()}-${i}-${rowNum}`
-          )),
+          invoice_number: `INV-${Date.now()}-${i}-${rowNum}`, // Auto-generate invoice number
           transaction_date: transactionDate,
           state: state,
           supplier_name: supplierName,
@@ -474,13 +469,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           uploaded_at: new Date()
         };
 
-        // Calculate total deduction - use mapped value if provided, otherwise calculate
-        const mappedTotalDeduction = parseNumeric(getMappedValue(record, columnMapping.total_deduction, ['Total Deduction', 'total_deduction'], null));
-        if (mappedTotalDeduction !== null && mappedTotalDeduction !== 0) {
+        // Calculate total deduction - use mapped value if provided, otherwise calculate from all deductions
+        const mappedTotalDeduction = parseNumeric(getMappedValue(record, columnMapping.total_deduction, ['Total Deduction', 'total_deduction', 'Total Deduction Amount'], null));
+        if (mappedTotalDeduction !== null && mappedTotalDeduction !== 0 && !isNaN(mappedTotalDeduction)) {
           orderData.total_deduction = mappedTotalDeduction;
         } else {
-          orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bddi + 
-            otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+          // Calculate total deduction from all deduction sources (HLW + MOI+BDDI + All Other Deductions)
+          const otherDeductionsTotal = otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+          orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bddi + otherDeductionsTotal;
         }
 
         // Calculate net_amount - use mapped value if provided and valid, otherwise calculate from gross_amount - total_deduction

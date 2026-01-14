@@ -172,7 +172,8 @@ export default function ConfirmedOrders({ userId, userName }: ConfirmedOrdersPro
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4,
     }).format(amount);
   };
 

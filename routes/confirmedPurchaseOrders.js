@@ -286,6 +286,34 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       return String(value).trim();
     };
 
+    // Helper function to sanitize numeric fields in an order object (prevent NaN)
+    const sanitizeNumericFields = (order) => {
+      const numericFields = [
+        'gross_weight_mt', 'tare_weight_mt', 'no_of_bags', 'net_weight_mt', 'rate_per_mt', 'gross_amount',
+        'hlw_wheat', 'excess_hlw', 'deduction_amount_hlw', 'moisture_moi', 'excess_moisture',
+        'bddi', 'excess_bddi', 'moi_bddi', 'weight_deduction_kg', 'deduction_amount_moi_bddi',
+        'net_amount', 'total_deduction'
+      ];
+      
+      const sanitized = { ...order };
+      numericFields.forEach(field => {
+        if (sanitized[field] === null || sanitized[field] === undefined || isNaN(sanitized[field])) {
+          sanitized[field] = 0;
+        } else if (typeof sanitized[field] === 'string') {
+          const parsed = parseFloat(sanitized[field]);
+          sanitized[field] = isNaN(parsed) ? 0 : parsed;
+        }
+      });
+      
+      // Special handling for no_of_bags (must be integer)
+      if (sanitized.no_of_bags !== undefined) {
+        const bags = parseInt(sanitized.no_of_bags);
+        sanitized.no_of_bags = isNaN(bags) ? 0 : bags;
+      }
+      
+      return sanitized;
+    };
+
     // Ensure we have at least one customer - create a fallback if needed
     let fallbackCustomer = allCustomers.length > 0 ? allCustomers[0] : null;
     if (!fallbackCustomer) {
@@ -403,7 +431,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           weight_slip_no: toNA(getMappedValue(record, columnMapping.weight_slip_no, ['Weight Slip No.', 'Weight Slip No', 'weight_slip_no', 'Weight Slip'], '')),
           gross_weight_mt: parseNumeric(getMappedValue(record, columnMapping.gross_weight_mt, ['Gross Weight in MT (Vehicle + Goods)', 'Gross Weight (MT)', 'gross_weight_mt', 'Gross Weight'], 0)),
           tare_weight_mt: parseNumeric(getMappedValue(record, columnMapping.tare_weight_mt, ['Tare Weight of Vehicle', 'Tare Weight (MT)', 'tare_weight_mt', 'Tare Weight'], 0)),
-          no_of_bags: parseInt(getMappedValue(record, columnMapping.no_of_bags, ['No. of Bags', 'No of Bags', 'no_of_bags', 'Bags'], 0) || 0),
+          no_of_bags: (() => {
+            const value = getMappedValue(record, columnMapping.no_of_bags, ['No. of Bags', 'No of Bags', 'no_of_bags', 'Bags'], 0);
+            if (value === null || value === undefined || value === '' || value === '-' || value === 'Not Available' || String(value).trim() === '') {
+              return 0;
+            }
+            const parsed = parseInt(value);
+            return isNaN(parsed) ? 0 : parsed;
+          })(),
           net_weight_mt: parseNumeric(getMappedValue(record, columnMapping.net_weight_mt, ['Net Weight in MT', 'Net Weight (MT)', 'net_weight_mt', 'Net Weight'], 0)),
           rate_per_mt: parseNumeric(getMappedValue(record, columnMapping.rate_per_mt, ['Rate Per MT', 'Rate per MT', 'rate_per_mt', 'Rate'], 0)),
           gross_amount: parseNumeric(getMappedValue(record, columnMapping.gross_amount, ['Gross Amount', 'gross_amount'], 0)),
@@ -442,15 +477,11 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         if (!orderData.vehicle_no || orderData.vehicle_no === 'N/A' || orderData.vehicle_no.trim() === '') {
           orderData.vehicle_no = `VEH-${rowNum}`;
         }
-        // Ensure numeric fields have valid defaults (but preserve 0 values from CSV)
-        if (orderData.net_weight_mt === null || orderData.net_weight_mt === undefined || isNaN(orderData.net_weight_mt)) {
-          orderData.net_weight_mt = 0;
-        }
-        if (orderData.rate_per_mt === null || orderData.rate_per_mt === undefined || isNaN(orderData.rate_per_mt)) {
-          orderData.rate_per_mt = 0;
-        }
-
-        orders.push(orderData);
+        
+        // Sanitize all numeric fields to prevent NaN values
+        const sanitizedOrder = sanitizeNumericFields(orderData);
+        
+        orders.push(sanitizedOrder);
       } catch (error) {
         // Log detailed error for debugging but STILL CREATE ORDER with N/A values
         console.error(`Error processing row ${rowNum}:`, error);
@@ -458,7 +489,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         
         // Create a minimal order even on error to preserve sequence
         try {
-          const errorOrderData = {
+          const errorOrderData = sanitizeNumericFields({
             customer_id: fallbackCustomer._id,
             invoice_number: `INV-ERROR-${Date.now()}-${i}-${rowNum}`,
             transaction_date: new Date().toISOString().split('T')[0],
@@ -497,7 +528,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             created_by: req.userId,
             row_sequence: i,
             uploaded_at: new Date()
-          };
+          });
           orders.push(errorOrderData);
         } catch (fallbackError) {
           console.error(`Failed to create fallback order for row ${rowNum}:`, fallbackError);
@@ -562,20 +593,22 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             
             // This one failed silently - try individual insert to get specific error
             try {
-              const savedOrder = await ConfirmedPurchaseOrder.create(order);
+              // Sanitize order before attempting insert
+              const sanitizedOrder = sanitizeNumericFields(order);
+              const savedOrder = await ConfirmedPurchaseOrder.create(sanitizedOrder);
               savedOrders.push(savedOrder);
               successCount++;
             } catch (individualError) {
               // Check if it's a duplicate invoice number (most common case)
               if (individualError.code === 11000 || individualError.message.includes('duplicate') || individualError.message.includes('E11000')) {
                 try {
-                  // Create fallback order with modified invoice number
-                  const fallbackOrder = {
+                  // Create fallback order with modified invoice number - sanitize all numeric fields
+                  const fallbackOrder = sanitizeNumericFields({
                     ...order,
                     invoice_number: `${order.invoice_number}-DUP-${Date.now()}-${rowNum}`,
                     remarks: `[DUPLICATE: Original invoice ${order.invoice_number}] ${order.remarks || ''}`.trim(),
                     vehicle_no: order.vehicle_no || `VEH-FALLBACK-${rowNum}`
-                  };
+                  });
                   const savedFallback = await ConfirmedPurchaseOrder.create(fallbackOrder);
                   savedOrders.push(savedFallback);
                   successCount++;
@@ -586,14 +619,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
                   console.error(`Failed to create fallback order for row ${rowNum}:`, fallbackError.message);
                 }
               } else {
-                // Other validation error - try generic fallback
+                // Other validation error - try generic fallback - sanitize all numeric fields
                 try {
-                  const fallbackOrder = {
+                  const fallbackOrder = sanitizeNumericFields({
                     ...order,
                     invoice_number: order.invoice_number || `INV-FALLBACK-${Date.now()}-${rowNum}`,
                     remarks: `[INSERT ERROR: ${individualError.message}] ${order.remarks || ''}`.trim(),
                     vehicle_no: order.vehicle_no || `VEH-FALLBACK-${rowNum}`
-                  };
+                  });
                   const savedFallback = await ConfirmedPurchaseOrder.create(fallbackOrder);
                   savedOrders.push(savedFallback);
                   successCount++;
@@ -618,20 +651,22 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           const rowNum = batchStart + j + 2;
           
           try {
-            const savedOrder = await ConfirmedPurchaseOrder.create(order);
+            // Sanitize order before attempting insert
+            const sanitizedOrder = sanitizeNumericFields(order);
+            const savedOrder = await ConfirmedPurchaseOrder.create(sanitizedOrder);
             savedOrders.push(savedOrder);
             successCount++;
           } catch (individualError) {
             // Try to create a fallback order with error info - NEVER SKIP A ROW
             console.error(`Failed to insert row ${rowNum}:`, individualError.message);
             try {
-              // Create a minimal order with error information to preserve the row
-              const fallbackOrder = {
+              // Create a minimal order with error information to preserve the row - sanitize numeric fields
+              const fallbackOrder = sanitizeNumericFields({
                 ...order,
                 invoice_number: order.invoice_number || `INV-FALLBACK-${Date.now()}-${rowNum}`,
                 remarks: `[INSERT ERROR: ${individualError.message}] ${order.remarks || ''}`.trim(),
                 vehicle_no: order.vehicle_no || `VEH-FALLBACK-${rowNum}`
-              };
+              });
               const savedFallback = await ConfirmedPurchaseOrder.create(fallbackOrder);
               savedOrders.push(savedFallback);
               successCount++;

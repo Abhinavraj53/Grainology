@@ -462,15 +462,98 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       });
     }
 
-    // Insert orders
-    const savedOrders = await ConfirmedSalesOrder.insertMany(orders, { ordered: false });
+    // Insert orders in batches to handle silent failures
+    let savedOrders = [];
+    let insertErrors = [];
+    let successCount = 0;
+    let failCount = 0;
+    
+    console.log(`Starting to insert ${orders.length} sales orders...`);
+    
+    const batchSize = 100;
+    for (let batchStart = 0; batchStart < orders.length; batchStart += batchSize) {
+      const batch = orders.slice(batchStart, batchStart + batchSize);
+      
+      try {
+        const batchResult = await ConfirmedSalesOrder.insertMany(batch, { 
+          ordered: false,
+          rawResult: false
+        });
+        
+        savedOrders.push(...batchResult);
+        successCount += batchResult.length;
+        
+        // Check if all documents were inserted
+        if (batchResult.length < batch.length) {
+          const failedCount = batch.length - batchResult.length;
+          console.log(`Sales Batch ${Math.floor(batchStart / batchSize) + 1}: ${batchResult.length} inserted, ${failedCount} failed silently`);
+          
+          const insertedInvoiceNumbers = new Set(batchResult.map(doc => doc.invoice_number));
+          
+          for (let j = 0; j < batch.length; j++) {
+            const order = batch[j];
+            const rowNum = batchStart + j + 2;
+            
+            if (insertedInvoiceNumbers.has(order.invoice_number)) {
+              continue;
+            }
+            
+            try {
+              const savedOrder = await ConfirmedSalesOrder.create(order);
+              savedOrders.push(savedOrder);
+              successCount++;
+            } catch (individualError) {
+              if (individualError.code === 11000 || individualError.message.includes('duplicate') || individualError.message.includes('E11000')) {
+                try {
+                  const fallbackOrder = {
+                    ...order,
+                    invoice_number: `${order.invoice_number}-DUP-${Date.now()}-${rowNum}`,
+                    remarks: `[DUPLICATE: ${order.invoice_number}] ${order.remarks || ''}`.trim()
+                  };
+                  const savedFallback = await ConfirmedSalesOrder.create(fallbackOrder);
+                  savedOrders.push(savedFallback);
+                  successCount++;
+                  insertErrors.push(`Row ${rowNum}: Duplicate invoice_number - Created with modified number`);
+                } catch (fallbackError) {
+                  failCount++;
+                  insertErrors.push(`Row ${rowNum}: Duplicate invoice and fallback failed: ${fallbackError.message}`);
+                }
+              } else {
+                failCount++;
+                insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+              }
+            }
+          }
+        } else {
+          console.log(`Sales Batch ${Math.floor(batchStart / batchSize) + 1}: Inserted ${batchResult.length} orders`);
+        }
+      } catch (batchError) {
+        console.log(`Sales batch insert failed, trying individual inserts...`);
+        for (let j = 0; j < batch.length; j++) {
+          const order = batch[j];
+          const rowNum = batchStart + j + 2;
+          try {
+            const savedOrder = await ConfirmedSalesOrder.create(order);
+            savedOrders.push(savedOrder);
+            successCount++;
+          } catch (individualError) {
+            failCount++;
+            insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+          }
+        }
+      }
+    }
+    
+    console.log(`Sales insertion complete: ${successCount} succeeded, ${failCount} failed out of ${orders.length} total`);
     
     res.json({
       success: true,
-      message: `Successfully uploaded ${savedOrders.length} confirmed sales orders`,
+      message: `Successfully uploaded ${savedOrders.length} confirmed sales orders${failCount > 0 ? ` (${failCount} failed)` : ''}`,
       count: savedOrders.length,
-      errors: errors.length > 0 ? errors : undefined,
-      orders: savedOrders
+      totalRows: orders.length,
+      savedRows: savedOrders.length,
+      errors: errors.length > 0 || insertErrors.length > 0 ? [...errors, ...insertErrors] : undefined,
+      orders: savedOrders.slice(0, 10) // Return first 10 for preview
     });
   } catch (error) {
     console.error('Bulk upload confirmed sales orders error:', error);

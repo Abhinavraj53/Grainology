@@ -541,10 +541,77 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         
         savedOrders.push(...batchResult);
         successCount += batchResult.length;
-        console.log(`Batch ${Math.floor(batchStart / batchSize) + 1}: Inserted ${batchResult.length} orders`);
+        
+        // Check if all documents were inserted - if not, some failed silently
+        if (batchResult.length < batch.length) {
+          const failedCount = batch.length - batchResult.length;
+          console.log(`Batch ${Math.floor(batchStart / batchSize) + 1}: ${batchResult.length} inserted, ${failedCount} failed silently (likely duplicates or validation errors)`);
+          
+          // Find which ones failed by checking invoice numbers
+          const insertedInvoiceNumbers = new Set(batchResult.map(doc => doc.invoice_number));
+          
+          // Try to insert the missing ones individually
+          for (let j = 0; j < batch.length; j++) {
+            const order = batch[j];
+            const rowNum = batchStart + j + 2;
+            
+            // Skip if this was successfully inserted (check by invoice number)
+            if (insertedInvoiceNumbers.has(order.invoice_number)) {
+              continue;
+            }
+            
+            // This one failed silently - try individual insert to get specific error
+            try {
+              const savedOrder = await ConfirmedPurchaseOrder.create(order);
+              savedOrders.push(savedOrder);
+              successCount++;
+            } catch (individualError) {
+              // Check if it's a duplicate invoice number (most common case)
+              if (individualError.code === 11000 || individualError.message.includes('duplicate') || individualError.message.includes('E11000')) {
+                try {
+                  // Create fallback order with modified invoice number
+                  const fallbackOrder = {
+                    ...order,
+                    invoice_number: `${order.invoice_number}-DUP-${Date.now()}-${rowNum}`,
+                    remarks: `[DUPLICATE: Original invoice ${order.invoice_number}] ${order.remarks || ''}`.trim(),
+                    vehicle_no: order.vehicle_no || `VEH-FALLBACK-${rowNum}`
+                  };
+                  const savedFallback = await ConfirmedPurchaseOrder.create(fallbackOrder);
+                  savedOrders.push(savedFallback);
+                  successCount++;
+                  insertErrors.push(`Row ${rowNum}: Duplicate invoice_number "${order.invoice_number}" - Created with modified invoice number`);
+                } catch (fallbackError) {
+                  failCount++;
+                  insertErrors.push(`Row ${rowNum}: Duplicate invoice "${order.invoice_number}" and fallback failed: ${fallbackError.message}`);
+                  console.error(`Failed to create fallback order for row ${rowNum}:`, fallbackError.message);
+                }
+              } else {
+                // Other validation error - try generic fallback
+                try {
+                  const fallbackOrder = {
+                    ...order,
+                    invoice_number: order.invoice_number || `INV-FALLBACK-${Date.now()}-${rowNum}`,
+                    remarks: `[INSERT ERROR: ${individualError.message}] ${order.remarks || ''}`.trim(),
+                    vehicle_no: order.vehicle_no || `VEH-FALLBACK-${rowNum}`
+                  };
+                  const savedFallback = await ConfirmedPurchaseOrder.create(fallbackOrder);
+                  savedOrders.push(savedFallback);
+                  successCount++;
+                  insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'} - Created fallback order`);
+                } catch (fallbackError) {
+                  failCount++;
+                  insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'} - Fallback also failed: ${fallbackError.message}`);
+                  console.error(`Failed to create fallback order for row ${rowNum}:`, fallbackError.message);
+                }
+              }
+            }
+          }
+        } else {
+          console.log(`Batch ${Math.floor(batchStart / batchSize) + 1}: Inserted ${batchResult.length} orders`);
+        }
       } catch (batchError) {
-        // If batch fails, try individual inserts to preserve all possible orders
-        console.log(`Batch insert failed, trying individual inserts for batch starting at row ${batchStart + 2}...`);
+        // If batch fails completely, try individual inserts to preserve all possible orders
+        console.log(`Batch insert failed completely, trying individual inserts for batch starting at row ${batchStart + 2}...`);
         
         for (let j = 0; j < batch.length; j++) {
           const order = batch[j];

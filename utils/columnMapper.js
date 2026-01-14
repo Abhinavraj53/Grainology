@@ -65,7 +65,7 @@ export const parseDate = (dateValue) => {
 };
 
 /**
- * Parse numeric value, handling various formats
+ * Parse numeric value, handling various formats including Indian number format with commas
  * @param {*} value - Value to parse
  * @param {number} defaultValue - Default value if parsing fails
  * @returns {number} Parsed number
@@ -75,7 +75,20 @@ export const parseNumeric = (value, defaultValue = 0) => {
       value === 'Not Available' || value === 'Not Applicable' || String(value).trim() === '') {
     return defaultValue;
   }
-  const parsed = parseFloat(value);
+  
+  // Convert to string and remove all commas (handles both Indian and Western number formats)
+  // Indian format: 1,54,026.00 or 12,34,567.89
+  // Western format: 1,540,026.00 or 12,345,678.90
+  let cleanValue = String(value).trim();
+  
+  // Remove all commas (thousands separators)
+  cleanValue = cleanValue.replace(/,/g, '');
+  
+  // Remove any currency symbols or spaces
+  cleanValue = cleanValue.replace(/[₹$€£¥\s]/g, '');
+  
+  // Parse as float
+  const parsed = parseFloat(cleanValue);
   return isNaN(parsed) ? defaultValue : parsed;
 };
 

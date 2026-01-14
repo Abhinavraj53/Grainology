@@ -300,15 +300,24 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         if (sanitized[field] === null || sanitized[field] === undefined || isNaN(sanitized[field])) {
           sanitized[field] = 0;
         } else if (typeof sanitized[field] === 'string') {
-          const parsed = parseFloat(sanitized[field]);
+          // Remove commas and currency symbols before parsing
+          let cleanValue = sanitized[field].replace(/,/g, '').replace(/[₹$€£¥\s]/g, '');
+          const parsed = parseFloat(cleanValue);
           sanitized[field] = isNaN(parsed) ? 0 : parsed;
         }
       });
       
       // Special handling for no_of_bags (must be integer)
       if (sanitized.no_of_bags !== undefined) {
-        const bags = parseInt(sanitized.no_of_bags);
-        sanitized.no_of_bags = isNaN(bags) ? 0 : bags;
+        if (typeof sanitized.no_of_bags === 'string') {
+          // Remove commas before parsing
+          let cleanValue = sanitized.no_of_bags.replace(/,/g, '').replace(/[₹$€£¥\s]/g, '');
+          const bags = parseInt(cleanValue);
+          sanitized.no_of_bags = isNaN(bags) ? 0 : bags;
+        } else {
+          const bags = parseInt(sanitized.no_of_bags);
+          sanitized.no_of_bags = isNaN(bags) ? 0 : bags;
+        }
       }
       
       return sanitized;
@@ -436,7 +445,9 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             if (value === null || value === undefined || value === '' || value === '-' || value === 'Not Available' || String(value).trim() === '') {
               return 0;
             }
-            const parsed = parseInt(value);
+            // Remove commas and parse as integer
+            let cleanValue = String(value).trim().replace(/,/g, '');
+            const parsed = parseInt(cleanValue);
             return isNaN(parsed) ? 0 : parsed;
           })(),
           net_weight_mt: parseNumeric(getMappedValue(record, columnMapping.net_weight_mt, ['Net Weight in MT', 'Net Weight (MT)', 'net_weight_mt', 'Net Weight'], 0)),

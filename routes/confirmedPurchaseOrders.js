@@ -457,8 +457,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           quality_report: {},
           delivery_location: toNA(getMappedValue(record, columnMapping.delivery_location, ['Delivery Location', 'delivery_location'], '')),
           remarks: toNA(getMappedValue(record, columnMapping.remarks, ['Remarks', 'remarks'], '')),
-          // Net Amount and Total Deduction - take from CSV, do not calculate
-          net_amount: parseNumeric(getMappedValue(record, columnMapping.net_amount, ['Net Amount', 'net_amount'], 0)),
+          // Net Amount and Total Deduction will be calculated below
           created_by: req.userId,
           row_sequence: i, // Preserve original row order from CSV
           uploaded_at: new Date()
@@ -471,6 +470,15 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         } else {
           orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bddi + 
             otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+        }
+
+        // Calculate net_amount - use mapped value if provided and valid, otherwise calculate from gross_amount - total_deduction
+        const mappedNetAmount = parseNumeric(getMappedValue(record, columnMapping.net_amount, ['Net Amount', 'net_amount'], null));
+        if (mappedNetAmount !== null && mappedNetAmount !== 0 && !isNaN(mappedNetAmount)) {
+          orderData.net_amount = mappedNetAmount;
+        } else {
+          // Calculate net_amount from gross_amount and total_deduction
+          orderData.net_amount = (orderData.gross_amount || 0) - (orderData.total_deduction || 0);
         }
 
         // Ensure vehicle_no is never empty (required field)

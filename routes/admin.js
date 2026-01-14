@@ -42,11 +42,29 @@ router.get('/stats', async (req, res) => {
     const confirmedPurchaseOrders = await ConfirmedPurchaseOrder.find({});
     
     const totalConfirmedSalesAmount = confirmedSalesOrders.reduce((sum, order) => {
-      return sum + (order.net_amount || 0);
+      const netAmount = order.net_amount;
+      // Handle NaN, null, undefined, or invalid values
+      if (netAmount === null || netAmount === undefined || isNaN(netAmount) || typeof netAmount !== 'number') {
+        // Try to calculate from gross_amount and total_deduction if net_amount is invalid
+        const gross = order.gross_amount || 0;
+        const deduction = order.total_deduction || 0;
+        const calculated = gross - deduction;
+        return sum + (isNaN(calculated) ? 0 : calculated);
+      }
+      return sum + netAmount;
     }, 0);
     
     const totalConfirmedPurchaseAmount = confirmedPurchaseOrders.reduce((sum, order) => {
-      return sum + (order.net_amount || 0);
+      const netAmount = order.net_amount;
+      // Handle NaN, null, undefined, or invalid values
+      if (netAmount === null || netAmount === undefined || isNaN(netAmount) || typeof netAmount !== 'number') {
+        // Try to calculate from gross_amount and total_deduction if net_amount is invalid
+        const gross = order.gross_amount || 0;
+        const deduction = order.total_deduction || 0;
+        const calculated = gross - deduction;
+        return sum + (isNaN(calculated) ? 0 : calculated);
+      }
+      return sum + netAmount;
     }, 0);
 
     res.json({

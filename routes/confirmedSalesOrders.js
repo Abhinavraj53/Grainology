@@ -282,6 +282,57 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     const errors = [];
     const warnings = []; // For CSV uploader, use warnings instead of errors
 
+    // Helper function to sanitize numeric fields in an order object (prevent NaN)
+    const sanitizeNumericFields = (order) => {
+      const numericFields = [
+        'gross_weight_mt', 'tare_weight_mt', 'no_of_bags', 'net_weight_mt', 'rate_per_mt', 'gross_amount',
+        'hlw_wheat', 'excess_hlw', 'deduction_amount_hlw', 'moisture_moi', 'excess_moisture',
+        'bdoi', 'excess_bdoi', 'moi_bdoi', 'weight_deduction_kg', 'deduction_amount_moi_bdoi',
+        'net_amount', 'total_deduction'
+      ];
+      
+      const sanitized = { ...order };
+      numericFields.forEach(field => {
+        if (sanitized[field] === null || sanitized[field] === undefined || isNaN(sanitized[field])) {
+          sanitized[field] = 0;
+        } else if (typeof sanitized[field] === 'string') {
+          // Remove commas and currency symbols before parsing
+          let cleanValue = sanitized[field].replace(/,/g, '').replace(/[₹$€£¥\s]/g, '');
+          const parsed = parseFloat(cleanValue);
+          sanitized[field] = isNaN(parsed) ? 0 : parsed;
+        }
+      });
+      
+      // Special handling for no_of_bags (must be integer)
+      if (sanitized.no_of_bags !== undefined) {
+        if (typeof sanitized.no_of_bags === 'string') {
+          // Remove commas before parsing
+          let cleanValue = sanitized.no_of_bags.replace(/,/g, '').replace(/[₹$€£¥\s]/g, '');
+          const bags = parseInt(cleanValue);
+          sanitized.no_of_bags = isNaN(bags) ? 0 : bags;
+        } else {
+          const bags = parseInt(sanitized.no_of_bags);
+          sanitized.no_of_bags = isNaN(bags) ? 0 : bags;
+        }
+      }
+      
+      // Sanitize other_deductions array
+      if (sanitized.other_deductions && Array.isArray(sanitized.other_deductions)) {
+        sanitized.other_deductions = sanitized.other_deductions.map(ded => {
+          let amount = ded.amount;
+          if (typeof amount === 'string') {
+            amount = parseFloat(amount.replace(/,/g, '').replace(/[₹$€£¥\s]/g, ''));
+          }
+          return {
+            amount: isNaN(amount) ? 0 : amount,
+            remarks: ded.remarks || ''
+          };
+        });
+      }
+      
+      return sanitized;
+    };
+
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
@@ -326,11 +377,11 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           }
         }
 
-        // Get customer from CSV - Customer column or Seller Name column
+        // Get customer from CSV - Seller Name column (primary) or Customer column (fallback)
         const customerName = toNA(getMappedValue(
           record,
-          columnMapping.customer_name || columnMapping.seller_name,
-          ['Customer', 'customer', 'Seller Name', 'seller_name', 'Seller'],
+          columnMapping.seller_name || columnMapping.customer_name,
+          ['Seller Name', 'seller_name', 'Seller', 'Customer', 'customer'],
           ''
         ));
         
@@ -455,7 +506,8 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           orderData.rate_per_mt = 0;
         }
 
-        orders.push(orderData);
+        // Sanitize all numeric fields before adding to orders
+        orders.push(sanitizeNumericFields(orderData));
       } catch (error) {
         errors.push(`Row ${rowNum}: ${error.message}`);
       }
@@ -505,28 +557,27 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             }
             
             try {
-              const savedOrder = await ConfirmedSalesOrder.create(order);
+              // Sanitize before individual insert
+              const sanitizedOrder = sanitizeNumericFields(order);
+              const savedOrder = await ConfirmedSalesOrder.create(sanitizedOrder);
               savedOrders.push(savedOrder);
               successCount++;
             } catch (individualError) {
-              if (individualError.code === 11000 || individualError.message.includes('duplicate') || individualError.message.includes('E11000')) {
-                try {
-                  const fallbackOrder = {
-                    ...order,
-                    invoice_number: `${order.invoice_number}-DUP-${Date.now()}-${rowNum}`,
-                    remarks: `[DUPLICATE: ${order.invoice_number}] ${order.remarks || ''}`.trim()
-                  };
-                  const savedFallback = await ConfirmedSalesOrder.create(fallbackOrder);
-                  savedOrders.push(savedFallback);
-                  successCount++;
-                  insertErrors.push(`Row ${rowNum}: Duplicate invoice_number - Created with modified number`);
-                } catch (fallbackError) {
-                  failCount++;
-                  insertErrors.push(`Row ${rowNum}: Duplicate invoice and fallback failed: ${fallbackError.message}`);
-                }
-              } else {
+              // Try with more aggressive sanitization
+              try {
+                const fallbackOrder = sanitizeNumericFields({
+                  ...order,
+                  invoice_number: `${order.invoice_number}-RETRY-${Date.now()}-${rowNum}`,
+                  remarks: `[RETRY: ${individualError.message}] ${order.remarks || ''}`.trim()
+                });
+                const savedFallback = await ConfirmedSalesOrder.create(fallbackOrder);
+                savedOrders.push(savedFallback);
+                successCount++;
+                console.log(`Row ${rowNum}: Saved with fallback after error: ${individualError.message}`);
+              } catch (fallbackError) {
                 failCount++;
                 insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+                console.log(`Failed to create fallback order for row ${rowNum}: ${fallbackError.message}`);
               }
             }
           }
@@ -539,12 +590,26 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           const order = batch[j];
           const rowNum = batchStart + j + 2;
           try {
-            const savedOrder = await ConfirmedSalesOrder.create(order);
+            // Sanitize before individual insert
+            const sanitizedOrder = sanitizeNumericFields(order);
+            const savedOrder = await ConfirmedSalesOrder.create(sanitizedOrder);
             savedOrders.push(savedOrder);
             successCount++;
           } catch (individualError) {
-            failCount++;
-            insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+            // Try fallback with aggressive sanitization
+            try {
+              const fallbackOrder = sanitizeNumericFields({
+                ...order,
+                invoice_number: `INV-FALLBACK-${Date.now()}-${rowNum}`,
+                remarks: `[FALLBACK: ${individualError.message}] ${order.remarks || ''}`.trim()
+              });
+              const savedFallback = await ConfirmedSalesOrder.create(fallbackOrder);
+              savedOrders.push(savedFallback);
+              successCount++;
+            } catch (fallbackError) {
+              failCount++;
+              insertErrors.push(`Row ${rowNum}: ${individualError.message || 'Insert failed'}`);
+            }
           }
         }
       }

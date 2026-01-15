@@ -187,7 +187,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Confirmed Sales Amount</p>
-              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedSalesAmount || 0).toLocaleString('en-IN')}</p>
+              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedSalesAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
               <p className="text-xs opacity-75 mt-2">All confirmed sales orders</p>
             </div>
             <DollarSign className="w-16 h-16 opacity-30" />
@@ -198,7 +198,7 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Confirmed Purchase Amount</p>
-              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedPurchaseAmount || 0).toLocaleString('en-IN')}</p>
+              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedPurchaseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
               <p className="text-xs opacity-75 mt-2">All confirmed purchase orders</p>
             </div>
             <DollarSign className="w-16 h-16 opacity-30" />

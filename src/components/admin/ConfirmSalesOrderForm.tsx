@@ -1345,10 +1345,9 @@ export default function ConfirmSalesOrderForm() {
         }}
         availableColumns={availableColumns}
         requiredFields={[
-          { key: 'customer_name', label: 'Customer Name', required: true },
+          { key: 'seller_name', label: 'Seller Name', required: true },
           { key: 'transaction_date', label: 'Transaction Date', required: false },
           { key: 'state', label: 'State', required: false },
-          { key: 'seller_name', label: 'Seller Name', required: false },
           { key: 'location', label: 'Location', required: false },
           { key: 'warehouse_name', label: 'Warehouse Name', required: false },
           { key: 'chamber_no', label: 'Chamber No', required: false },

@@ -19,6 +19,7 @@ export default function ConfirmSalesOrderForm() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'manual' | 'upload'>('manual');
+  const [isDragging, setIsDragging] = useState(false);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [showMappingDialog, setShowMappingDialog] = useState(false);
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
@@ -379,7 +380,40 @@ export default function ConfirmSalesOrderForm() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Upload File (CSV or Excel) <span className="text-red-500">*</span>
               </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-green-400 transition-colors">
+              <div 
+                className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors cursor-pointer ${
+                  isDragging ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-green-400'
+                }`}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(true);
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                  const files = e.dataTransfer.files;
+                  if (files && files.length > 0) {
+                    const file = files[0];
+                    const ext = file.name.split('.').pop()?.toLowerCase();
+                    if (['csv', 'xlsx', 'xls'].includes(ext || '')) {
+                      setUploadFile(file);
+                    } else {
+                      showError('Please select a CSV or Excel file (.csv, .xlsx, .xls)');
+                    }
+                  }
+                }}
+              >
                 <div className="space-y-1 text-center">
                   <Upload className="mx-auto h-12 w-12 text-gray-400" />
                   <div className="flex text-sm text-gray-600">

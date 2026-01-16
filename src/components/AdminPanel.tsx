@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Profile, supabase, Order, Offer } from '../lib/supabase';
-import { LayoutDashboard, LogOut, Users, Package, Truck, TrendingUp, Cloud, FileText, ShoppingBag, Menu, X } from 'lucide-react';
+import { LayoutDashboard, LogOut, Users, Package, Truck, TrendingUp, Cloud, FileText, ShoppingBag, Menu, X, BarChart3 } from 'lucide-react';
 // Commented out unused imports - can be restored if needed
 // import { ClipboardCheck, Calculator, PackageCheck } from 'lucide-react';
 import EnhancedDashboard from './admin/EnhancedDashboard';
@@ -15,6 +15,7 @@ import ConfirmPurchaseOrderForm from './admin/ConfirmPurchaseOrderForm';
 import AllConfirmedOrders from './admin/AllConfirmedOrders';
 import CommodityVarietyManagement from './admin/CommodityVarietyManagement';
 import WarehouseManagement from './admin/WarehouseManagement';
+import { AnalyticsDashboard } from './admin/analytics';
 import { DashboardCache } from '../lib/sessionStorage';
 // Commented out unused component imports - can be restored if needed
 // import OrderManagementEnhanced from './admin/OrderManagementEnhanced';
@@ -26,7 +27,7 @@ import { DashboardCache } from '../lib/sessionStorage';
 // import CustomerCommoditySales from './admin/CustomerCommoditySales';
 // import SupplyTransactionsView from './admin/SupplyTransactionsView';
 
-type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders' | 'commodity-variety-management' | 'warehouse-management';
+type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders' | 'commodity-variety-management' | 'warehouse-management' | 'analytics';
 
 interface AdminPanelProps {
   profile: Profile;
@@ -220,6 +221,19 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           >
             <LayoutDashboard className="w-5 h-5" />
             <span className="font-medium">Dashboard</span>
+          </button>
+
+          {/* Analytics Dashboard */}
+          <button
+            onClick={() => handleViewChange('analytics')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'analytics'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="font-medium">Analytics & Reports</span>
           </button>
 
           {/* 2. User Management */}
@@ -500,6 +514,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             </button>
             <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex-1">
             {currentView === 'dashboard' && 'Admin Dashboard'}
+            {currentView === 'analytics' && 'Analytics & Reports'}
             {currentView === 'users' && 'User Management'}
             {currentView === 'all-purchase-orders' && 'All Purchase Orders'}
             {currentView === 'all-sale-orders' && 'All Sale Orders'}
@@ -537,6 +552,9 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           )}
           {currentView === 'dashboard' && (
             <EnhancedDashboard stats={stats} orders={orders} offers={offers} />
+          )}
+          {currentView === 'analytics' && (
+            <AnalyticsDashboard />
           )}
           {currentView === 'users' && (
             <UserManagement users={users} onRefresh={loadData} />

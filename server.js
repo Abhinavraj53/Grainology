@@ -27,6 +27,7 @@ import uploadRoutes from './routes/uploads.js';
 import supplyTransactionRoutes from './routes/supplyTransactions.js';
 import cashfreeKYCRoutes from './routes/cashfreeKYC.js';
 import sandboxKYCRoutes from './routes/sandboxKYC.js';
+import analyticsRoutes from './routes/analytics.js';
 
 dotenv.config();
 
@@ -120,6 +121,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/supply-transactions', supplyTransactionRoutes);
 app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
 app.use('/api/sandbox/kyc', sandboxKYCRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // -----------------------------
 // ERROR HANDLER

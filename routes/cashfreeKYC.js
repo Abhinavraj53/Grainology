@@ -83,12 +83,7 @@ router.post('/verify-gstin', async (req, res) => {
       `${CASHFREE_BASE_URL}/verification/gstin`,
       gstBody,
       {
-        headers: {
-          'x-client-id': CASHFREE_CLIENT_ID,
-          'x-client-secret': CASHFREE_CLIENT_SECRET,
-          'x-api-version': CASHFREE_API_VERSION,
-          'Content-Type': 'application/json',
-        },
+        headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
         timeout: 10000,
       }
     );
@@ -209,12 +204,7 @@ router.post('/verify-cin', async (req, res) => {
       `${CASHFREE_BASE_URL}/verification/cin`,
       cinBody,
       {
-        headers: {
-          'x-client-id': CASHFREE_CLIENT_ID,
-          'x-client-secret': CASHFREE_CLIENT_SECRET,
-          'x-api-version': CASHFREE_API_VERSION,
-          'Content-Type': 'application/json',
-        },
+        headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
         timeout: 10000,
       }
     );
@@ -447,12 +437,7 @@ router.post('/verify-pan', async (req, res) => {
         `${CASHFREE_BASE_URL}/verification/pan`,
         { pan: cleanPan, name: cleanName },
       {
-        headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'x-api-version': '2023-12-18',
-          'Content-Type': 'application/json',
-          },
+        headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
           timeout: 10000,
       }
     );
@@ -578,12 +563,7 @@ router.post('/digilocker/verify-account', async (req, res) => {
         `${CASHFREE_BASE_URL}/verification/digilocker/verify-account`,
         verifyAccountRequest,
         {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'Content-Type': 'application/json',
-            'x-api-version': '2023-12-18',
-          },
+          headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
           timeout: 15000,
         }
       );
@@ -674,12 +654,7 @@ router.post('/digilocker/create-url', async (req, res) => {
             ...(user_flow && { user_flow: user_flow }),
           },
           {
-            headers: {
-              'x-client-id': CASHFREE_CLIENT_ID,
-              'x-client-secret': CASHFREE_CLIENT_SECRET,
-              'Content-Type': 'application/json',
-              'x-api-version': '2023-12-18',
-            },
+            headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
             timeout: 15000,
           }
         );
@@ -769,12 +744,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
             aadhaar_number: cleanAadhaar,
         },
         {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'Content-Type': 'application/json',
-              'x-api-version': '2023-12-18',
-            },
+          headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
             timeout: 10000,
         }
       );
@@ -918,12 +888,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
       
           // Adjust request body and headers based on endpoint type
           let apiRequestBody = requestBody;
-          let apiHeaders = {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-            'Content-Type': 'application/json',
-            'x-api-version': '2023-12-18',
-          };
+          let apiHeaders = getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET);
           
           // If using Payout API format (/pg/lrs/digilocker/link), adjust request format
           if (endpoint.includes('/pg/lrs/digilocker/link')) {
@@ -1289,12 +1254,7 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
         const fallbackResponse = await axios.get(
           `${CASHFREE_BASE_URL}/verification/digilocker/verification-status/${idToUse}`,
         {
-          headers: {
-            'x-client-id': CASHFREE_CLIENT_ID,
-            'x-client-secret': CASHFREE_CLIENT_SECRET,
-              'Content-Type': 'application/json',
-              'x-api-version': '2023-12-18',
-            },
+          headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
             timeout: 15000,
         }
       );
@@ -1308,12 +1268,7 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
           const docResponse = await axios.get(
               `${CASHFREE_BASE_URL}/verification/digilocker/document/${idToUse}?document_requested=AADHAAR`,
             {
-              headers: {
-                'x-client-id': CASHFREE_CLIENT_ID,
-                'x-client-secret': CASHFREE_CLIENT_SECRET,
-                  'Content-Type': 'application/json',
-                  'x-api-version': '2023-12-18',
-                },
+              headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
                 timeout: 15000,
             }
           );

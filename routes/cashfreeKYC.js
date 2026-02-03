@@ -19,6 +19,20 @@ const CASHFREE_USE_SIGNATURE = process.env.CASHFREE_USE_SIGNATURE === 'true';
 
 // Helper function to handle Cashfree authentication errors
 function handleCashfreeAuthError(status, data) {
+git   // Check for IP not whitelisted error
+  const isIpNotWhitelisted = data.code === 'ip_validation_failed' ||
+                            data.message?.toLowerCase().includes('ip not whitelisted') ||
+                            data.message?.toLowerCase().includes('ip validation failed');
+  
+  // Extract IP from error message if available
+  let currentIp = null;
+  if (isIpNotWhitelisted && data.message) {
+    const ipMatch = data.message.match(/\d+\.\d+\.\d+\.\d+/);
+    if (ipMatch) {
+      currentIp = ipMatch[0];
+    }
+  }
+  
   // Check for "x-cf-signature missing" error (means dashboard is still in Public Key mode)
   const isSignatureMissing = data.message?.toLowerCase().includes('x-cf-signature missing') ||
                             data.message?.toLowerCase().includes('signature missing');
@@ -28,6 +42,29 @@ function handleCashfreeAuthError(status, data) {
                                data.message?.toLowerCase().includes('signature mismatch')) ||
                                (data.type === 'authentication_error' && 
                                data.message?.toLowerCase().includes('signature mismatch'));
+  
+  if (isIpNotWhitelisted) {
+    return {
+      error: 'IP Not Whitelisted',
+      message: currentIp 
+        ? `Your server IP address (${currentIp}) is not whitelisted in Cashfree dashboard. Please add this IP to the whitelist.`
+        : 'Your server IP address is not whitelisted in Cashfree dashboard.',
+      currentIp: currentIp,
+      fix: {
+        step1: 'Go to Cashfree Dashboard: Developers → Two-Factor Authentication',
+        step2: 'Make sure "IP Whitelisting" method is selected (not Public Key)',
+        step3: currentIp ? `Click "Add IP Address" and enter: ${currentIp}` : 'Click "Add IP Address" and enter your server IP',
+        step4: 'Save the configuration',
+        step5: 'Wait 2-3 minutes for changes to take effect',
+      },
+      important: [
+        '⚠️ IP whitelisting requires the EXACT IP address that makes the API call',
+        '⚠️ Render.com services may have dynamic IPs - you may need to add multiple IPs',
+        '⚠️ If IP changes frequently, consider using Public Key signature instead',
+      ],
+      alternative: 'If IP keeps changing, you can use Public Key signature by setting CASHFREE_USE_SIGNATURE=true',
+    };
+  }
   
   if (isSignatureMissing) {
     return {

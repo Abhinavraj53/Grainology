@@ -13,37 +13,43 @@ const CASHFREE_CLIENT_SECRET = process.env.CASHFREE_CLIENT_SECRET || '';
 // Normalize base URL to avoid double slashes
 const CASHFREE_BASE_URL = (process.env.CASHFREE_BASE_URL || 'https://api.cashfree.com').replace(/\/$/, '');
 const CASHFREE_API_VERSION = '2023-12-18';
-// Option to disable signature if IP is whitelisted (set CASHFREE_DISABLE_SIGNATURE=true)
-const CASHFREE_DISABLE_SIGNATURE = process.env.CASHFREE_DISABLE_SIGNATURE === 'true';
+// Using IP whitelisting instead of public key signature
+// Set CASHFREE_USE_SIGNATURE=true if you want to use public key signature instead
+const CASHFREE_USE_SIGNATURE = process.env.CASHFREE_USE_SIGNATURE === 'true';
 
-// Helper function to get Cashfree headers with signature configuration
+// Helper function to get Cashfree headers (using IP whitelisting by default)
 function getCashfreeHeadersWithConfig() {
-  // Verify public key status on first call
-  if (!getCashfreeHeadersWithConfig._keyVerified) {
-    const keyStatus = verifyPublicKey();
-    console.log('🔍 Public Key Status:', {
-      exists: keyStatus.exists,
-      format: keyStatus.format,
-      valid: keyStatus.valid,
-      error: keyStatus.error,
-    });
-    
-    if (CASHFREE_DISABLE_SIGNATURE) {
-      console.log('ℹ️  Signature disabled via CASHFREE_DISABLE_SIGNATURE=true (using IP whitelisting)');
-    } else if (!keyStatus.exists) {
-      console.warn('⚠️  Public key not found. Set CASHFREE_DISABLE_SIGNATURE=true if using IP whitelisting.');
-    } else if (!keyStatus.valid) {
-      console.error('❌ Public key is invalid:', keyStatus.error);
+  // Log configuration on first call
+  if (!getCashfreeHeadersWithConfig._initialized) {
+    if (CASHFREE_USE_SIGNATURE) {
+      const keyStatus = verifyPublicKey();
+      console.log('🔍 Using Public Key Signature Mode');
+      console.log('🔍 Public Key Status:', {
+        exists: keyStatus.exists,
+        format: keyStatus.format,
+        valid: keyStatus.valid,
+        error: keyStatus.error,
+      });
+      
+      if (!keyStatus.exists || !keyStatus.valid) {
+        console.warn('⚠️  Public key not available. Falling back to IP whitelisting mode.');
+        console.warn('   To use IP whitelisting: Ensure your server IP is whitelisted in Cashfree dashboard.');
+      }
+    } else {
+      console.log('✅ Using IP Whitelisting Mode (signature disabled)');
+      console.log('ℹ️  Make sure your server IP is whitelisted in Cashfree dashboard:');
+      console.log('   Developers → Two-Factor Authentication → Switch Method → IP Whitelisting');
     }
     
-    getCashfreeHeadersWithConfig._keyVerified = true;
+    getCashfreeHeadersWithConfig._initialized = true;
   }
   
+  // Use signature only if explicitly enabled, otherwise use IP whitelisting
   return getCashfreeHeaders(
     CASHFREE_CLIENT_ID, 
     CASHFREE_CLIENT_SECRET, 
-    true, // includeSignature
-    CASHFREE_DISABLE_SIGNATURE // forceNoSignature
+    CASHFREE_USE_SIGNATURE, // includeSignature - only true if explicitly enabled
+    !CASHFREE_USE_SIGNATURE // forceNoSignature - true when using IP whitelisting
   );
 }
 
@@ -1716,10 +1722,11 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
 router.get('/diagnostics', async (req, res) => {
   try {
     const keyStatus = verifyPublicKey();
-    const signatureTest = generateCashfreeSignature(CASHFREE_CLIENT_ID);
+    const signatureTest = CASHFREE_USE_SIGNATURE ? generateCashfreeSignature(CASHFREE_CLIENT_ID) : null;
     
     return res.json({
       success: true,
+      authenticationMode: CASHFREE_USE_SIGNATURE ? 'Public Key Signature' : 'IP Whitelisting',
       configuration: {
         hasClientId: !!CASHFREE_CLIENT_ID,
         hasClientSecret: !!CASHFREE_CLIENT_SECRET,
@@ -1727,33 +1734,57 @@ router.get('/diagnostics', async (req, res) => {
         clientIdPreview: CASHFREE_CLIENT_ID ? `${CASHFREE_CLIENT_ID.substring(0, 8)}...${CASHFREE_CLIENT_ID.substring(CASHFREE_CLIENT_ID.length - 4)}` : 'MISSING',
         baseUrl: CASHFREE_BASE_URL,
         apiVersion: CASHFREE_API_VERSION,
-        signatureDisabled: CASHFREE_DISABLE_SIGNATURE,
+        usingSignature: CASHFREE_USE_SIGNATURE,
+        usingIpWhitelisting: !CASHFREE_USE_SIGNATURE,
       },
-      publicKey: {
+      publicKey: CASHFREE_USE_SIGNATURE ? {
         exists: keyStatus.exists,
         format: keyStatus.format,
         valid: keyStatus.valid,
         path: keyStatus.path,
         error: keyStatus.error,
+      } : {
+        note: 'Not used - IP whitelisting mode enabled',
       },
-      signature: {
+      signature: CASHFREE_USE_SIGNATURE ? {
         canGenerate: !!signatureTest,
         length: signatureTest?.length || 0,
+      } : {
+        note: 'Not used - IP whitelisting mode enabled',
       },
       recommendations: [
         !CASHFREE_CLIENT_ID ? '❌ Set CASHFREE_CLIENT_ID environment variable' : '✅ Client ID configured',
         !CASHFREE_CLIENT_SECRET ? '❌ Set CASHFREE_CLIENT_SECRET environment variable' : '✅ Client Secret configured',
-        !keyStatus.exists ? '⚠️  Public key file not found. Either add keys/cashfree_public_key.pem OR set CASHFREE_DISABLE_SIGNATURE=true' : '✅ Public key file exists',
-        !keyStatus.valid ? '❌ Public key is invalid. Download a fresh key from Cashfree dashboard' : '✅ Public key is valid',
-        !signatureTest && !CASHFREE_DISABLE_SIGNATURE ? '❌ Cannot generate signature. Check public key or whitelist IP in Cashfree dashboard' : '✅ Signature generation working',
+        CASHFREE_USE_SIGNATURE 
+          ? (!keyStatus.exists ? '⚠️  Public key file not found. Add keys/cashfree_public_key.pem' : '✅ Public key file exists')
+          : '✅ Using IP whitelisting (no public key needed)',
+        CASHFREE_USE_SIGNATURE 
+          ? (!keyStatus.valid ? '❌ Public key is invalid. Download a fresh key from Cashfree dashboard' : '✅ Public key is valid')
+          : '✅ IP whitelisting mode - ensure server IP is whitelisted in Cashfree dashboard',
+        !CASHFREE_USE_SIGNATURE 
+          ? '✅ IP Whitelisting: Make sure your server IP is whitelisted in Cashfree dashboard (Developers → Two-Factor Authentication → IP Whitelisting)'
+          : (signatureTest ? '✅ Signature generation working' : '❌ Cannot generate signature. Check public key'),
       ],
+      ipWhitelisting: {
+        enabled: !CASHFREE_USE_SIGNATURE,
+        instructions: [
+          '1. Go to Cashfree dashboard: Developers → Two-Factor Authentication',
+          '2. Click "Switch Method" and select "IP Whitelisting"',
+          '3. Add your server IP address',
+          '4. For Render.com: Check your service logs or use a service to get your outbound IP',
+        ],
+      },
       troubleshooting: {
-        signatureMismatch: [
+        authenticationFailed: !CASHFREE_USE_SIGNATURE ? [
+          '1. Verify your server IP is whitelisted in Cashfree dashboard',
+          '2. Check that CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET are correct',
+          '3. Ensure you\'re using the correct environment (sandbox vs production)',
+          '4. Check Cashfree dashboard → Developers → Two-Factor Authentication → IP Whitelisting',
+        ] : [
           '1. Verify the public key in keys/cashfree_public_key.pem matches the one in Cashfree dashboard',
           '2. Ensure CASHFREE_CLIENT_ID exactly matches the Client ID in Cashfree dashboard (case-sensitive)',
           '3. Download a fresh public key from Cashfree dashboard (Two-Factor Authentication section)',
-          '4. If public key was password-protected, extract it properly before saving',
-          '5. Alternative: Whitelist your server IP in Cashfree dashboard and set CASHFREE_DISABLE_SIGNATURE=true',
+          '4. Alternative: Switch to IP whitelisting by removing CASHFREE_USE_SIGNATURE=true',
         ],
       },
     });

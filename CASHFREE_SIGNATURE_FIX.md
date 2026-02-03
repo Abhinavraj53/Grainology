@@ -1,24 +1,59 @@
-# Cashfree Signature Mismatch - Troubleshooting Guide
+# Cashfree Authentication Setup - IP Whitelisting Guide
 
-## Problem
-Getting "Signature mismatch" error from Cashfree API even though public key is configured.
+## Current Configuration
+**IP Whitelisting is now the default authentication method** (no public key signature required).
 
-## Quick Fixes
+## Setup IP Whitelisting
 
-### Option 1: Use IP Whitelisting (Recommended for Production)
-If you've whitelisted your server IP in Cashfree dashboard, you can disable signature:
+### Step 1: Get Your Server IP Address
 
-1. Add to your `.env` file or Render environment variables:
+**For Render.com:**
+1. Check your service logs for outbound IP
+2. Or use a service to detect your IP:
+   ```bash
+   curl https://api.ipify.org
+   ```
+3. Render services typically have a static outbound IP - check Render documentation
+
+**For other platforms:**
+- Check your server's public IP address
+- For dynamic IPs, you may need to update the whitelist periodically
+
+### Step 2: Configure in Cashfree Dashboard
+
+1. Log in to Cashfree dashboard
+2. Go to **Developers** → **Two-Factor Authentication**
+3. Click **Switch Method** button
+4. Select **IP Whitelisting** (not Public Key)
+5. Click **Add IP Address**
+6. Enter your server's IP address
+7. Save the configuration
+
+### Step 3: Verify Configuration
+
+The code is already configured to use IP whitelisting by default. No environment variables needed!
+
+To verify:
+```bash
+curl https://grainology-rmg1.onrender.com/api/cashfree/diagnostics
+```
+
+You should see:
+- `authenticationMode: "IP Whitelisting"`
+- `usingIpWhitelisting: true`
+
+## Alternative: Using Public Key Signature (Not Recommended)
+
+If you prefer to use public key signature instead of IP whitelisting:
+
+1. Set environment variable:
    ```env
-   CASHFREE_DISABLE_SIGNATURE=true
+   CASHFREE_USE_SIGNATURE=true
    ```
 
-2. In Cashfree dashboard:
-   - Go to **Developers** → **Two-Factor Authentication**
-   - Click **Switch Method** and select **IP Whitelisting**
-   - Add your server IP address (for Render: check your service's outbound IP)
+2. Follow the public key setup steps below
 
-### Option 2: Fix Public Key Configuration
+### Public Key Configuration (Optional)
 
 #### Step 1: Verify Client ID Matches
 The Client ID used in signature must **exactly** match the one in Cashfree dashboard:
@@ -141,9 +176,11 @@ CASHFREE_CLIENT_ID=your_client_id_here
 CASHFREE_CLIENT_SECRET=your_client_secret_here
 CASHFREE_BASE_URL=https://api.cashfree.com
 
-# Optional - Set to true if using IP whitelisting instead of signature
-CASHFREE_DISABLE_SIGNATURE=false
+# Optional - Only set if you want to use public key signature instead of IP whitelisting
+# CASHFREE_USE_SIGNATURE=true
 ```
+
+**Note:** By default, IP whitelisting is used. No additional environment variables needed!
 
 ## Still Having Issues?
 

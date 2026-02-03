@@ -87,14 +87,22 @@ export function generateCashfreeSignature(clientId) {
     const signature = encrypted.toString('base64');
 
     // Detailed logging for debugging (but mask sensitive data)
+    // Show first 8 and last 4 chars of client ID for verification
+    const clientIdPreview = trimmedClientId.length > 12 
+      ? `${trimmedClientId.substring(0, 8)}...${trimmedClientId.substring(trimmedClientId.length - 4)}`
+      : trimmedClientId.substring(0, 10) + '...';
+    
     console.log('Generated Cashfree signature:', {
-      clientId: trimmedClientId.substring(0, 10) + '...',
+      clientId: clientIdPreview,
       clientIdLength: trimmedClientId.length,
+      clientIdFull: trimmedClientId, // Log full client ID for debugging (safe to log)
       timestamp,
-      payload: `${trimmedClientId.substring(0, 5)}...${timestamp}`,
+      payload: `${trimmedClientId}.${timestamp}`,
+      payloadLength: payload.length,
       signatureLength: signature.length,
       signaturePreview: signature.substring(0, 30) + '...',
       keyFormat: isPKCS1 ? 'PKCS#1' : 'PKCS#8',
+      publicKeyPath: publicKeyPath,
     });
 
     return signature;
@@ -109,8 +117,13 @@ export function generateCashfreeSignature(clientId) {
 
 /**
  * Get Cashfree API headers with 2FA signature if public key is available
+ * 
+ * @param {string} clientId - Cashfree Client ID
+ * @param {string} clientSecret - Cashfree Client Secret
+ * @param {boolean} includeSignature - Whether to include 2FA signature (default: true)
+ * @param {boolean} forceNoSignature - Force disable signature even if key exists (for IP whitelisting)
  */
-export function getCashfreeHeaders(clientId, clientSecret, includeSignature = true) {
+export function getCashfreeHeaders(clientId, clientSecret, includeSignature = true, forceNoSignature = false) {
   // Validate credentials
   if (!clientId || !clientSecret) {
     console.error('Cashfree credentials are missing');
@@ -126,6 +139,9 @@ export function getCashfreeHeaders(clientId, clientSecret, includeSignature = tr
     throw new Error('Cashfree credentials cannot be empty');
   }
 
+  // Log the exact client ID being used (for debugging signature mismatch)
+  console.log('🔑 Using Cashfree Client ID:', trimmedClientId);
+
   const headers = {
     'x-client-id': trimmedClientId,
     'x-client-secret': trimmedClientSecret,
@@ -133,8 +149,8 @@ export function getCashfreeHeaders(clientId, clientSecret, includeSignature = tr
     'x-api-version': '2023-12-18',
   };
 
-  // Add 2FA signature if public key is available
-  if (includeSignature) {
+  // Add 2FA signature if public key is available and not forced to skip
+  if (includeSignature && !forceNoSignature) {
     const signature = generateCashfreeSignature(trimmedClientId);
     if (signature) {
       headers['x-cf-signature'] = signature;
@@ -143,8 +159,62 @@ export function getCashfreeHeaders(clientId, clientSecret, includeSignature = tr
       console.warn('⚠️  Signature generation failed or skipped. Requests may fail if IP is not whitelisted in Cashfree dashboard.');
       console.warn('   To fix: Either add your server IP to Cashfree whitelist OR ensure public key file exists at keys/cashfree_public_key.pem');
     }
+  } else if (forceNoSignature) {
+    console.log('ℹ️  Signature disabled (IP whitelisting mode)');
   }
 
   return headers;
 }
 
+/**
+ * Verify public key file exists and is valid
+ * @returns {Object} Verification result with details
+ */
+export function verifyPublicKey() {
+  const publicKeyPath = path.join(__dirname, '..', 'keys', 'cashfree_public_key.pem');
+  
+  const result = {
+    exists: false,
+    path: publicKeyPath,
+    format: null,
+    valid: false,
+    error: null,
+  };
+
+  try {
+    if (!fs.existsSync(publicKeyPath)) {
+      result.error = 'Public key file not found';
+      return result;
+    }
+
+    result.exists = true;
+    const publicKey = fs.readFileSync(publicKeyPath, 'utf8').trim();
+    
+    const isPKCS1 = publicKey.includes('BEGIN RSA PUBLIC KEY');
+    const isPKCS8 = publicKey.includes('BEGIN PUBLIC KEY');
+    
+    if (isPKCS1) {
+      result.format = 'PKCS#1';
+      result.valid = true;
+    } else if (isPKCS8) {
+      result.format = 'PKCS#8';
+      result.valid = true;
+    } else {
+      result.error = 'Invalid key format - must be PKCS#1 or PKCS#8';
+    }
+
+    // Try to create a test key object to verify it's parseable
+    if (result.valid) {
+      try {
+        crypto.createPublicKey(publicKey);
+      } catch (parseError) {
+        result.valid = false;
+        result.error = `Key parsing failed: ${parseError.message}`;
+      }
+    }
+  } catch (error) {
+    result.error = error.message;
+  }
+
+  return result;
+}

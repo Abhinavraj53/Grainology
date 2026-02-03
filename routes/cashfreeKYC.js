@@ -3,7 +3,7 @@ import axios from 'axios';
 import multer from 'multer';
 import FormDataLib from 'form-data';
 import Cashfree from '../lib/cashfree.js';
-import { generateCashfreeSignature, getCashfreeHeaders } from '../utils/cashfreeSignature.js';
+import { generateCashfreeSignature, getCashfreeHeaders, verifyPublicKey } from '../utils/cashfreeSignature.js';
 
 const router = express.Router();
 
@@ -13,6 +13,39 @@ const CASHFREE_CLIENT_SECRET = process.env.CASHFREE_CLIENT_SECRET || '';
 // Normalize base URL to avoid double slashes
 const CASHFREE_BASE_URL = (process.env.CASHFREE_BASE_URL || 'https://api.cashfree.com').replace(/\/$/, '');
 const CASHFREE_API_VERSION = '2023-12-18';
+// Option to disable signature if IP is whitelisted (set CASHFREE_DISABLE_SIGNATURE=true)
+const CASHFREE_DISABLE_SIGNATURE = process.env.CASHFREE_DISABLE_SIGNATURE === 'true';
+
+// Helper function to get Cashfree headers with signature configuration
+function getCashfreeHeadersWithConfig() {
+  // Verify public key status on first call
+  if (!getCashfreeHeadersWithConfig._keyVerified) {
+    const keyStatus = verifyPublicKey();
+    console.log('🔍 Public Key Status:', {
+      exists: keyStatus.exists,
+      format: keyStatus.format,
+      valid: keyStatus.valid,
+      error: keyStatus.error,
+    });
+    
+    if (CASHFREE_DISABLE_SIGNATURE) {
+      console.log('ℹ️  Signature disabled via CASHFREE_DISABLE_SIGNATURE=true (using IP whitelisting)');
+    } else if (!keyStatus.exists) {
+      console.warn('⚠️  Public key not found. Set CASHFREE_DISABLE_SIGNATURE=true if using IP whitelisting.');
+    } else if (!keyStatus.valid) {
+      console.error('❌ Public key is invalid:', keyStatus.error);
+    }
+    
+    getCashfreeHeadersWithConfig._keyVerified = true;
+  }
+  
+  return getCashfreeHeaders(
+    CASHFREE_CLIENT_ID, 
+    CASHFREE_CLIENT_SECRET, 
+    true, // includeSignature
+    CASHFREE_DISABLE_SIGNATURE // forceNoSignature
+  );
+}
 
 // Multer configuration for document uploads
 const storage = multer.memoryStorage();
@@ -83,7 +116,7 @@ router.post('/verify-gstin', async (req, res) => {
       `${CASHFREE_BASE_URL}/verification/gstin`,
       gstBody,
       {
-        headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+        headers: getCashfreeHeadersWithConfig(),
         timeout: 10000,
       }
     );
@@ -223,7 +256,7 @@ router.post('/verify-cin', async (req, res) => {
       `${CASHFREE_BASE_URL}/verification/cin`,
       cinBody,
       {
-        headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+        headers: getCashfreeHeadersWithConfig(),
         timeout: 10000,
       }
     );
@@ -475,7 +508,7 @@ router.post('/verify-pan', async (req, res) => {
         `${CASHFREE_BASE_URL}/verification/pan`,
         { pan: cleanPan, name: cleanName },
       {
-        headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+        headers: getCashfreeHeadersWithConfig(),
           timeout: 10000,
       }
     );
@@ -620,7 +653,7 @@ router.post('/digilocker/verify-account', async (req, res) => {
         `${CASHFREE_BASE_URL}/verification/digilocker/verify-account`,
         verifyAccountRequest,
         {
-          headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+          headers: getCashfreeHeadersWithConfig(),
           timeout: 15000,
         }
       );
@@ -711,7 +744,7 @@ router.post('/digilocker/create-url', async (req, res) => {
             ...(user_flow && { user_flow: user_flow }),
           },
           {
-            headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+            headers: getCashfreeHeadersWithConfig(),
             timeout: 15000,
           }
         );
@@ -801,7 +834,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
             aadhaar_number: cleanAadhaar,
         },
         {
-          headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+          headers: getCashfreeHeadersWithConfig(),
             timeout: 10000,
         }
       );
@@ -945,7 +978,7 @@ router.post('/verify-aadhaar-number', async (req, res) => {
       
           // Adjust request body and headers based on endpoint type
           let apiRequestBody = requestBody;
-          let apiHeaders = getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET);
+          let apiHeaders = getCashfreeHeadersWithConfig();
           
           // If using Payout API format (/pg/lrs/digilocker/link), adjust request format
           if (endpoint.includes('/pg/lrs/digilocker/link')) {
@@ -1311,7 +1344,7 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
         const fallbackResponse = await axios.get(
           `${CASHFREE_BASE_URL}/verification/digilocker/verification-status/${idToUse}`,
         {
-          headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+          headers: getCashfreeHeadersWithConfig(),
             timeout: 15000,
         }
       );
@@ -1325,7 +1358,7 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
           const docResponse = await axios.get(
               `${CASHFREE_BASE_URL}/verification/digilocker/document/${idToUse}?document_requested=AADHAAR`,
             {
-              headers: getCashfreeHeaders(CASHFREE_CLIENT_ID, CASHFREE_CLIENT_SECRET),
+              headers: getCashfreeHeadersWithConfig(),
                 timeout: 15000,
             }
           );
@@ -1675,6 +1708,59 @@ router.get('/digilocker-status/:referenceId', async (req, res) => {
     return res.status(500).json({
       error: 'Failed to get DigiLocker status',
       details: error.response?.data || error.message,
+    });
+  }
+});
+
+// Diagnostic endpoint to check Cashfree configuration
+router.get('/diagnostics', async (req, res) => {
+  try {
+    const keyStatus = verifyPublicKey();
+    const signatureTest = generateCashfreeSignature(CASHFREE_CLIENT_ID);
+    
+    return res.json({
+      success: true,
+      configuration: {
+        hasClientId: !!CASHFREE_CLIENT_ID,
+        hasClientSecret: !!CASHFREE_CLIENT_SECRET,
+        clientIdLength: CASHFREE_CLIENT_ID?.length || 0,
+        clientIdPreview: CASHFREE_CLIENT_ID ? `${CASHFREE_CLIENT_ID.substring(0, 8)}...${CASHFREE_CLIENT_ID.substring(CASHFREE_CLIENT_ID.length - 4)}` : 'MISSING',
+        baseUrl: CASHFREE_BASE_URL,
+        apiVersion: CASHFREE_API_VERSION,
+        signatureDisabled: CASHFREE_DISABLE_SIGNATURE,
+      },
+      publicKey: {
+        exists: keyStatus.exists,
+        format: keyStatus.format,
+        valid: keyStatus.valid,
+        path: keyStatus.path,
+        error: keyStatus.error,
+      },
+      signature: {
+        canGenerate: !!signatureTest,
+        length: signatureTest?.length || 0,
+      },
+      recommendations: [
+        !CASHFREE_CLIENT_ID ? '❌ Set CASHFREE_CLIENT_ID environment variable' : '✅ Client ID configured',
+        !CASHFREE_CLIENT_SECRET ? '❌ Set CASHFREE_CLIENT_SECRET environment variable' : '✅ Client Secret configured',
+        !keyStatus.exists ? '⚠️  Public key file not found. Either add keys/cashfree_public_key.pem OR set CASHFREE_DISABLE_SIGNATURE=true' : '✅ Public key file exists',
+        !keyStatus.valid ? '❌ Public key is invalid. Download a fresh key from Cashfree dashboard' : '✅ Public key is valid',
+        !signatureTest && !CASHFREE_DISABLE_SIGNATURE ? '❌ Cannot generate signature. Check public key or whitelist IP in Cashfree dashboard' : '✅ Signature generation working',
+      ],
+      troubleshooting: {
+        signatureMismatch: [
+          '1. Verify the public key in keys/cashfree_public_key.pem matches the one in Cashfree dashboard',
+          '2. Ensure CASHFREE_CLIENT_ID exactly matches the Client ID in Cashfree dashboard (case-sensitive)',
+          '3. Download a fresh public key from Cashfree dashboard (Two-Factor Authentication section)',
+          '4. If public key was password-protected, extract it properly before saving',
+          '5. Alternative: Whitelist your server IP in Cashfree dashboard and set CASHFREE_DISABLE_SIGNATURE=true',
+        ],
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
 });

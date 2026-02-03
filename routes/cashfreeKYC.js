@@ -17,6 +17,66 @@ const CASHFREE_API_VERSION = '2023-12-18';
 // Set CASHFREE_USE_SIGNATURE=true if you want to use public key signature instead
 const CASHFREE_USE_SIGNATURE = process.env.CASHFREE_USE_SIGNATURE === 'true';
 
+// Helper function to handle Cashfree authentication errors
+function handleCashfreeAuthError(status, data) {
+  // Check for "x-cf-signature missing" error (means dashboard is still in Public Key mode)
+  const isSignatureMissing = data.message?.toLowerCase().includes('x-cf-signature missing') ||
+                            data.message?.toLowerCase().includes('signature missing');
+  
+  // Check for signature mismatch errors
+  const isSignatureMismatch = (data.code === 'authentication_failed' && 
+                               data.message?.toLowerCase().includes('signature mismatch')) ||
+                               (data.type === 'authentication_error' && 
+                               data.message?.toLowerCase().includes('signature mismatch'));
+  
+  if (isSignatureMissing) {
+    return {
+      error: '2FA Method Mismatch',
+      message: 'Cashfree dashboard is still set to "Public Key" mode, but the code is using IP Whitelisting. You need to switch the 2FA method in Cashfree dashboard.',
+      fix: {
+        step1: 'Go to Cashfree Dashboard: Developers → Two-Factor Authentication',
+        step2: 'Click "Switch Method" button',
+        step3: 'Select "IP Whitelisting" (not Public Key)',
+        step4: 'Add your server IP address to the whitelist',
+        step5: 'Save the configuration',
+      },
+      alternative: 'Alternatively, set CASHFREE_USE_SIGNATURE=true and configure the public key file',
+      troubleshooting: [
+        '1. Verify you switched to IP Whitelisting in Cashfree dashboard (not just added IP while in Public Key mode)',
+        '2. Make sure you clicked "Switch Method" and selected "IP Whitelisting"',
+        '3. Ensure your server IP is added to the whitelist',
+        '4. Wait a few minutes for the change to propagate',
+        '5. Check the diagnostic endpoint: /api/cashfree/diagnostics',
+      ],
+    };
+  }
+  
+  if (isSignatureMismatch) {
+    return {
+      error: 'Authentication failed',
+      message: 'Signature mismatch detected. Please verify: 1) Public key file exists at keys/cashfree_public_key.pem, 2) Public key matches your Cashfree account, 3) Client ID in signature matches x-client-id header.',
+      troubleshooting: [
+        '1. Verify public key file exists: keys/cashfree_public_key.pem',
+        '2. Ensure public key matches your Cashfree account (download fresh key if needed)',
+        '3. Check that CASHFREE_CLIENT_ID matches the one in Cashfree dashboard',
+        '4. Verify public key format (should be PKCS#1 or PKCS#8)',
+        '5. Alternative: Switch to IP Whitelisting in Cashfree dashboard',
+      ],
+    };
+  }
+  
+  return {
+    error: 'Authentication failed',
+    message: 'Verification service authentication failed. Please check Cashfree credentials or IP whitelisting configuration.',
+    troubleshooting: [
+      '1. Check CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET are correct',
+      '2. Verify credentials match your Cashfree account environment (sandbox/production)',
+      '3. If using IP Whitelisting: Ensure you switched the 2FA method in Cashfree dashboard to "IP Whitelisting"',
+      '4. If using Public Key: Ensure public key file exists and matches dashboard',
+    ],
+  };
+}
+
 // Helper function to get Cashfree headers (using IP whitelisting by default)
 function getCashfreeHeadersWithConfig() {
   // Log configuration on first call
@@ -159,31 +219,12 @@ router.post('/verify-gstin', async (req, res) => {
       const status = error.response.status;
       const data = error.response.data || {};
 
-      if (status === 401 || status === 403) {
-        // Check for specific signature mismatch error
-        const isSignatureMismatch = data.code === 'authentication_failed' || 
-                                   data.message?.toLowerCase().includes('signature') ||
-                                   data.type === 'authentication_error';
-        
+      if (status === 401 || status === 403 || status === 400) {
+        const errorInfo = handleCashfreeAuthError(status, data);
         return res.status(500).json({
           success: false,
-          error: 'Authentication failed',
-          message: isSignatureMismatch 
-            ? 'Signature mismatch detected. Please verify: 1) Public key file exists at keys/cashfree_public_key.pem, 2) Public key matches your Cashfree account, 3) Client ID in signature matches x-client-id header. Alternatively, whitelist your server IP in Cashfree dashboard.'
-            : 'Verification service authentication failed. Please check Cashfree credentials or IP whitelisting.',
+          ...errorInfo,
           details: data,
-          troubleshooting: isSignatureMismatch ? [
-            '1. Verify public key file exists: keys/cashfree_public_key.pem',
-            '2. Ensure public key matches your Cashfree account (download fresh key if needed)',
-            '3. Check that CASHFREE_CLIENT_ID matches the one in Cashfree dashboard',
-            '4. Verify public key format (should be PKCS#1 or PKCS#8)',
-            '5. Alternative: Whitelist your server IP in Cashfree dashboard to skip signature requirement'
-          ] : [
-            '1. Check CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET are correct',
-            '2. Verify credentials match your Cashfree account environment (sandbox/production)',
-            '3. Whitelist your server IP in Cashfree dashboard',
-            '4. Ensure public key file exists if using 2FA signature'
-          ],
         });
       }
 
@@ -309,31 +350,12 @@ router.post('/verify-cin', async (req, res) => {
       const status = error.response.status;
       const data = error.response.data || {};
 
-      if (status === 401 || status === 403) {
-        // Check for specific signature mismatch error
-        const isSignatureMismatch = data.code === 'authentication_failed' || 
-                                   data.message?.toLowerCase().includes('signature') ||
-                                   data.type === 'authentication_error';
-        
+      if (status === 401 || status === 403 || status === 400) {
+        const errorInfo = handleCashfreeAuthError(status, data);
         return res.status(500).json({
           success: false,
-          error: 'Authentication failed',
-          message: isSignatureMismatch 
-            ? 'Signature mismatch detected. Please verify: 1) Public key file exists at keys/cashfree_public_key.pem, 2) Public key matches your Cashfree account, 3) Client ID in signature matches x-client-id header. Alternatively, whitelist your server IP in Cashfree dashboard.'
-            : 'Verification service authentication failed. Please check Cashfree credentials or IP whitelisting.',
+          ...errorInfo,
           details: data,
-          troubleshooting: isSignatureMismatch ? [
-            '1. Verify public key file exists: keys/cashfree_public_key.pem',
-            '2. Ensure public key matches your Cashfree account (download fresh key if needed)',
-            '3. Check that CASHFREE_CLIENT_ID matches the one in Cashfree dashboard',
-            '4. Verify public key format (should be PKCS#1 or PKCS#8)',
-            '5. Alternative: Whitelist your server IP in Cashfree dashboard to skip signature requirement'
-          ] : [
-            '1. Check CASHFREE_CLIENT_ID and CASHFREE_CLIENT_SECRET are correct',
-            '2. Verify credentials match your Cashfree account environment (sandbox/production)',
-            '3. Whitelist your server IP in Cashfree dashboard',
-            '4. Ensure public key file exists if using 2FA signature'
-          ],
         });
       }
 

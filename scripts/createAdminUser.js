@@ -31,7 +31,7 @@ const createAdminUser = async () => {
       console.log(`   Name: ${admin.name}`);
       console.log(`   Email: ${admin.email || 'Not set'}\n`);
       
-      // Update password and ensure it's an admin
+      // Update password and ensure it's an admin (pre-verified, can login)
       admin.password = adminPassword; // Will be hashed by pre-save hook
       admin.role = 'admin';
       admin.name = adminName;
@@ -39,11 +39,13 @@ const createAdminUser = async () => {
       admin.mobile_number = adminMobile;
       admin.kyc_status = 'verified';
       admin.kyc_verified_at = new Date();
-      
+      admin.approval_status = 'approved';
+      admin.approved_at = new Date();
+
       await admin.save();
       console.log('✅ Admin user updated successfully!\n');
     } else {
-      // Create new admin user
+      // Create new admin user (pre-verified, can login with mobile or email)
       admin = new User({
         email: adminEmail,
         password: adminPassword, // Will be hashed by pre-save hook
@@ -55,6 +57,8 @@ const createAdminUser = async () => {
         country: 'India',
         kyc_status: 'verified',
         kyc_verified_at: new Date(),
+        approval_status: 'approved',
+        approved_at: new Date(),
       });
 
       await admin.save();
@@ -75,10 +79,11 @@ const createAdminUser = async () => {
     console.log(`   User ID: ${admin._id}`);
     console.log(`   Password Verified: ${isPasswordValid ? '✅ YES' : '❌ NO'}`);
     console.log('═══════════════════════════════════════════════════════');
-    console.log('\n💡 Login Instructions:');
-    console.log('   - Use Mobile Number: 9999999999');
-    console.log('   - Use Password: Admin@123');
-    console.log('   - Login is case-sensitive\n');
+    console.log('\n💡 Login: Use either Mobile Number OR Email + Password');
+    console.log('   - Mobile: 9999999999');
+    console.log('   - Email: admin@grainology.com');
+    console.log('   - Password: Admin@123');
+    console.log('   - Login is case-sensitive for password.\n');
 
     await mongoose.disconnect();
     console.log('✅ Database connection closed');

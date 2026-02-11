@@ -4,6 +4,8 @@ import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToastContext } from '../../contexts/ToastContext';
 import ColumnMappingDialog from './ColumnMappingDialog';
+import FileFormatRequirementsModal from './FileFormatRequirementsModal';
+import { generateSampleExcel, downloadExcelBuffer } from '../../utils/sampleExcel';
 
 interface User {
   id: string;
@@ -22,6 +24,8 @@ export default function ConfirmSalesOrderForm() {
   const [isDragging, setIsDragging] = useState(false);
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [showMappingDialog, setShowMappingDialog] = useState(false);
+  const [showFormatRequirements, setShowFormatRequirements] = useState(false);
+  const [duplicateChoice, setDuplicateChoice] = useState<{ duplicateCount: number; totalRows: number; duplicateRowNumbers: number[] } | null>(null);
   const [availableColumns, setAvailableColumns] = useState<string[]>([]);
   const [previewRows, setPreviewRows] = useState<Array<Record<string, any>>>([]);
   const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
@@ -171,12 +175,22 @@ export default function ConfirmSalesOrderForm() {
   };
 
   const fetchLocations = async () => {
-    // For now, use a static list. Can be replaced with location master API if available
-    const commonLocations = [
-      'GULABBAGH', 'BUXAR', 'PATNA', 'MUZAFFARPUR', 'GAYA', 'BHAGALPUR',
-      'PURNIA', 'DARBHANGA', 'SARAN', 'SIWAN', 'VAISHALI', 'SAMASTIPUR'
-    ];
-    setLocations(commonLocations);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+
+      const response = await fetch(`${apiUrl}/location-master?is_active=true`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLocations(data.map((l: { name: string }) => l.name));
+      }
+    } catch (error) {
+      console.error('Failed to fetch locations:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -318,6 +332,59 @@ export default function ConfirmSalesOrderForm() {
     setRemarks('');
   };
 
+  const handleBulkUpload = async (skipDuplicates: boolean) => {
+    if (!uploadFile) return;
+    setDuplicateChoice(null);
+    setUploading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showError('Authentication required. Please sign in again.');
+        return;
+      }
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+      if (Object.keys(columnMapping).length > 0) {
+        formData.append('columnMapping', JSON.stringify(columnMapping));
+      }
+      formData.append('skipDuplicates', String(skipDuplicates));
+      const response = await fetch(`${apiUrl}/confirmed-sales-orders/bulk-upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || result.message || 'Upload failed');
+      if (result.requiresDuplicateChoice) {
+        setDuplicateChoice({
+          duplicateCount: result.duplicateCount,
+          totalRows: result.totalRows,
+          duplicateRowNumbers: result.duplicateRowNumbers || [],
+        });
+        setUploading(false);
+        return;
+      }
+      if (result.success && result.count > 0) {
+        const dupMsg = result.duplicateSkipped > 0 ? ` (${result.duplicateSkipped} duplicates skipped)` : '';
+        const warningMsg = result.warnings?.length ? ` (${result.warnings.length} warnings)` : '';
+        showSuccess(`Successfully uploaded ${result.count} confirmed sales orders!${dupMsg}${warningMsg}`);
+      } else if (result.errors?.length && !result.count) {
+        showError(`Upload failed: ${result.errors.slice(0, 3).join(', ')}`);
+      } else {
+        showSuccess(`Successfully uploaded ${result.count || 0} confirmed sales orders!`);
+      }
+      setUploadFile(null);
+      setColumnMapping({});
+      const fileInput = document.getElementById('file-upload-sales') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+    } catch (err: any) {
+      showError(err.message || 'Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Varieties are now fetched from database via useEffect
 
   return (
@@ -451,13 +518,20 @@ export default function ConfirmSalesOrderForm() {
             </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <h4 className="font-semibold text-blue-900">File Format Requirements:</h4>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowFormatRequirements(true)}
+                    className="px-3 py-1 bg-amber-500 text-white text-sm rounded hover:bg-amber-600"
+                  >
+                    View detailed format requirements
+                  </button>
                 <button
                   type="button"
                   onClick={async () => {
                     try {
-                      // Fetch master data dynamically
                       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
                       const token = localStorage.getItem('auth_token');
                       if (!token) {
@@ -465,34 +539,30 @@ export default function ConfirmSalesOrderForm() {
                         return;
                       }
 
-                      // Fetch all master data
-                      const [commoditiesRes, warehousesRes, customersRes] = await Promise.all([
-                        fetch(`${apiUrl}/commodity-master?is_active=true`, {
-                          headers: { 'Authorization': `Bearer ${token}` }
-                        }),
-                        fetch(`${apiUrl}/warehouse-master?is_active=true`, {
-                          headers: { 'Authorization': `Bearer ${token}` }
-                        }),
-                        fetch(`${apiUrl}/admin/users`, {
-                          headers: { 'Authorization': `Bearer ${token}` }
-                        })
+                      // Fetch master list from API so Sample CSV always has current dropdown values (even if state was empty)
+                      const [locRes, whRes, commRes, usersRes] = await Promise.all([
+                        fetch(`${apiUrl}/location-master?is_active=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                        fetch(`${apiUrl}/warehouse-master?is_active=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                        fetch(`${apiUrl}/commodity-master?is_active=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                        fetch(`${apiUrl}/admin/users`, { headers: { 'Authorization': `Bearer ${token}` } }),
                       ]);
+                      const locList = locRes.ok ? (await locRes.json()).map((l: any) => l.name) : locations.length ? locations : ['GULABBAGH', 'BUXAR'];
+                      const whList = whRes.ok ? (await whRes.json()).map((w: any) => w.name) : warehouses.length ? warehouses : ['SATISH KUMAR WAREHOUSE', 'SIDDHASHRAM WAREHOUSE'];
+                      const commList = commRes.ok ? (await commRes.json()).map((c: any) => c.name) : commodities.length ? commodities : ['Maize', 'Wheat'];
+                      const usersData = usersRes.ok ? await usersRes.json() : [];
+                      const customerList = (usersData.length ? usersData : customers).filter((u: any) => u.role !== 'admin');
 
-                      const commoditiesData = commoditiesRes.ok ? await commoditiesRes.json() : [];
-                      const warehousesData = warehousesRes.ok ? await warehousesRes.json() : [];
-                      const customersData = customersRes.ok ? await customersRes.json() : [];
-                      const customerList = customersData.filter((u: any) => u.role !== 'admin');
-
-                      // Get sample values from master data
                       const sampleState = indianStates[0] || 'Bihar';
-                      const sampleLocation = locations[0] || 'GULABBAGH';
-                      const sampleWarehouse = warehousesData[0]?.name || warehouses[0] || 'SATISH KUMAR WAREHOUSE';
-                      const sampleCommodity1 = commoditiesData.find((c: any) => c.name === 'Maize')?.name || commodities.find(c => c === 'Maize') || 'Maize';
-                      const sampleCommodity2 = commoditiesData.find((c: any) => c.name === 'Wheat')?.name || commodities.find(c => c === 'Wheat') || 'Wheat';
+                      const sampleLocation = locList[0] || 'GULABBAGH';
+                      const sampleLocation2 = (locList[1] ?? locList[0]) || 'BUXAR';
+                      const sampleWarehouse = whList[0] || 'SATISH KUMAR WAREHOUSE';
+                      const sampleWarehouse2 = (whList[1] ?? whList[0]) || 'SIDDHASHRAM WAREHOUSE';
+                      const sampleCommodity1 = commList[0] || 'Maize';
+                      const sampleCommodity2 = (commList[1] ?? commList[0]) || 'Wheat';
                       const sampleSeller1 = customerList[0]?.name || 'FARMKEN VENTURES';
                       const sampleSeller2 = customerList[1]?.name || customerList[0]?.name || 'Agro Valley Trading';
 
-                      // Fetch varieties for sample commodities
+                      // Fetch varieties for sample commodities (dropdown values for those commodities)
                       let sampleVarieties1: string[] = [];
                       let sampleVarieties2: string[] = [];
                       try {
@@ -631,8 +701,8 @@ export default function ConfirmSalesOrderForm() {
                         sampleState,
                         sampleSeller2, // Customer name
                         sampleSeller2, // Seller Name (same as customer)
-                        locations[1] || 'BUXAR',
-                        warehousesData[1]?.name || warehouses[1] || 'SIDDHASHRAM WAREHOUSE',
+                        sampleLocation2,
+                        sampleWarehouse2,
                         '2',
                         sampleCommodity2,
                         finalVariety2,
@@ -698,6 +768,92 @@ export default function ConfirmSalesOrderForm() {
                   <Download className="w-4 h-4" />
                   Download Sample CSV
                 </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+                      const token = localStorage.getItem('auth_token');
+                      if (!token) {
+                        showError('Authentication required');
+                        return;
+                      }
+                      const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
+                      // Always fetch latest master data from API so dropdowns in Excel are up to date
+                      const [locRes, whRes, commRes, usersRes, varietiesRes, statesRes] = await Promise.all([
+                        fetch(`${apiUrl}/location-master?is_active=true`, authHeaders),
+                        fetch(`${apiUrl}/warehouse-master?is_active=true`, authHeaders),
+                        fetch(`${apiUrl}/commodity-master?is_active=true`, authHeaders),
+                        fetch(`${apiUrl}/admin/users`, authHeaders),
+                        fetch(`${apiUrl}/variety-master`, authHeaders),
+                        fetch(`${apiUrl}/weather/states`, authHeaders),
+                      ]);
+                      const locList = locRes.ok ? (await locRes.json()).map((l: any) => l.name) : ['GULABBAGH', 'BUXAR'];
+                      const whList = whRes.ok ? (await whRes.json()).map((w: any) => w.name) : ['SATISH KUMAR WAREHOUSE', 'SIDDHASHRAM WAREHOUSE'];
+                      const commList = commRes.ok ? (await commRes.json()).map((c: any) => c.name) : ['Maize', 'Wheat'];
+                      const usersData = usersRes.ok ? await usersRes.json() : [];
+                      const customerList = (usersData.length ? usersData : customers).filter((u: any) => u.role !== 'admin');
+                      const allVarieties: string[] = varietiesRes.ok
+                        ? [...new Set((await varietiesRes.json()).filter((v: any) => v.is_active !== false).map((v: any) => v.variety_name))]
+                        : [];
+                      const statesList: string[] = statesRes.ok ? await statesRes.json() : indianStates;
+                      const sampleState = statesList[0] || 'Bihar';
+                      const sampleLocation = locList[0] || 'GULABBAGH';
+                      const sampleLocation2 = (locList[1] ?? locList[0]) || 'BUXAR';
+                      const sampleWarehouse = whList[0] || 'SATISH KUMAR WAREHOUSE';
+                      const sampleWarehouse2 = (whList[1] ?? whList[0]) || 'SIDDHASHRAM WAREHOUSE';
+                      const sampleCommodity1 = commList[0] || 'Maize';
+                      const sampleCommodity2 = (commList[1] ?? commList[0]) || 'Wheat';
+                      const sampleSeller1 = customerList[0]?.name || 'FARMKEN VENTURES';
+                      const sampleSeller2 = customerList[1]?.name || customerList[0]?.name || 'Agro Valley Trading';
+                      const finalVariety1 = allVarieties[0] || 'Hybrid';
+                      const finalVariety2 = allVarieties[1] || allVarieties[0] || 'Dara';
+                      const headers = [
+                        'Date of Transaction', 'State', 'Customer', 'Seller Name', 'Location', 'Warehouse Name', 'Chamber No.', 'Commodity', 'Variety',
+                        'Gate Pass No.', 'Vehicle No.', 'Weight Slip No.', 'Gross Weight in MT (Vehicle + Goods)', 'Tare Weight of Vehicle', 'No. of Bags', 'Net Weight in MT', 'Rate Per MT', 'Gross Amount',
+                        'HLW (Hectolitre Weight) in Wheat', 'Excess HLW', 'Deduction Amount Rs. (HLW)', 'Moisture (MOI)', 'Excess Moisture', 'Broken, Damage, Discolour, Immature (BDOI)', 'Excess BDOI', 'MOI+BDOI', 'Weight Deduction in KG (MOI+BDOI)', 'Deduction Amount Rs. (MOI+BDOI)',
+                        'Other Deduction 1', 'Other Deduction 1 Remarks', 'Other Deduction 2', 'Other Deduction 2 Remarks', 'Other Deduction 3', 'Other Deduction 3 Remarks', 'Other Deduction 4', 'Other Deduction 4 Remarks', 'Other Deduction 5', 'Other Deduction 5 Remarks',
+                        'Other Deduction 6', 'Other Deduction 6 Remarks', 'Other Deduction 7', 'Other Deduction 7 Remarks', 'Other Deduction 8', 'Other Deduction 8 Remarks', 'Other Deduction 9', 'Other Deduction 9 Remarks', 'Net Amount', 'Remarks'
+                      ];
+                      const today = new Date();
+                      const d1 = new Date(today); d1.setDate(d1.getDate() - 5);
+                      const d2 = new Date(today); d2.setDate(d2.getDate() - 10);
+                      const sampleRow1 = [d1.toLocaleDateString('en-GB'), sampleState, sampleSeller1, sampleSeller1, sampleLocation, sampleWarehouse, '16', sampleCommodity1, finalVariety1, '754201', 'BR11GD-8172', '1300', '12.690', '6.790', '93', '5.900', '22310.00', '131629.00', 'Not Applicable', 'Not Applicable', '0.00', '14.80', '0.80', '4.95', '0.00', '0.80', '47.20', '1053.03', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '130575.97', ''];
+                      const sampleRow2 = [d2.toLocaleDateString('en-GB'), sampleState, sampleSeller2, sampleSeller2, sampleLocation2, sampleWarehouse2, '2', sampleCommodity2, finalVariety2, 'Not Available', 'Not Available', 'Not Available', 'Not Available', 'Not Available', '105', '5.970', '25900.00', '154623.00', '74.00', '0.00', '0.00', '9.20', '0.00', '0.00', '0.00', '0.00', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '154623.00', ''];
+                      const buffer = await generateSampleExcel({
+                        headers,
+                        sampleRows: [sampleRow1, sampleRow2],
+                        masterList: {
+                          locations: locList,
+                          warehouses: whList,
+                          commodities: commList,
+                          customers: customerList.map((c: any) => c.name),
+                          varieties: allVarieties,
+                          states: statesList,
+                        },
+                        sheetName: 'Sample Data',
+                        dropdownColumns: [
+                          { columnIndex: 2, masterListRow: 9 },  // State
+                          { columnIndex: 3, masterListRow: 6 },  // Customer
+                          { columnIndex: 4, masterListRow: 6 },  // Seller Name
+                          { columnIndex: 5, masterListRow: 3 },  // Location
+                          { columnIndex: 6, masterListRow: 4 },  // Warehouse Name
+                          { columnIndex: 8, masterListRow: 5 },  // Commodity
+                          { columnIndex: 9, masterListRow: 7 },  // Variety
+                        ],
+                      });
+                      downloadExcelBuffer(buffer, 'sample_confirmed_sales_order.xlsx');
+                      showSuccess('Sample Excel sheet downloaded.');
+                    } catch (error: any) {
+                      showError('Failed to generate sample Excel: ' + (error.message || 'Unknown error'));
+                    }
+                  }}
+                  className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center gap-1"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Download Sample Excel Sheet
+                </button>
+                </div>
               </div>
               <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
                 <li>First row should contain column headers</li>
@@ -706,6 +862,47 @@ export default function ConfirmSalesOrderForm() {
                 <li>Each row represents one confirmed sales order</li>
               </ul>
             </div>
+
+            <FileFormatRequirementsModal
+              open={showFormatRequirements}
+              onClose={() => setShowFormatRequirements(false)}
+              type="sales"
+            />
+
+            {duplicateChoice && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setDuplicateChoice(null)}>
+                <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Duplicate rows found</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    {duplicateChoice.duplicateCount} duplicate row(s) found (out of {duplicateChoice.totalRows} total). Duplicates are rows with the same State, Customer/Seller, Location, Warehouse, Date, Vehicle No., and Net Weight.
+                  </p>
+                  <p className="text-sm text-gray-600 mb-4">How do you want to proceed?</p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleBulkUpload(true)}
+                      className="flex-1 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium"
+                    >
+                      Skip duplicates (keep first)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleBulkUpload(false)}
+                      className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
+                    >
+                      Keep all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDuplicateChoice(null)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {uploadFile && (
               <div className="flex gap-2">
@@ -760,68 +957,7 @@ export default function ConfirmSalesOrderForm() {
 
             <button
               type="button"
-              onClick={async () => {
-                if (!uploadFile) {
-                  showError('Please select a file to upload');
-                  return;
-                }
-
-                setUploading(true);
-                try {
-                  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-                  const token = localStorage.getItem('auth_token');
-
-                  if (!token) {
-                    showError('Authentication required. Please sign in again.');
-                    setUploading(false);
-                    return;
-                  }
-
-                  const formData = new FormData();
-                  formData.append('file', uploadFile);
-                  if (Object.keys(columnMapping).length > 0) {
-                    formData.append('columnMapping', JSON.stringify(columnMapping));
-                  }
-
-                  const response = await fetch(`${apiUrl}/confirmed-sales-orders/bulk-upload`, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                    },
-                    body: formData,
-                  });
-
-                  const result = await response.json();
-
-                  if (!response.ok) {
-                    throw new Error(result.error || result.message || 'Upload failed');
-                  }
-
-                  // Only show error if upload actually failed (no orders saved)
-                  if (result.success && result.count > 0) {
-                    // Upload was successful - show success message
-                    const warningMsg = result.warnings && result.warnings.length > 0 
-                      ? ` (${result.warnings.length} warnings)` 
-                      : '';
-                    showSuccess(`Successfully uploaded ${result.count} confirmed sales orders!${warningMsg}`);
-                  } else if (result.errors && result.errors.length > 0 && (!result.count || result.count === 0)) {
-                    // Only show error if no orders were saved
-                    showError(`Upload failed: ${result.errors.slice(0, 3).join(', ')}`);
-                  } else {
-                    showSuccess(`Successfully uploaded ${result.count || 0} confirmed sales orders!`);
-                  }
-
-                  // Reset form
-                  setUploadFile(null);
-                  setColumnMapping({});
-                  const fileInput = document.getElementById('file-upload-sales') as HTMLInputElement;
-                  if (fileInput) fileInput.value = '';
-                } catch (err: any) {
-                  showError(err.message || 'Failed to upload file. Please try again.');
-                } finally {
-                  setUploading(false);
-                }
-              }}
+              onClick={() => handleBulkUpload(false)}
               disabled={uploading || !uploadFile}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >

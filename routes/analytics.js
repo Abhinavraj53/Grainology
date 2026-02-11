@@ -1,7 +1,6 @@
 import express from 'express';
 import ConfirmedSalesOrder from '../models/ConfirmedSalesOrder.js';
 import ConfirmedPurchaseOrder from '../models/ConfirmedPurchaseOrder.js';
-import User from '../models/User.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -10,34 +9,63 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireAdmin);
 
-// Helper function to get date range
+// Helper: start/end of day in UTC so range matches MongoDB date comparison (transaction_date parses to UTC)
+const startOfDay = (d) => { const x = new Date(d); x.setUTCHours(0, 0, 0, 0); return x; };
+const endOfDay = (d) => { const x = new Date(d); x.setUTCHours(23, 59, 59, 999); return x; };
+
 const getDateRange = (period) => {
   const now = new Date();
-  let startDate = new Date();
-  
+  let startDate;
+  let endDate = now;
+
   switch (period) {
     case 'today':
+      startDate = new Date(now);
       startDate.setHours(0, 0, 0, 0);
-      break;
+      endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      return { startDate, endDate };
     case 'week':
+      startDate = new Date(now);
       startDate.setDate(now.getDate() - 7);
       break;
     case 'month':
+      startDate = new Date(now);
       startDate.setMonth(now.getMonth() - 1);
       break;
     case 'quarter':
+      startDate = new Date(now);
       startDate.setMonth(now.getMonth() - 3);
       break;
     case 'year':
+      startDate = new Date(now);
       startDate.setFullYear(now.getFullYear() - 1);
       break;
     case 'all':
     default:
       startDate = new Date('2020-01-01');
+      endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999);
+      return { startDate, endDate };
   }
-  
-  return { startDate, endDate: now };
+
+  startDate = startOfDay(startDate);
+  endDate = endOfDay(endDate);
+  return { startDate, endDate };
 };
+
+// Use booking date (transaction_date from excel) for analytics; fallback to createdAt
+const effectiveDateStage = {
+  $addFields: {
+    _effectiveDate: {
+      $ifNull: [
+        { $dateFromString: { dateString: '$transaction_date', onError: null, onNull: null } },
+        '$createdAt'
+      ]
+    }
+  }
+};
+const dateMatchStage = (startDate, endDate) => ({ $match: { _effectiveDate: { $gte: startDate, $lte: endDate } } });
 
 // Get time-based analytics (Daily/Weekly/Monthly trends)
 router.get('/time-based', async (req, res) => {
@@ -45,19 +73,16 @@ router.get('/time-based', async (req, res) => {
     const { period = 'month', groupBy = 'day' } = req.query;
     const { startDate, endDate } = getDateRange(period);
 
-    // Aggregation for sales orders
+    // Aggregation for sales orders (by booking date from sheet)
     const salesAggregation = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: {
             $dateToString: {
               format: groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-W%V' : '%Y-%m-%d',
-              date: '$createdAt'
+              date: '$_effectiveDate'
             }
           },
           totalOrders: { $sum: 1 },
@@ -69,19 +94,16 @@ router.get('/time-based', async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
 
-    // Aggregation for purchase orders
+    // Aggregation for purchase orders (by booking date from sheet)
     const purchaseAggregation = await ConfirmedPurchaseOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: {
             $dateToString: {
               format: groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-W%V' : '%Y-%m-%d',
-              date: '$createdAt'
+              date: '$_effectiveDate'
             }
           },
           totalOrders: { $sum: 1 },
@@ -116,13 +138,15 @@ router.get('/time-based', async (req, res) => {
       };
     });
 
-    // Monthly heatmap data (for seasonal patterns)
+    // Monthly heatmap data (by booking date)
     const heatmapData = await ConfirmedSalesOrder.aggregate([
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: {
-            month: { $month: '$createdAt' },
-            dayOfWeek: { $dayOfWeek: '$createdAt' }
+            month: { $month: '$_effectiveDate' },
+            dayOfWeek: { $dayOfWeek: '$_effectiveDate' }
           },
           count: { $sum: 1 },
           amount: { $sum: { $ifNull: ['$net_amount', 0] } }
@@ -149,13 +173,10 @@ router.get('/commodity', async (req, res) => {
     const { period = 'all' } = req.query;
     const { startDate, endDate } = getDateRange(period);
 
-    // Commodity distribution for sales
+    // Commodity distribution for sales (by booking date)
     const salesByCommodity = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: '$commodity',
@@ -170,13 +191,10 @@ router.get('/commodity', async (req, res) => {
       { $sort: { totalAmount: -1 } }
     ]);
 
-    // Commodity distribution for purchases
+    // Commodity distribution for purchases (by booking date)
     const purchaseByCommodity = await ConfirmedPurchaseOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: '$commodity',
@@ -191,13 +209,10 @@ router.get('/commodity', async (req, res) => {
       { $sort: { totalAmount: -1 } }
     ]);
 
-    // Variety breakdown
+    // Variety breakdown (by booking date)
     const varietyBreakdown = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: { commodity: '$commodity', variety: '$variety' },
@@ -209,17 +224,14 @@ router.get('/commodity', async (req, res) => {
       { $sort: { totalAmount: -1 } }
     ]);
 
-    // Commodity price trends over time
+    // Commodity price trends over time (by booking date)
     const priceTrends = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: {
-            date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
             commodity: '$commodity'
           },
           avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
@@ -283,47 +295,34 @@ router.get('/customer', async (req, res) => {
     const { startDate, endDate } = getDateRange(period);
 
     const Model = type === 'purchase' ? ConfirmedPurchaseOrder : ConfirmedSalesOrder;
+    const customerNameField = type === 'purchase' ? 'supplier_name' : 'seller_name';
 
-    // Top customers by volume
+    // Top customers (Seller/Supplier from sheet - no account required)
     const topCustomers = await Model.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
-          _id: '$customer_id',
+          _id: `$${customerNameField}`,
           totalOrders: { $sum: 1 },
           totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
           totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
           avgOrderValue: { $avg: { $ifNull: ['$net_amount', 0] } },
-          firstOrder: { $min: '$createdAt' },
-          lastOrder: { $max: '$createdAt' }
+          firstOrder: { $min: '$_effectiveDate' },
+          lastOrder: { $max: '$_effectiveDate' }
         }
       },
       { $sort: { totalAmount: -1 } },
-      { $limit: 10 },
-      {
-        $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'customerInfo'
-        }
-      }
+      { $limit: 10 }
     ]);
 
     // Customer order frequency distribution
     const orderFrequency = await Model.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
-          _id: '$customer_id',
+          _id: `$${customerNameField}`,
           orderCount: { $sum: 1 }
         }
       },
@@ -346,43 +345,27 @@ router.get('/customer', async (req, res) => {
       }
     ]);
 
-    // Customer-wise revenue (for pie chart)
+    // Customer-wise revenue (Seller/Supplier from sheet)
     const customerRevenue = await Model.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
-          _id: '$customer_id',
+          _id: `$${customerNameField}`,
           totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }
         }
       },
       { $sort: { totalAmount: -1 } },
-      { $limit: 10 },
-      {
-        $lookup: {
-          from: 'users',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'customerInfo'
-        }
-      }
+      { $limit: 10 }
     ]);
 
-    // New vs returning customers
+    // New vs returning customers (by booking date)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const allCustomersWithOrders = await Model.aggregate([
-      {
-        $group: {
-          _id: '$customer_id',
-          firstOrder: { $min: '$createdAt' },
-          totalOrders: { $sum: 1 }
-        }
-      }
+      effectiveDateStage,
+      { $group: { _id: `$${customerNameField}`, firstOrder: { $min: '$_effectiveDate' }, totalOrders: { $sum: 1 } } }
     ]);
 
     const newCustomers = allCustomersWithOrders.filter(c => c.firstOrder >= thirtyDaysAgo).length;
@@ -393,8 +376,8 @@ router.get('/customer', async (req, res) => {
       success: true,
       topCustomers: topCustomers.map(c => ({
         customerId: c._id,
-        customerName: c.customerInfo[0]?.name || 'Unknown',
-        customerEmail: c.customerInfo[0]?.email || '',
+        customerName: c._id || 'Unknown',
+        customerEmail: '',
         totalOrders: c.totalOrders,
         totalAmount: Math.round(c.totalAmount * 100) / 100,
         totalWeight: Math.round(c.totalWeight * 1000) / 1000,
@@ -407,7 +390,7 @@ router.get('/customer', async (req, res) => {
         count: f.count
       })),
       customerRevenue: customerRevenue.map(c => ({
-        customerName: c.customerInfo[0]?.name || 'Unknown',
+        customerName: c._id || 'Unknown',
         amount: Math.round(c.totalAmount * 100) / 100
       })),
       customerTypes: {
@@ -429,13 +412,10 @@ router.get('/comparison', async (req, res) => {
     const { period = 'month' } = req.query;
     const { startDate, endDate } = getDateRange(period);
 
-    // Sales summary
+    // Sales summary (by booking date)
     const salesSummary = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: null,
@@ -448,13 +428,10 @@ router.get('/comparison', async (req, res) => {
       }
     ]);
 
-    // Purchase summary
+    // Purchase summary (by booking date)
     const purchaseSummary = await ConfirmedPurchaseOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: null,
@@ -467,13 +444,10 @@ router.get('/comparison', async (req, res) => {
       }
     ]);
 
-    // Warehouse comparison
+    // Warehouse comparison (by booking date)
     const salesByWarehouse = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: '$warehouse_name',
@@ -486,11 +460,8 @@ router.get('/comparison', async (req, res) => {
     ]);
 
     const purchaseByWarehouse = await ConfirmedPurchaseOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: '$warehouse_name',
@@ -502,13 +473,10 @@ router.get('/comparison', async (req, res) => {
       { $sort: { amount: -1 } }
     ]);
 
-    // State-wise comparison
+    // State-wise comparison (by booking date)
     const salesByState = await ConfirmedSalesOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: '$state',
@@ -521,11 +489,8 @@ router.get('/comparison', async (req, res) => {
     ]);
 
     const purchaseByState = await ConfirmedPurchaseOrder.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate, $lte: endDate }
-        }
-      },
+      effectiveDateStage,
+      dateMatchStage(startDate, endDate),
       {
         $group: {
           _id: '$state',
@@ -593,39 +558,42 @@ router.get('/reports/:reportType', async (req, res) => {
 
     switch (reportType) {
       case 'order-summary':
-        // Order Summary Table
-        const salesOrders = await ConfirmedSalesOrder.find({
-          createdAt: { $gte: startDate, $lte: endDate }
-        })
-          .populate('customer_id', 'name')
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit));
-
-        const purchaseOrders = await ConfirmedPurchaseOrder.find({
-          createdAt: { $gte: startDate, $lte: endDate }
-        })
-          .populate('customer_id', 'name')
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit));
+        // Order Summary Table (by booking date; Customer = Seller/Supplier from sheet)
+        const [salesOrdersAgg, purchaseOrdersAgg] = await Promise.all([
+          ConfirmedSalesOrder.aggregate([
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            { $sort: { _effectiveDate: -1 } },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            { $project: { transaction_date: 1, invoice_number: 1, seller_name: 1, commodity: 1, variety: 1, net_weight_mt: 1, net_amount: 1, _effectiveDate: 1 } }
+          ]),
+          ConfirmedPurchaseOrder.aggregate([
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            { $sort: { _effectiveDate: -1 } },
+            { $skip: skip },
+            { $limit: parseInt(limit) },
+            { $project: { transaction_date: 1, invoice_number: 1, supplier_name: 1, commodity: 1, variety: 1, net_weight_mt: 1, net_amount: 1, _effectiveDate: 1 } }
+          ])
+        ]);
 
         data = [
-          ...salesOrders.map(o => ({
+          ...salesOrdersAgg.map(o => ({
             type: 'Sales',
-            date: o.transaction_date || o.createdAt,
+            date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
             invoice: o.invoice_number,
-            customer: o.customer_id?.name || o.seller_name || 'N/A',
+            customer: o.seller_name || 'N/A',
             commodity: o.commodity,
             variety: o.variety || 'N/A',
             netWeight: o.net_weight_mt,
             netAmount: o.net_amount
           })),
-          ...purchaseOrders.map(o => ({
+          ...purchaseOrdersAgg.map(o => ({
             type: 'Purchase',
-            date: o.transaction_date || o.createdAt,
+            date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
             invoice: o.invoice_number,
-            customer: o.customer_id?.name || o.supplier_name || 'N/A',
+            customer: o.supplier_name || 'N/A',
             commodity: o.commodity,
             variety: o.variety || 'N/A',
             netWeight: o.net_weight_mt,
@@ -633,17 +601,21 @@ router.get('/reports/:reportType', async (req, res) => {
           }))
         ].sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        total = await ConfirmedSalesOrder.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } }) +
-                await ConfirmedPurchaseOrder.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } });
+        const [salesCount, purchaseCount] = await Promise.all([
+          ConfirmedSalesOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]),
+          ConfirmedPurchaseOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }])
+        ]);
+        total = (salesCount[0]?.total || 0) + (purchaseCount[0]?.total || 0);
         break;
 
       case 'daily-transaction':
-        // Daily Transaction Report
+        // Daily Transaction Report (by booking date from sheet)
         const dailySales = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
-              _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              _id: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
               salesOrders: { $sum: 1 },
               salesAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
               salesWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
@@ -652,10 +624,11 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const dailyPurchase = await ConfirmedPurchaseOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
-              _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              _id: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
               purchaseOrders: { $sum: 1 },
               purchaseAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
               purchaseWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
@@ -682,44 +655,48 @@ router.get('/reports/:reportType', async (req, res) => {
         break;
 
       case 'customer-ledger':
-        // Customer Ledger
-        const customerData = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
-          {
-            $group: {
-              _id: '$customer_id',
-              totalOrders: { $sum: 1 },
-              totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-            }
-          },
-          { $sort: { totalAmount: -1 } },
-          {
-            $lookup: {
-              from: 'users',
-              localField: '_id',
-              foreignField: '_id',
-              as: 'customerInfo'
-            }
-          }
+        // Customer Ledger (Customer = Seller from sales + Supplier from purchase; by booking date)
+        const salesBySeller = await ConfirmedSalesOrder.aggregate([
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          { $group: { _id: '$seller_name', totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
+          { $sort: { totalAmount: -1 } }
         ]);
-
-        data = customerData.map(c => ({
-          customer: c.customerInfo[0]?.name || 'Unknown',
-          email: c.customerInfo[0]?.email || 'N/A',
+        const purchaseBySupplier = await ConfirmedPurchaseOrder.aggregate([
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          { $group: { _id: '$supplier_name', totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
+          { $sort: { totalAmount: -1 } }
+        ]);
+        const customerKeys = new Map();
+        salesBySeller.forEach(c => { customerKeys.set(c._id || 'Unknown', { customer: c._id || 'Unknown', totalOrders: c.totalOrders, totalAmount: c.totalAmount, totalWeight: c.totalWeight, type: 'Sales' }); });
+        purchaseBySupplier.forEach(c => {
+          const key = c._id || 'Unknown';
+          if (customerKeys.has(key)) {
+            const prev = customerKeys.get(key);
+            prev.totalOrders += c.totalOrders;
+            prev.totalAmount += c.totalAmount;
+            prev.totalWeight += c.totalWeight;
+            prev.type = 'Sales & Purchase';
+          } else customerKeys.set(key, { customer: key, totalOrders: c.totalOrders, totalAmount: c.totalAmount, totalWeight: c.totalWeight, type: 'Purchase' });
+        });
+        data = Array.from(customerKeys.values()).map(c => ({
+          customer: c.customer,
+          email: 'N/A',
           totalOrders: c.totalOrders,
           totalAmount: Math.round(c.totalAmount * 100) / 100,
           totalWeight: Math.round(c.totalWeight * 1000) / 1000,
-          pending: 0, // Can be calculated if payment tracking is implemented
+          pending: 0,
           paid: Math.round(c.totalAmount * 100) / 100
-        }));
+        })).sort((a, b) => b.totalAmount - a.totalAmount);
         total = data.length;
         break;
 
       case 'commodity-price':
-        // Commodity Price List
+        // Commodity Price List (by booking date)
         const commodityPrices = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
               _id: { commodity: '$commodity', variety: '$variety' },
@@ -746,14 +723,15 @@ router.get('/reports/:reportType', async (req, res) => {
         break;
 
       case 'deduction':
-        // Deduction Report
-        const deductionOrders = await ConfirmedSalesOrder.find({
-          createdAt: { $gte: startDate, $lte: endDate }
-        })
-          .select('invoice_number transaction_date commodity deduction_amount_hlw deduction_amount_moi_bdoi other_deductions total_deduction gross_amount net_amount')
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit));
+        // Deduction Report (by booking date from sheet)
+        const deductionOrders = await ConfirmedSalesOrder.aggregate([
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          { $sort: { _effectiveDate: -1 } },
+          { $skip: skip },
+          { $limit: parseInt(limit) },
+          { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, deduction_amount_hlw: 1, deduction_amount_moi_bdoi: 1, other_deductions: 1, total_deduction: 1, gross_amount: 1, net_amount: 1 } }
+        ]);
 
         data = deductionOrders.map(o => ({
           invoice: o.invoice_number,
@@ -766,13 +744,15 @@ router.get('/reports/:reportType', async (req, res) => {
           grossAmount: o.gross_amount || 0,
           netAmount: o.net_amount || 0
         }));
-        total = await ConfirmedSalesOrder.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } });
+        const deductionCount = await ConfirmedSalesOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
+        total = deductionCount[0]?.total || 0;
         break;
 
       case 'warehouse-stock':
-        // Warehouse Stock Report
+        // Warehouse Stock Report (by booking date)
         const warehouseIn = await ConfirmedPurchaseOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
               _id: { warehouse: '$warehouse_name', commodity: '$commodity' },
@@ -783,7 +763,8 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const warehouseOut = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
               _id: { warehouse: '$warehouse_name', commodity: '$commodity' },
@@ -816,9 +797,10 @@ router.get('/reports/:reportType', async (req, res) => {
         break;
 
       case 'vehicle':
-        // Vehicle-wise Report
+        // Vehicle-wise Report (by booking date)
         const vehicleData = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
               _id: '$vehicle_no',
@@ -842,14 +824,15 @@ router.get('/reports/:reportType', async (req, res) => {
         break;
 
       case 'quality':
-        // Quality Report
-        const qualityOrders = await ConfirmedSalesOrder.find({
-          createdAt: { $gte: startDate, $lte: endDate }
-        })
-          .select('invoice_number transaction_date commodity variety hlw_wheat moisture_moi bdoi moi_bdoi total_deduction')
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(parseInt(limit));
+        // Quality Report (by booking date from sheet)
+        const qualityOrders = await ConfirmedSalesOrder.aggregate([
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          { $sort: { _effectiveDate: -1 } },
+          { $skip: skip },
+          { $limit: parseInt(limit) },
+          { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, variety: 1, hlw_wheat: 1, moisture_moi: 1, bdoi: 1, moi_bdoi: 1, total_deduction: 1 } }
+        ]);
 
         data = qualityOrders.map(o => {
           // Calculate quality grade based on parameters
@@ -873,13 +856,15 @@ router.get('/reports/:reportType', async (req, res) => {
             qualityGrade: grade
           };
         });
-        total = await ConfirmedSalesOrder.countDocuments({ createdAt: { $gte: startDate, $lte: endDate } });
+        const qualityCount = await ConfirmedSalesOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
+        total = qualityCount[0]?.total || 0;
         break;
 
       case 'state-summary':
-        // State-wise Summary
+        // State-wise Summary (by booking date)
         const stateSales = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
               _id: '$state',
@@ -891,7 +876,8 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const statePurchase = await ConfirmedPurchaseOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
               _id: '$state',
@@ -921,12 +907,13 @@ router.get('/reports/:reportType', async (req, res) => {
         break;
 
       case 'monthly-pl':
-        // Monthly P&L Statement
+        // Monthly P&L Statement (by booking date from sheet)
         const monthlyData = await ConfirmedSalesOrder.aggregate([
-          { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
           {
             $group: {
-              _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } },
+              _id: { $dateToString: { format: '%Y-%m', date: '$_effectiveDate' } },
               grossAmount: { $sum: { $ifNull: ['$gross_amount', 0] } },
               totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
               netAmount: { $sum: { $ifNull: ['$net_amount', 0] } },

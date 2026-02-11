@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import CommodityMaster from '../models/CommodityMaster.js';
 import VarietyMaster from '../models/VarietyMaster.js';
 import WarehouseMaster from '../models/WarehouseMaster.js';
+import LocationMaster from '../models/LocationMaster.js';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import { parseFile } from '../utils/csvParser.js';
@@ -241,6 +242,58 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       return res.status(400).json({ error: 'File is empty or invalid' });
     }
 
+    const skipDuplicates = req.body.skipDuplicates === 'true' || req.body.skipDuplicates === true;
+
+    // Build duplicate key from record (state, supplier, location, warehouse, date, vehicle_no, net_weight_mt)
+    const toNAVal = (v) => {
+      if (v === null || v === undefined || v === '' || v === '-' || String(v).trim() === '') return '';
+      return String(v).trim();
+    };
+    const getVal = (record, mapping, fallbacks, def = '') => {
+      if (mapping && record[mapping] !== undefined && record[mapping] !== null && record[mapping] !== '') return String(record[mapping]).trim();
+      for (const name of fallbacks) {
+        if (record[name] !== undefined && record[name] !== null && record[name] !== '') return String(record[name]).trim();
+      }
+      return def;
+    };
+    const buildDuplicateKey = (record) => {
+      const state = toNAVal(getVal(record, columnMapping.state, ['State', 'state'], ''));
+      const supplier = toNAVal(getVal(record, columnMapping.supplier_name, ['Supplier Name', 'supplier_name', 'Supplier', 'Customer'], ''));
+      const location = toNAVal(getVal(record, columnMapping.location, ['Location', 'location'], ''));
+      const warehouse = toNAVal(getVal(record, columnMapping.warehouse_name, ['Warehouse Name', 'warehouse_name', 'Warehouse'], ''));
+      const dateVal = getVal(record, columnMapping.transaction_date, ['Date of Transaction', 'transaction_date', 'Date'], '');
+      const date = dateVal ? parseDate(dateVal) : '';
+      const vehicle = toNAVal(getVal(record, columnMapping.vehicle_no, ['Vehicle No.', 'vehicle_no', 'Vehicle Number'], ''));
+      const netWt = getVal(record, columnMapping.net_weight_mt, ['Net Weight in MT', 'net_weight_mt', 'Net Weight'], '');
+      const netWtNorm = netWt === '' ? '' : String(parseNumeric(netWt, 0));
+      return [state, supplier, location, warehouse, date, vehicle, netWtNorm].join('|');
+    };
+
+    const keyToRowIndices = new Map();
+    records.forEach((record, i) => {
+      const key = buildDuplicateKey(record);
+      if (!keyToRowIndices.has(key)) keyToRowIndices.set(key, []);
+      keyToRowIndices.get(key).push(i + 2); // 1-based row number (header = row 1)
+    });
+    const duplicateRowNumbers = [];
+    keyToRowIndices.forEach((rowNums) => {
+      if (rowNums.length > 1) duplicateRowNumbers.push(...rowNums.slice(1)); // keep first, mark rest as duplicate
+    });
+    const duplicateCount = duplicateRowNumbers.length;
+    const hasDuplicates = duplicateCount > 0;
+
+    if (hasDuplicates && !skipDuplicates) {
+      return res.status(200).json({
+        success: false,
+        requiresDuplicateChoice: true,
+        duplicateCount,
+        totalRows: records.length,
+        duplicateRowNumbers: duplicateRowNumbers.sort((a, b) => a - b),
+        message: `${duplicateCount} duplicate row(s) found. Choose "Skip duplicates" to keep first occurrence only, or "Keep all" to upload all rows.`,
+      });
+    }
+    const duplicateSkippedCount = skipDuplicates && hasDuplicates ? duplicateCount : 0;
+
     // Fetch master data for validation
     const [commodities, varieties, warehouses, allCustomers] = await Promise.all([
       CommodityMaster.find({ is_active: true }),
@@ -266,10 +319,8 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
       'Andaman and Nicobar Islands', 'Chandigarh', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
     ]);
-    const validLocations = new Set([
-      'GULABBAGH', 'BUXAR', 'PATNA', 'MUZAFFARPUR', 'GAYA', 'BHAGALPUR',
-      'PURNIA', 'DARBHANGA', 'SARAN', 'SIWAN', 'VAISHALI', 'SAMASTIPUR'
-    ]);
+    const locationDocs = await LocationMaster.find({ is_active: true }).select('name').lean();
+    const validLocations = new Set(locationDocs.map(l => (l.name || '').toUpperCase()));
     const validSupplierNames = new Set(allCustomers.map(c => c.name));
 
     // Transform and validate records - PRESERVE ALL ROWS IN ORIGINAL ORDER
@@ -343,6 +394,10 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     for (let i = 0; i < records.length; i++) {
       const record = records[i] || {}; // Handle undefined/null records
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
+
+      if (skipDuplicates && duplicateRowNumbers.includes(rowNum)) {
+        continue; // Skip duplicate rows (first occurrence was kept)
+      }
 
       // Process ALL rows - even if completely empty, create order with N/A values to preserve sequence
       // This ensures no rows are skipped and original order is maintained
@@ -711,11 +766,13 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       return seqA - seqB;
     });
     
+    const dupMsg = duplicateSkippedCount > 0 ? `, ${duplicateSkippedCount} duplicate row(s) skipped` : '';
     res.json({
       success: true,
-      message: `Processed ${totalProcessed} rows from file: ${totalSaved} orders saved successfully${totalSkipped > 0 ? `, ${totalSkipped} rows skipped` : ''}${totalErrors > 0 ? `, ${totalErrors} errors` : ''}`,
+      message: `Processed ${totalProcessed} rows from file: ${totalSaved} orders saved successfully${dupMsg}${totalSkipped > 0 ? `, ${totalSkipped} rows skipped` : ''}${totalErrors > 0 ? `, ${totalErrors} errors` : ''}`,
       count: totalSaved,
       totalRows: totalProcessed,
+      duplicateSkipped: duplicateSkippedCount,
       savedRows: totalSaved,
       skippedRows: skippedRows.length > 0 ? skippedRows : undefined,
       errors: totalErrors > 0 ? [...errors, ...insertErrors] : undefined,

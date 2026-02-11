@@ -18,6 +18,7 @@ import logisticsShipmentRoutes from './routes/logisticsShipments.js';
 import varietyMasterRoutes from './routes/varietyMaster.js';
 import commodityMasterRoutes from './routes/commodityMaster.js';
 import warehouseMasterRoutes from './routes/warehouseMaster.js';
+import locationMasterRoutes from './routes/locationMaster.js';
 import purchaseOrderRoutes from './routes/purchaseOrders.js';
 import saleOrderRoutes from './routes/saleOrders.js';
 import confirmedSalesOrderRoutes from './routes/confirmedSalesOrders.js';
@@ -25,9 +26,12 @@ import confirmedPurchaseOrderRoutes from './routes/confirmedPurchaseOrders.js';
 import reportRoutes from './routes/reports.js';
 import uploadRoutes from './routes/uploads.js';
 import supplyTransactionRoutes from './routes/supplyTransactions.js';
-import cashfreeKYCRoutes from './routes/cashfreeKYC.js';
-import sandboxKYCRoutes from './routes/sandboxKYC.js';
+// COMMENTED OUT: Cashfree and Aadhaar verification APIs - using simple registration now
+// import cashfreeKYCRoutes from './routes/cashfreeKYC.js';
+// import sandboxKYCRoutes from './routes/sandboxKYC.js';
+import registrationRoutes from './routes/registration.js';
 import analyticsRoutes from './routes/analytics.js';
+import documentViewRoutes from './routes/documentView.js';
 
 dotenv.config();
 
@@ -82,10 +86,51 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // -----------------------------
 // DB CONNECT
 // -----------------------------
-mongoose
-  .connect(process.env.MONGODB_URI)
-  .then(() => console.log('Mongo connected'))
-  .catch(err => console.error('Mongo error:', err.message));
+const connectDB = async () => {
+  try {
+    if (!process.env.MONGODB_URI) {
+      console.error('❌ MONGODB_URI is not set in .env file');
+      console.error('💡 Please add MONGODB_URI to your .env file');
+      console.error('   Example: MONGODB_URI=mongodb://localhost:27017/grainology');
+      console.error('   Or MongoDB Atlas: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/grainology');
+      process.exit(1);
+    }
+
+    const conn = await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+    });
+
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    console.log(`📊 Database: ${conn.connection.name}`);
+    
+    // Handle connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err.message);
+    });
+
+    mongoose.connection.on('disconnected', () => {
+      console.warn('⚠️  MongoDB disconnected. Attempting to reconnect...');
+    });
+
+    mongoose.connection.on('reconnected', () => {
+      console.log('✅ MongoDB reconnected');
+    });
+
+  } catch (error) {
+    console.error('❌ MongoDB connection failed!');
+    console.error('Error:', error.message);
+    console.error('\n💡 Troubleshooting tips:');
+    console.error('   1. Check your MONGODB_URI in .env file');
+    console.error('   2. If using MongoDB Atlas: Check IP whitelist (allow 0.0.0.0/0 for testing)');
+    console.error('   3. If using local MongoDB: Ensure MongoDB service is running');
+    console.error('   4. Verify your connection string format');
+    console.error('   5. Check your network connection');
+    process.exit(1);
+  }
+};
+
+connectDB();
 
 // -----------------------------
 // HEALTH CHECK
@@ -112,6 +157,7 @@ app.use('/api/logistics-shipments', logisticsShipmentRoutes);
 app.use('/api/variety-master', varietyMasterRoutes);
 app.use('/api/commodity-master', commodityMasterRoutes);
 app.use('/api/warehouse-master', warehouseMasterRoutes);
+app.use('/api/location-master', locationMasterRoutes);
 app.use('/api/purchase-orders', purchaseOrderRoutes);
 app.use('/api/sale-orders', saleOrderRoutes);
 app.use('/api/confirmed-sales-orders', confirmedSalesOrderRoutes);
@@ -119,9 +165,12 @@ app.use('/api/confirmed-purchase-orders', confirmedPurchaseOrderRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/uploads', uploadRoutes);
 app.use('/api/supply-transactions', supplyTransactionRoutes);
-app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
-app.use('/api/sandbox/kyc', sandboxKYCRoutes);
+// COMMENTED OUT: Cashfree and Aadhaar verification APIs - using simple registration now
+// app.use('/api/cashfree/kyc', cashfreeKYCRoutes);
+// app.use('/api/sandbox/kyc', sandboxKYCRoutes);
+app.use('/api/registration', registrationRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/documents', documentViewRoutes);
 
 // -----------------------------
 // ERROR HANDLER

@@ -18,6 +18,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  trade_name: {
+    type: String,
+    trim: true
+  },
   mobile_number: {
     type: String,
     required: true, // Now required for registration
@@ -43,6 +47,12 @@ const userSchema = new mongoose.Schema({
     enum: ['admin', 'farmer', 'trader', 'fpo', 'corporate', 'miller', 'financer'],
     default: 'farmer'
   },
+  approval_status: {
+    type: String,
+    enum: ['pending', 'approved'],
+    default: 'pending'
+  },
+  approved_at: Date,
   entity_type: {
     type: String,
     enum: ['individual', 'company'],
@@ -58,32 +68,41 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: {}
   },
-  // Verification document IDs for uniqueness checking
+  // Verification document IDs for uniqueness checking (indexes defined via schema.index() below)
   verification_documents: {
-    aadhaar_number: {
-      type: String,
-      sparse: true,
-      trim: true
-    },
-    pan_number: {
-      type: String,
-      sparse: true,
-      trim: true,
-      uppercase: true
-    },
-    gstin: {
-      type: String,
-      sparse: true,
-      trim: true,
-      uppercase: true
-    },
-    cin: {
-      type: String,
-      sparse: true,
-      trim: true,
-      uppercase: true
-    }
+    aadhaar_number: { type: String, trim: true },
+    pan_number: { type: String, trim: true, uppercase: true },
+    gstin: { type: String, trim: true, uppercase: true },
+    cin: { type: String, trim: true, uppercase: true }
   },
+  // Uploaded verification document (for simple registration) – single, kept for backward compat
+  uploaded_document: {
+    document_type: {
+      type: String,
+      enum: ['aadhaar', 'pan', 'driving_license', 'voter_id', 'passport', 'gstin', 'cin', 'registration_certificate', 'license', 'other'],
+    },
+    cloudinary_url: String,
+    cloudinary_public_id: String,
+    view_url: String,
+    download_url: String,
+    file_name: String,
+    file_size: Number,
+    uploaded_at: Date,
+  },
+  // Multiple uploaded documents (user can choose multiple types; all selected must be uploaded)
+  uploaded_documents: [{
+    document_type: {
+      type: String,
+      enum: ['aadhaar', 'pan', 'driving_license', 'voter_id', 'passport', 'gstin', 'cin', 'registration_certificate', 'license', 'other'],
+    },
+    cloudinary_url: String,
+    cloudinary_public_id: String,
+    view_url: String,
+    download_url: String,
+    file_name: String,
+    file_size: Number,
+    uploaded_at: Date,
+  }],
   business_name: String,
   business_type: {
     type: String,
@@ -108,7 +127,7 @@ userSchema.index({ 'verification_documents.aadhaar_number': 1 }, { unique: true,
 userSchema.index({ 'verification_documents.pan_number': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.gstin': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.cin': 1 }, { unique: true, sparse: true });
-userSchema.index({ mobile_number: 1 }, { unique: true });
+// mobile_number: unique index is created by schema field option above, do not duplicate here
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {

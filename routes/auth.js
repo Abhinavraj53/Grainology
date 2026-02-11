@@ -452,40 +452,47 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Sign in (using mobile number and password)
+// Sign in (using mobile number OR email, and password)
 router.post('/signin', async (req, res) => {
   try {
     // Check database connection
     const dbError = checkDB(req, res);
     if (dbError) return;
 
-    const { mobile_number, password } = req.body;
-    
-    console.log('🔐 Sign in request received:', {
-      mobile_number: mobile_number ? `${mobile_number.substring(0, 3)}***` : 'missing',
-      hasPassword: !!password,
-      passwordLength: password?.length
-    });
+    const { mobile_number, email, password } = req.body;
 
-    if (!mobile_number || !password) {
-      console.log('❌ Missing mobile_number or password');
-      return res.status(400).json({ error: 'Mobile number and password are required' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
 
-    // Clean and validate mobile number
-    const cleanMobile = mobile_number.trim().replace(/\D/g, '');
-    console.log('📱 Cleaned mobile number:', cleanMobile);
-    
-    const mobileRegex = /^[0-9]{10}$/;
-    if (!mobileRegex.test(cleanMobile)) {
-      console.log('❌ Invalid mobile number format:', cleanMobile);
-      return res.status(400).json({ error: 'Mobile number must be 10 digits' });
+    const loginByEmail = email && String(email).trim().includes('@');
+    const loginByMobile = mobile_number && String(mobile_number).trim().replace(/\D/g, '').length === 10;
+
+    if (!loginByEmail && !loginByMobile) {
+      return res.status(400).json({
+        error: 'Login with mobile number or email',
+        message: 'Provide either a 10-digit mobile number or a valid email address, and password.'
+      });
     }
 
-    const user = await User.findOne({ mobile_number: cleanMobile });
-    if (!user) {
-      console.log('❌ User not found with mobile number:', cleanMobile);
-      return res.status(401).json({ error: 'Invalid credentials' });
+    let user;
+    if (loginByEmail) {
+      const cleanEmail = String(email).trim().toLowerCase();
+      user = await User.findOne({ email: cleanEmail });
+      if (!user) {
+        console.log('❌ User not found with email:', cleanEmail.replace(/(.{2}).*@/, '$1***@'));
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    } else {
+      const cleanMobile = String(mobile_number).trim().replace(/\D/g, '');
+      if (cleanMobile.length !== 10) {
+        return res.status(400).json({ error: 'Mobile number must be 10 digits' });
+      }
+      user = await User.findOne({ mobile_number: cleanMobile });
+      if (!user) {
+        console.log('❌ User not found with mobile number:', cleanMobile);
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
     }
     
     console.log('✅ User found:', {
@@ -501,6 +508,15 @@ router.post('/signin', async (req, res) => {
     if (!isPasswordValid) {
       console.log('❌ Invalid password');
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Block login until admin has approved the account (existing users without field can still login)
+    if (user.approval_status === 'pending') {
+      console.log('❌ Login blocked: account pending approval');
+      return res.status(403).json({
+        error: 'Account pending approval',
+        message: 'Your account is under review. You will receive an email when an admin approves your account. Until then, you cannot log in.'
+      });
     }
     
     console.log('✅ Login successful for user:', user._id);

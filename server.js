@@ -47,6 +47,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://grainologyagri.com',
   'https://www.grainologyagri.com',
+  'https://grainology-rmg1.onrender.com', // backend itself (e.g. server-side fetches)
   process.env.FRONTEND_URL
 ].filter(Boolean);
 

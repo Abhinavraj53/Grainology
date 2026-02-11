@@ -208,7 +208,9 @@ router.put('/users/:id', async (req, res) => {
     // When admin approves, send welcome/approval email if user has email
     if (wasApproved && user.email) {
       try {
-        await sendWelcomeEmail(user.email, user.name);
+        const loginId = user.email;
+        const passwordNote = 'Use the password you set during registration.';
+        await sendWelcomeEmail(user.email, user.name, loginId, passwordNote);
         console.log(`Approval email sent to ${user.email}`);
       } catch (emailError) {
         console.error('Approval email error:', emailError);

@@ -1,56 +1,102 @@
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
+// Brevo: use either API key (REST) or SMTP key (smtp-relay.brevo.com)
 const BREVO_API_KEY = process.env.BREVO_API_KEY || '';
+const BREVO_SMTP_KEY = process.env.BREVO_SMTP_KEY || '';
+const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER || 'a1e08c001@smtp-brevo.com'; // from Brevo SMTP & API → Your SMTP Settings
 const FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@grainologyagri.com';
 const FROM_NAME = process.env.BREVO_FROM_NAME || 'Grainology';
 
+// Prefer SMTP if SMTP key is set; else use API key for REST (do not use SMTP key as API key)
+const useSmtp = Boolean(BREVO_SMTP_KEY) || (BREVO_API_KEY && BREVO_API_KEY.startsWith('xsmtpsib-'));
+const smtpPassword = BREVO_SMTP_KEY || (BREVO_API_KEY && BREVO_API_KEY.startsWith('xsmtpsib-') ? BREVO_API_KEY : '');
+const apiKeyForRest = useSmtp ? '' : BREVO_API_KEY;
+
+let transporter = null;
+
+function getSmtpTransporter() {
+  if (transporter) return transporter;
+  transporter = nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: BREVO_SMTP_USER,
+      pass: smtpPassword,
+    },
+  });
+  return transporter;
+}
+
 /**
- * Send email using Brevo (formerly Sendinblue)
+ * Send email via Brevo (REST API or SMTP)
  * @param {String} to - Recipient email
  * @param {String} subject - Email subject
  * @param {String} html - Email HTML content
  * @param {String} text - Email text content (optional)
- * @returns {Promise<Object>} Brevo response
+ * @returns {Promise<Object>} Result with messageId or similar
  */
 export async function sendEmail(to, subject, html, text = null) {
-  try {
-    if (!BREVO_API_KEY) {
-      console.warn('Brevo not configured. Email would be sent to:', to);
-      console.warn('Subject:', subject);
-      return { messageId: 'mock-' + Date.now() };
-    }
-
-    const body = {
-      sender: { email: FROM_EMAIL, name: FROM_NAME },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-    };
-    if (text) body.textContent = text;
-
-    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'api-key': BREVO_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.message || `Brevo API ${response.status}`);
-    }
-
-    const data = await response.json().catch(() => ({}));
-    console.log('Email sent successfully:', data.messageId);
-    return data;
-  } catch (error) {
-    console.error('Error sending email:', error);
-    throw error;
+  if (useSmtp && smtpPassword) {
+    return sendEmailSmtp(to, subject, html, text);
   }
+  if (apiKeyForRest) {
+    return sendEmailApi(to, subject, html, text);
+  }
+  console.warn('Brevo not configured (no BREVO_API_KEY or BREVO_SMTP_KEY). Email would be sent to:', to, 'Subject:', subject);
+  return { messageId: 'mock-' + Date.now() };
+}
+
+/**
+ * Send via Brevo REST API (api.brevo.com/v3/smtp/email)
+ */
+async function sendEmailApi(to, subject, html, text) {
+  const body = {
+    sender: { email: FROM_EMAIL, name: FROM_NAME },
+    to: [{ email: to }],
+    subject,
+    htmlContent: html,
+  };
+  if (text) body.textContent = text;
+
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKeyForRest,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({}));
+    throw new Error(errData.message || `Brevo API ${response.status}`);
+  }
+
+  const data = await response.json().catch(() => ({}));
+  console.log('Brevo email sent (API):', data.messageId);
+  return data;
+}
+
+/**
+ * Send via Brevo SMTP (smtp-relay.brevo.com:587)
+ * Uses BREVO_SMTP_USER and BREVO_SMTP_KEY (or BREVO_API_KEY if it looks like xsmtpsib-)
+ */
+async function sendEmailSmtp(to, subject, html, text) {
+  const transport = getSmtpTransporter();
+  const mailOptions = {
+    from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+    to,
+    subject,
+    html,
+    text: text || undefined,
+  };
+  const info = await transport.sendMail(mailOptions);
+  console.log('Brevo email sent (SMTP):', info.messageId);
+  return { messageId: info.messageId };
 }
 
 /**
@@ -99,10 +145,23 @@ export async function sendOTPEmail(to, otp) {
 }
 
 /**
- * Send welcome email (after admin approval)
+ * Send welcome/approval email (after admin approval).
+ * @param {string} to - Recipient email
+ * @param {string} name - User's name
+ * @param {string} loginId - Login ID (email or mobile) to show in the email
+ * @param {string} [passwordNote] - Note about password (e.g. "Use the password you set during registration.")
  */
-export async function sendWelcomeEmail(to, name) {
-  const subject = 'Welcome to Grainology!';
+export async function sendWelcomeEmail(to, name, loginId, passwordNote) {
+  const loginUrl = `${process.env.FRONTEND_URL || 'https://grainologyagri.com'}/login`;
+  const subject = 'Your Grainology Account Has Been Approved';
+  const credentialsHtml = loginId
+    ? `
+    <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 20px 0;">
+      <p style="margin: 0 0 8px 0; font-weight: 600;">Your login details:</p>
+      <p style="margin: 0 0 4px 0;"><strong>Login ID:</strong> ${loginId}</p>
+      <p style="margin: 0;">${passwordNote || 'Use the password you set during registration.'}</p>
+    </div>`
+    : '';
   const html = `
     <!DOCTYPE html>
     <html>
@@ -112,30 +171,24 @@ export async function sendWelcomeEmail(to, name) {
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
         .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-        .button { display: inline-block; background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .button { display: inline-block; background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: 600; }
         .footer { text-align: center; margin-top: 20px; color: #6b7280; font-size: 12px; }
       </style>
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <h1>Welcome to Grainology!</h1>
+          <h1>Account Approved</h1>
         </div>
         <div class="content">
-          <h2>Hello ${name}!</h2>
-          <p>Your account has been approved. You can now log in and use Grainology - your digital agri-marketplace.</p>
-          <p>You can:</p>
-          <ul>
-            <li>Browse and create offers for agricultural commodities</li>
-            <li>Connect with farmers, traders, and other stakeholders</li>
-            <li>Access real-time market prices and analytics</li>
-            <li>Manage your orders and transactions</li>
-          </ul>
+          <p>Dear ${name},</p>
+          <p>We are pleased to inform you that your registration has been approved. You may now log in to Grainology and access the platform.</p>
+          ${credentialsHtml}
           <p style="text-align: center;">
-            <a href="${process.env.FRONTEND_URL || 'https://grainologyagri.com'}/login" class="button">Login to Dashboard</a>
+            <a href="${loginUrl}" class="button">Login</a>
           </p>
-          <p>Happy trading!</p>
-          <p><strong>The Grainology Team</strong></p>
+          <p>If you have any questions, please contact our support team.</p>
+          <p>Regards,<br><strong>The Grainology Team</strong></p>
         </div>
         <div class="footer">
           <p>© ${new Date().getFullYear()} Grainology. All rights reserved.</p>
@@ -144,7 +197,7 @@ export async function sendWelcomeEmail(to, name) {
     </body>
     </html>
   `;
-  const text = `Welcome to Grainology, ${name}! Your account has been approved. Visit ${process.env.FRONTEND_URL || 'https://grainologyagri.com'}/login to get started.`;
+  const text = `Dear ${name}, Your Grainology account has been approved. Login ID: ${loginId || 'your registered email'}. ${passwordNote || 'Use the password you set during registration.'} Login at: ${loginUrl}`;
   return sendEmail(to, subject, html, text);
 }
 

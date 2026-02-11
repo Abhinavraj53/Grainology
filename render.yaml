@@ -1,0 +1,14 @@
+# Render Blueprint - Backend Web Service
+# Use repo root so package.json and node_modules are used correctly.
+services:
+  - type: web
+    name: grainology-backend
+    runtime: node
+    region: oregon
+    plan: free
+    # Root Directory: leave blank so Render uses repo root (where package.json lives)
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production

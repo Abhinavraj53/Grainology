@@ -9,7 +9,7 @@ async function fetchCloudinaryAsset(url) {
   if (response.status === 401) {
     const parsed = parseCloudinaryUrl(url);
     if (parsed) {
-      const signedUrl = getSignedDeliveryUrl(parsed.publicId, parsed.resourceType);
+      const signedUrl = await getSignedDeliveryUrl(parsed.publicId, parsed.resourceType);
       response = await fetch(signedUrl, { method: 'GET' });
     }
   }

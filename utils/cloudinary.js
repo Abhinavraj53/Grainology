@@ -1,19 +1,29 @@
-import cloudinary from 'cloudinary';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Normalize cloud name (fix common typo: dbtrvqifra -> dbtrvqifr)
-let cloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').trim();
-if (cloudName === 'dbtrvqifra') cloudName = 'dbtrvqifr';
+// Lazy-load cloudinary so server can start on Render even if package is not installed
+let cloudinary = null;
+let cloudinaryConfig = null;
 
-// Configure Cloudinary
-const cloudinaryConfig = cloudinary.v2;
-cloudinaryConfig.config({
-  cloud_name: cloudName,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+async function loadCloudinary() {
+  if (cloudinaryConfig) return cloudinaryConfig;
+  try {
+    const mod = await import('cloudinary');
+    cloudinary = mod.default;
+    cloudinaryConfig = cloudinary.v2;
+    const cloudName = (process.env.CLOUDINARY_CLOUD_NAME || '').trim().replace(/^dbtrvqifra$/, 'dbtrvqifr');
+    cloudinaryConfig.config({
+      cloud_name: cloudName,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    return cloudinaryConfig;
+  } catch (err) {
+    console.warn('Cloudinary package not found. Install it with: npm install cloudinary. Document upload/view will be disabled.');
+    throw new Error('Cloudinary is not installed. Add "cloudinary" to package.json dependencies and redeploy.');
+  }
+}
 
 const isPdf = (fileName) => (fileName || '').toLowerCase().endsWith('.pdf');
 
@@ -39,9 +49,10 @@ export function parseCloudinaryUrl(url) {
  * Generate a signed delivery URL for an asset (use when account has authenticated delivery / 401).
  * @param {string} publicId - Cloudinary public_id
  * @param {string} resourceType - 'image' | 'raw' | 'video'
- * @returns {string} signed URL
+ * @returns {Promise<string>} signed URL
  */
-export function getSignedDeliveryUrl(publicId, resourceType = 'image') {
+export async function getSignedDeliveryUrl(publicId, resourceType = 'image') {
+  const c = await loadCloudinary();
   return cloudinary.url(publicId, {
     type: 'upload',
     resource_type: resourceType,
@@ -58,16 +69,16 @@ export function getSignedDeliveryUrl(publicId, resourceType = 'image') {
  * @returns {Promise<Object>} Upload result with URL and public_id
  */
 export async function uploadToCloudinary(fileBuffer, fileName, folder = 'grainology/documents') {
+  const c = await loadCloudinary();
   try {
     const useRawForPdf = isPdf(fileName);
     return new Promise((resolve, reject) => {
-      const uploadStream = cloudinaryConfig.uploader.upload_stream(
+      const uploadStream = c.uploader.upload_stream(
         {
           folder: folder,
-          resource_type: useRawForPdf ? 'raw' : 'auto', // PDFs as raw so URL is /raw/upload/ and deliverable without 401
+          resource_type: useRawForPdf ? 'raw' : 'auto',
           allowed_formats: ['jpg', 'jpeg', 'png', 'pdf'],
           format: useRawForPdf ? 'pdf' : 'auto',
-          // Allow public delivery so PDFs/images can be viewed from admin panel (avoids "Blocked for delivery")
           access_control: [{ access_type: 'anonymous' }],
         },
         (error, result) => {
@@ -87,7 +98,6 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'grainol
           }
         }
       );
-
       uploadStream.end(fileBuffer);
     });
   } catch (error) {
@@ -102,8 +112,9 @@ export async function uploadToCloudinary(fileBuffer, fileName, folder = 'grainol
  * @returns {Promise<Object>} Deletion result
  */
 export async function deleteFromCloudinary(publicId) {
+  const c = await loadCloudinary();
   try {
-    const result = await cloudinaryConfig.uploader.destroy(publicId);
+    const result = await c.uploader.destroy(publicId);
     return result;
   } catch (error) {
     console.error('Error deleting from Cloudinary:', error);
@@ -111,4 +122,4 @@ export async function deleteFromCloudinary(publicId) {
   }
 }
 
-export default cloudinaryConfig;
+export default { loadCloudinary, get v2() { return cloudinaryConfig; } };

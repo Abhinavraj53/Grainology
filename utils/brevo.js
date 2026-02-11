@@ -10,10 +10,11 @@ const BREVO_SMTP_USER = process.env.BREVO_SMTP_USER || 'a1e08c001@smtp-brevo.com
 const FROM_EMAIL = process.env.BREVO_FROM_EMAIL || 'noreply@grainologyagri.com';
 const FROM_NAME = process.env.BREVO_FROM_NAME || 'Grainology';
 
-// Prefer SMTP if SMTP key is set; else use API key for REST (do not use SMTP key as API key)
-const useSmtp = Boolean(BREVO_SMTP_KEY) || (BREVO_API_KEY && BREVO_API_KEY.startsWith('xsmtpsib-'));
+// Prefer REST API when BREVO_API_KEY (xkeysib-) is set – works on Render/cloud where SMTP port 587 may be blocked
+const hasRestKey = Boolean(BREVO_API_KEY && BREVO_API_KEY.startsWith('xkeysib-'));
+const useSmtp = !hasRestKey && (Boolean(BREVO_SMTP_KEY) || (BREVO_API_KEY && BREVO_API_KEY.startsWith('xsmtpsib-')));
 const smtpPassword = BREVO_SMTP_KEY || (BREVO_API_KEY && BREVO_API_KEY.startsWith('xsmtpsib-') ? BREVO_API_KEY : '');
-const apiKeyForRest = useSmtp ? '' : BREVO_API_KEY;
+const apiKeyForRest = hasRestKey ? BREVO_API_KEY : (useSmtp ? '' : BREVO_API_KEY);
 
 let transporter = null;
 
@@ -27,6 +28,8 @@ function getSmtpTransporter() {
       user: BREVO_SMTP_USER,
       pass: smtpPassword,
     },
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
   });
   return transporter;
 }
@@ -40,11 +43,11 @@ function getSmtpTransporter() {
  * @returns {Promise<Object>} Result with messageId or similar
  */
 export async function sendEmail(to, subject, html, text = null) {
-  if (useSmtp && smtpPassword) {
-    return sendEmailSmtp(to, subject, html, text);
-  }
   if (apiKeyForRest) {
     return sendEmailApi(to, subject, html, text);
+  }
+  if (useSmtp && smtpPassword) {
+    return sendEmailSmtp(to, subject, html, text);
   }
   console.warn('Brevo not configured (no BREVO_API_KEY or BREVO_SMTP_KEY). Email would be sent to:', to, 'Subject:', subject);
   return { messageId: 'mock-' + Date.now() };

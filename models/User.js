@@ -49,7 +49,7 @@ const userSchema = new mongoose.Schema({
   },
   approval_status: {
     type: String,
-    enum: ['pending', 'approved'],
+    enum: ['pending', 'approved', 'rejected'],
     default: 'pending'
   },
   approved_at: Date,

@@ -510,12 +510,15 @@ router.post('/signin', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Block login until admin has approved the account (existing users without field can still login)
-    if (user.approval_status === 'pending') {
-      console.log('❌ Login blocked: account pending approval');
+    // Block login until admin has approved the account (pending and rejected cannot login)
+    if (user.approval_status !== 'approved') {
+      const isRejected = user.approval_status === 'rejected';
+      console.log('❌ Login blocked: account', isRejected ? 'rejected' : 'pending approval');
       return res.status(403).json({
-        error: 'Account pending approval',
-        message: 'Your account is under review. You will receive an email when an admin approves your account. Until then, you cannot log in.'
+        error: isRejected ? 'Account rejected' : 'Account pending approval',
+        message: isRejected
+          ? 'Your account was not approved. Please contact support.'
+          : 'Your account is under review. You will receive an email when an admin approves your account. Until then, you cannot log in.'
       });
     }
     

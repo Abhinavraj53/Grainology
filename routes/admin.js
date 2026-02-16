@@ -190,9 +190,12 @@ router.put('/users/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid user id' });
     }
     const wasApproved = req.body.approval_status === 'approved';
+    const isDisapprove = req.body.approval_status === 'pending' || req.body.approval_status === 'rejected';
     const update = { ...req.body };
     if (wasApproved) {
       update.approved_at = new Date();
+    } else if (isDisapprove) {
+      update.approved_at = null; // clear so user cannot login until re-approved
     }
 
     const user = await User.findByIdAndUpdate(

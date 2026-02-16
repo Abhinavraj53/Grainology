@@ -15,10 +15,10 @@ const router = express.Router();
 // All routes require authentication
 router.use(authenticate);
 
-// Get all confirmed purchase orders (admin only)
+// Get all confirmed purchase orders (admin only) - exclude trashed
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    const orders = await ConfirmedPurchaseOrder.find()
+    const orders = await ConfirmedPurchaseOrder.find({ trash: { $ne: true } })
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email')
       .sort({ createdAt: -1 });
@@ -40,7 +40,10 @@ router.get('/customer/:customerId', async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const orders = await ConfirmedPurchaseOrder.find({ customer_id: customerId })
+    const orders = await ConfirmedPurchaseOrder.find({
+      customer_id: customerId,
+      trash: { $ne: true }
+    })
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email')
       .sort({ createdAt: -1 });
@@ -51,10 +54,13 @@ router.get('/customer/:customerId', async (req, res) => {
   }
 });
 
-// Get confirmed purchase order by ID
+// Get confirmed purchase order by ID (exclude trashed)
 router.get('/:id', async (req, res) => {
   try {
-    const order = await ConfirmedPurchaseOrder.findById(req.params.id)
+    const order = await ConfirmedPurchaseOrder.findOne({
+      _id: req.params.id,
+      trash: { $ne: true }
+    })
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email');
 
@@ -100,7 +106,8 @@ router.post('/', requireAdmin, async (req, res) => {
     const orderData = {
       ...req.body,
       customer_id: customerId,
-      created_by: req.userId
+      created_by: req.userId,
+      unique_id: req.body.unique_id || `PO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     };
 
     // Calculate total deduction
@@ -169,10 +176,14 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Delete confirmed purchase order (admin only)
+// Delete confirmed purchase order (admin only) - soft delete (trash in MongoDB, not shown to user)
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
-    const order = await ConfirmedPurchaseOrder.findByIdAndDelete(req.params.id);
+    const order = await ConfirmedPurchaseOrder.findByIdAndUpdate(
+      req.params.id,
+      { $set: { trash: true } },
+      { new: true }
+    );
     if (!order) {
       return res.status(404).json({ error: 'Confirmed purchase order not found' });
     }
@@ -476,7 +487,8 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         // Add row_sequence to preserve original order
         const orderData = {
           customer_id: customer._id,
-          invoice_number: `INV-${Date.now()}-${i}-${rowNum}`, // Auto-generate invoice number
+          invoice_number: `INV-${Date.now()}-${i}-${rowNum}`, // Auto-generate invoice number (internal)
+          unique_id: `PO-${Date.now()}-${i}-${rowNum}`,
           transaction_date: transactionDate,
           state: state,
           supplier_name: supplierName,

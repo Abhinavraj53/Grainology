@@ -1,10 +1,15 @@
 import mongoose from 'mongoose';
 
 const warehouseMasterSchema = new mongoose.Schema({
+  location_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'LocationMaster',
+    default: null
+  },
   name: {
     type: String,
     required: true,
-    unique: true
+    trim: true
   },
   is_active: {
     type: Boolean,
@@ -21,6 +26,8 @@ const warehouseMasterSchema = new mongoose.Schema({
     }
   }
 });
+
+warehouseMasterSchema.index({ location_id: 1, name: 1 }, { unique: true, sparse: true });
 
 const WarehouseMaster = mongoose.model('WarehouseMaster', warehouseMasterSchema);
 

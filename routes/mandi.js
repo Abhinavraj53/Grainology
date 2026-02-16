@@ -3,14 +3,22 @@ import axios from 'axios';
 import MandiPrice from '../models/MandiPrice.js';
 import User from '../models/User.js';
 import { authenticate } from '../middleware/auth.js';
+import { fetchCedaAgmarknet } from '../utils/cedaAgmarknet.js';
 
 const router = express.Router();
 
-// Environment for data.gov.in Mandi API
+// CEDA API (first priority) - https://api.ceda.ashoka.edu.in/
+const CEDA_API_KEY = process.env.CEDA_API_KEY || '';
+
+// Environment for data.gov.in Mandi API (fallback)
 const MANDI_API_BASE = (process.env.MANDI_API_BASE || 'https://api.data.gov.in').replace(/\/$/, '');
 const MANDI_API_KEY = process.env.MANDI_API_KEY || '';
 // Default to variety-wise daily market prices resource if env not provided
 const MANDI_RESOURCE_ID = process.env.MANDI_RESOURCE_ID || '35985678-0d79-46b4-9ed6-6f13308a1d24';
+
+// Default state and commodities for mandi data (Bihar, Maize, Wheat, Paddy)
+const DEFAULT_STATE = 'Bihar';
+const DEFAULT_COMMODITIES = ['Paddy', 'Maize', 'Wheat'];
 
 // MSP (Minimum Support Price) data for 2025-26 season
 const MSP_DATA = {
@@ -92,17 +100,11 @@ const extractArrival = (record) => {
 };
 
 // AgMarkNet-style endpoint: Grouped data by commodity with date columns
+// 1st priority: CEDA API (Bihar, Maize, Wheat, Paddy as default). Fallback: data.gov.in
 router.get('/agmarknet', async (req, res) => {
   try {
-    if (!MANDI_API_KEY) {
-      return res.status(500).json({
-        success: false,
-        error: 'MANDI_API_KEY is not configured on the server'
-      });
-    }
-
     const {
-      state = 'all',
+      state: qState = 'all',
       district = 'all',
       market = 'all',
       commodity_group = 'all',
@@ -113,6 +115,38 @@ router.get('/agmarknet', async (req, res) => {
       offset = 0,
     } = req.query;
 
+    // Default to Bihar and Cereals (Paddy, Maize, Wheat) when not specified
+    const state = (qState && qState !== 'all') ? qState : DEFAULT_STATE;
+    const queryForCeda = {
+      state: qState && qState !== 'all' ? qState : DEFAULT_STATE,
+      district,
+      market,
+      commodity_group: commodity_group || 'Cereals',
+      commodity,
+      variety,
+      grade,
+    };
+
+    // 1st priority: try CEDA API
+    if (CEDA_API_KEY) {
+      try {
+        const cedaResult = await fetchCedaAgmarknet(queryForCeda);
+        if (cedaResult && cedaResult.success && cedaResult.data && cedaResult.data.length > 0) {
+          return res.json(cedaResult);
+        }
+      } catch (cedaErr) {
+        console.warn('CEDA Agmarknet failed, using fallback:', cedaErr.message);
+      }
+    }
+
+    // Fallback: existing data.gov.in API
+    if (!MANDI_API_KEY) {
+      return res.status(500).json({
+        success: false,
+        error: 'MANDI_API_KEY is not configured on the server. CEDA API did not return data.'
+      });
+    }
+
     const params = new URLSearchParams({
       'api-key': MANDI_API_KEY,
       format: 'json',
@@ -120,8 +154,8 @@ router.get('/agmarknet', async (req, res) => {
       offset: (Number(offset) || 0).toString(),
     });
 
-    // Apply filters - handle 'all' values properly
-    if (state && state !== 'all') params.append('filters[state.keyword]', state);
+    // Apply filters - state already defaulted to Bihar when 'all'
+    if (state) params.append('filters[state.keyword]', state);
     if (district && district !== 'all') params.append('filters[district]', district);
     if (market && market !== 'all') params.append('filters[market]', market);
     if (commodity && commodity !== 'all') params.append('filters[commodity]', commodity);
@@ -521,9 +555,10 @@ router.get('/filters', async (req, res) => {
       if (variety) varieties.add(variety);
     });
 
-    // Sort states alphabetically, but ensure all Indian states are included
+    // Sort states: Bihar first (default), then rest by list order / alphabetically
     const sortedStates = Array.from(states).sort((a, b) => {
-      // Prioritize exact matches with our list
+      if (a === 'Bihar') return -1;
+      if (b === 'Bihar') return 1;
       const aIndex = ALL_INDIAN_STATES.indexOf(a);
       const bIndex = ALL_INDIAN_STATES.indexOf(b);
       if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;

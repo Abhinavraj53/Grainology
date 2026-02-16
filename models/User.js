@@ -79,8 +79,9 @@ const userSchema = new mongoose.Schema({
   uploaded_document: {
     document_type: {
       type: String,
-      enum: ['aadhaar', 'pan', 'driving_license', 'voter_id', 'passport', 'gstin', 'cin', 'registration_certificate', 'license', 'other'],
+      enum: ['aadhaar', 'pan', 'driving_license', 'voter_id', 'passport', 'gstin', 'cin', 'other'],
     },
+    document_type_label: String, // when document_type is 'other', user can specify e.g. "Ration Card"
     cloudinary_url: String,
     cloudinary_public_id: String,
     view_url: String,
@@ -93,8 +94,9 @@ const userSchema = new mongoose.Schema({
   uploaded_documents: [{
     document_type: {
       type: String,
-      enum: ['aadhaar', 'pan', 'driving_license', 'voter_id', 'passport', 'gstin', 'cin', 'registration_certificate', 'license', 'other'],
+      enum: ['aadhaar', 'pan', 'driving_license', 'voter_id', 'passport', 'gstin', 'cin', 'other'],
     },
+    document_type_label: String, // when document_type is 'other'
     cloudinary_url: String,
     cloudinary_public_id: String,
     view_url: String,

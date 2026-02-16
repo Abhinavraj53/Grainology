@@ -41,15 +41,15 @@ const checkDB = (req, res) => {
 // All document types available for any user (FPO, Farmer, Corporate, etc.) – user selects via checkboxes
 const ALL_DOCUMENT_OPTIONS = [
   'aadhaar', 'pan', 'driving_license', 'voter_id', 'passport',
-  'gstin', 'cin', 'registration_certificate', 'license', 'other'
+  'gstin', 'cin', 'other'
 ];
 const DOCUMENT_OPTIONS = {
   farmer: ['aadhaar', 'pan', 'driving_license', 'voter_id'],
   trader: ['aadhaar', 'pan', 'gstin', 'driving_license'],
-  fpo: ['aadhaar', 'pan', 'gstin', 'cin', 'registration_certificate'],
-  corporate: ['gstin', 'cin', 'pan', 'registration_certificate'],
-  miller: ['aadhaar', 'pan', 'gstin', 'license'],
-  financer: ['aadhaar', 'pan', 'gstin', 'license'],
+  fpo: ['aadhaar', 'pan', 'gstin', 'cin'],
+  corporate: ['gstin', 'cin', 'pan'],
+  miller: ['aadhaar', 'pan', 'gstin', 'driving_license'],
+  financer: ['aadhaar', 'pan', 'gstin', 'driving_license'],
 };
 
 // Step 1: Send WhatsApp OTP - DISABLED (OTP only via email when user provides email)
@@ -146,8 +146,6 @@ const DOCUMENT_TYPE_LABELS = {
   voter_id: 'Voter ID',
   passport: 'Passport',
   gstin: 'GSTIN',
-  registration_certificate: 'Registration Certificate',
-  license: 'License',
   other: 'Other',
 };
 
@@ -184,6 +182,13 @@ router.post('/register', upload.array('documents', 10), async (req, res) => {
       document_types,
       document_type,
       email_otp,
+      address_line1,
+      address_line2,
+      district,
+      state,
+      country,
+      pincode,
+      other_document_label,
     } = req.body;
 
     if (!name || !name.trim()) {
@@ -258,6 +263,7 @@ router.post('/register', upload.array('documents', 10), async (req, res) => {
       }
     }
 
+    const otherLabel = (other_document_label && String(other_document_label).trim()) || '';
     const uploadedDocs = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -268,7 +274,7 @@ router.post('/register', upload.array('documents', 10), async (req, res) => {
           file.originalname,
           `grainology/verification/${user_type}/${docType}`
         );
-        uploadedDocs.push({
+        const docEntry = {
           document_type: docType,
           cloudinary_url: uploadResult.url,
           cloudinary_public_id: uploadResult.public_id,
@@ -277,7 +283,9 @@ router.post('/register', upload.array('documents', 10), async (req, res) => {
           file_name: file.originalname,
           file_size: uploadResult.bytes,
           uploaded_at: new Date(),
-        });
+        };
+        if (docType === 'other' && otherLabel) docEntry.document_type_label = otherLabel;
+        uploadedDocs.push(docEntry);
       } catch (uploadError) {
         console.error('Cloudinary upload error:', uploadError);
         return res.status(500).json({ error: `Failed to upload ${docType} document. Please try again.` });
@@ -301,6 +309,12 @@ router.post('/register', upload.array('documents', 10), async (req, res) => {
     };
     if (finalTradeName) userData.trade_name = finalTradeName;
     if (cleanEmail) userData.email = cleanEmail;
+    if (address_line1 && address_line1.trim()) userData.address_line1 = address_line1.trim();
+    if (address_line2 && address_line2.trim()) userData.address_line2 = address_line2.trim();
+    if (district && district.trim()) userData.district = district.trim();
+    if (state && state.trim()) userData.state = state.trim();
+    if (country && country.trim()) userData.country = country.trim();
+    if (pincode && String(pincode).trim()) userData.pincode = String(pincode).trim();
 
     const user = new User(userData);
     await user.save();

@@ -8,14 +8,16 @@ const router = express.Router();
 // Get all logistics providers
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { is_active, pickup_city, delivery_city } = req.query;
+    const { is_active, pickup_city, delivery_city, id, company_name } = req.query;
     const query = {};
 
+    if (id) query._id = id;
     if (is_active !== undefined) query.is_active = is_active === 'true';
     if (pickup_city) query.pickup_city = pickup_city;
     if (delivery_city) query.delivery_city = delivery_city;
+    if (company_name) query.company_name = new RegExp(company_name, 'i');
 
-    const providers = await LogisticsProvider.find(query).sort({ createdAt: -1 });
+    const providers = await LogisticsProvider.find(query).sort({ company_name: 1 });
     res.json(providers);
   } catch (error) {
     console.error('Get logistics providers error:', error);
@@ -45,7 +47,8 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const provider = new LogisticsProvider(req.body);
+    const body = Array.isArray(req.body) ? req.body[0] : req.body;
+    const provider = new LogisticsProvider(body);
     await provider.save();
     res.status(201).json(provider);
   } catch (error) {

@@ -1,10 +1,15 @@
 import mongoose from 'mongoose';
 
 const locationMasterSchema = new mongoose.Schema({
+  state: {
+    type: String,
+    default: '',
+    trim: true
+  },
   name: {
     type: String,
     required: true,
-    unique: true
+    trim: true
   },
   is_active: {
     type: Boolean,
@@ -21,6 +26,8 @@ const locationMasterSchema = new mongoose.Schema({
     }
   }
 });
+
+locationMasterSchema.index({ state: 1, name: 1 }, { unique: true, sparse: true });
 
 const LocationMaster = mongoose.model('LocationMaster', locationMasterSchema);
 

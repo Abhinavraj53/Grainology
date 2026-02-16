@@ -11,6 +11,16 @@ const confirmedSalesOrderSchema = new mongoose.Schema({
     required: true,
     unique: true
   },
+  unique_id: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  trash: {
+    type: Boolean,
+    default: false,
+    select: false
+  },
   transaction_date: {
     type: String,
     required: true
@@ -84,6 +94,7 @@ const confirmedSalesOrderSchema = new mongoose.Schema({
       ret.id = ret._id.toString();
       delete ret._id;
       delete ret.__v;
+      if (ret.trash !== undefined) delete ret.trash;
       return ret;
     }
   }

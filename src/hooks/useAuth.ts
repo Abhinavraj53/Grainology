@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 // @ts-ignore - JS module without types
-import { api, Profile } from '../lib/api';
+import { api } from '../lib/api';
+import type { Profile } from '../lib/client';
 
 export function useAuth() {
   const [user, setUser] = useState<any | null>(null);
@@ -94,11 +95,15 @@ export function useAuth() {
     return data;
   };
 
-  const signIn = async (mobile_number: string, password: string) => {
-    const { data, error } = await api.auth.signInWithPassword({
-      mobile_number,
-      password,
-    });
+  const signIn = async (
+    credentials: { mobile_number?: string; email?: string; password: string } | string,
+    password?: string
+  ) => {
+    const payload =
+      typeof credentials === 'string'
+        ? { mobile_number: credentials, password: password! }
+        : credentials;
+    const { data, error } = await api.auth.signInWithPassword(payload);
 
     if (error) throw error;
     if (data?.session?.user) {

@@ -32,10 +32,10 @@ export default function MandiBhaav() {
   const [dates, setDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
-    state: 'all', // Show overall data by default
+    state: 'Bihar', // Default: Bihar (CEDA + fallback API)
     district: 'all',
     market: 'all',
-    commodity_group: 'Cereals', // Default to Cereals to show Paddy, Maize, Wheat
+    commodity_group: 'Cereals', // Default: Paddy, Maize, Wheat
     commodity: 'all',
     variety: 'all',
     grade: 'FAQ'
@@ -167,6 +167,8 @@ export default function MandiBhaav() {
       params.append('commodity_group', 'Cereals');
       // No state filter - show overall data
       // Filter to show only Paddy, Maize, Wheat
+      // Default: Bihar, Paddy, Maize, Wheat (API tries CEDA first, then fallback)
+      params.append('state', 'Bihar');
       const defaultCommodities = ['Paddy', 'Maize', 'Wheat'];
       
       // Fetch data for each commodity and combine

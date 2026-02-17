@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Shield, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
-import { supabase, Profile } from '../lib/supabase';
+import { api, Profile } from '../lib/client';
 
 interface KYCVerificationProps {
   profile: Profile;
@@ -28,7 +28,7 @@ export default function KYCVerification({ profile, onVerificationComplete }: KYC
     setLoading(true);
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await api.auth.getSession();
       if (!session) {
         throw new Error('Not authenticated');
       }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, Order, LogisticsShipment } from '../../lib/supabase';
+import { api, Order, LogisticsShipment } from '../../lib/client';
 import { Package, MapPin, Truck, Clock, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface OrderTrackingProps {
@@ -16,7 +16,7 @@ export default function OrderTracking({ profileId }: OrderTrackingProps) {
   }, [profileId]);
 
   const loadOrdersAndShipments = async () => {
-    const { data: ordersData, error: ordersError } = await supabase
+    const { data: ordersData, error: ordersError } = await api
       .from('orders')
       .select('*, offer:offers(commodity, variety, location, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
       .or(`buyer_id.eq.${profileId},offer_id.in.(select id from offers where seller_id='${profileId}')`)
@@ -27,7 +27,7 @@ export default function OrderTracking({ profileId }: OrderTrackingProps) {
 
       const orderIds = ordersData.map(o => o.id);
       if (orderIds.length > 0) {
-        const { data: shipmentsData } = await supabase
+        const { data: shipmentsData } = await api
           .from('logistics_shipments')
           .select('*')
           .in('order_id', orderIds);

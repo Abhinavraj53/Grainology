@@ -1,4 +1,4 @@
-import { Order, Offer } from '../../lib/supabase';
+import { Order, Offer } from '../../lib/client';
 import { Users, Package, ShoppingCart, AlertCircle, TrendingUp, Calendar, DollarSign, UserCheck } from 'lucide-react';
 
 interface AdminDashboardProps {

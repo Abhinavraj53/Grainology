@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Profile, supabase, Offer, Order, QualityParameter } from '../lib/supabase';
-import { Home, PlusCircle, LogOut, Cloud, TrendingUp, ShoppingCart, Store, Menu, X, FileText } from 'lucide-react';
+import { Profile, api, Offer, Order, QualityParameter } from '../lib/client';
+import { Home, PlusCircle, LogOut, Cloud, TrendingUp, ShoppingCart, Store, Menu, X, FileText, Truck } from 'lucide-react';
 import Dashboard from './customer/Dashboard';
 import CreateTrade from './customer/CreateTrade';
 import MandiBhaav from './MandiBhaav';
@@ -8,6 +8,7 @@ import WeatherForecast from './WeatherForecast';
 import PurchaseOrderHistory from './customer/PurchaseOrderHistory';
 import SaleOrderHistory from './customer/SaleOrderHistory';
 import ConfirmedOrders from './customer/ConfirmedOrders';
+import LogisticsProvidersList from './customer/LogisticsProvidersList';
 import { ToastContainer, useToast } from './Toast';
 // Commented out - not in use
 // import Marketplace from './customer/Marketplace';
@@ -15,7 +16,7 @@ import { ToastContainer, useToast } from './Toast';
 // import OrderTracking from './customer/OrderTracking';
 import { DashboardCache } from '../lib/sessionStorage';
 
-type View = 'dashboard' | 'create-trade' | 'purchase-order' | 'sale-order' | 'confirmed-orders' | 'mandi' | 'weather';
+type View = 'dashboard' | 'create-trade' | 'purchase-order' | 'sale-order' | 'confirmed-orders' | 'mandi' | 'weather' | 'logistics-providers';
 
 interface CustomerPanelProps {
   profile: Profile | null; // Allow profile to be null
@@ -55,7 +56,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
   }, [profile]);
 
   const loadOffers = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('offers')
       .select('*, seller:profiles!offers_seller_id_fkey(name)')
       .eq('status', 'Active')
@@ -81,7 +82,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
     let ordersData: any[] = [];
     
     if (profile.role === 'farmer') {
-      const { data: farmerOffers } = await supabase
+      const { data: farmerOffers } = await api
         .from('offers')
         .select('id')
         .eq('seller_id', profile.id);
@@ -100,7 +101,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
 
       const offerIds = farmerOffers.map((o: { id: string }) => o.id);
 
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('orders')
         .select('*, offer:offers(*, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
         .in('offer_id', offerIds)
@@ -111,7 +112,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
         setMyOrders(ordersData);
       }
     } else {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('orders')
         .select('*, offer:offers(*, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
         .eq('buyer_id', profile.id)
@@ -135,7 +136,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
   };
 
   const loadQualityParams = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('quality_parameters')
       .select('*')
       .order('commodity', { ascending: true });
@@ -163,7 +164,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
       return { error: { message: 'Please complete KYC verification before creating offers' } };
     }
 
-    const { error } = await supabase.from('offers').insert({
+    const { error } = await api.from('offers').insert({
       seller_id: profile.id,
       ...offerData,
     });
@@ -185,7 +186,7 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
       return { error: { message: 'Please complete KYC verification before placing orders' } };
     }
 
-    const { error } = await supabase.from('orders').insert({
+    const { error } = await api.from('orders').insert({
       offer_id: offerId,
       buyer_id: profile.id,
       quantity_mt: quantity,
@@ -329,6 +330,19 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
             <Cloud className="w-5 h-5" />
             <span className="font-medium">Weather</span>
           </button>
+
+          {/* 8. Logistics Providers */}
+          <button
+            onClick={() => handleViewChange('logistics-providers')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'logistics-providers'
+                ? 'bg-green-50 text-green-700'
+                : 'text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <Truck className="w-5 h-5" />
+            <span className="font-medium">Logistics Providers</span>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-gray-200 flex-shrink-0">
@@ -387,6 +401,9 @@ export default function CustomerPanel({ profile, onSignOut }: CustomerPanelProps
           )}
           {currentView === 'weather' && (
             <WeatherForecast />
+          )}
+          {currentView === 'logistics-providers' && (
+            <LogisticsProvidersList />
           )}
         </div>
       </main>

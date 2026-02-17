@@ -1,9 +1,26 @@
 import { useState, useEffect } from 'react';
-import { Order, Offer, supabase } from '../../lib/supabase';
-import { Users, Package, ShoppingCart, TrendingUp, DollarSign, CheckCircle } from 'lucide-react';
+import { Order, Offer } from '../../lib/client';
+import { Users, Package, ShoppingCart, TrendingUp, CheckCircle, UserCheck } from 'lucide-react';
 import MandiBhaav from '../MandiBhaav';
 import Weathersonu from '../weathersonu';
-import { DashboardCache } from '../../lib/sessionStorage';
+
+interface ConfirmedOrderRow {
+  _id?: string;
+  invoice_number: string;
+  transaction_date: string;
+  commodity: string;
+  orderType: 'sales' | 'purchase';
+  partyName: string;
+  net_weight_mt: number;
+  net_amount: number;
+  createdAt: string;
+}
+
+interface VendorPerformanceRow {
+  name: string;
+  totalOrders: number;
+  totalAmount: number;
+}
 
 interface EnhancedDashboardProps {
   stats: {
@@ -11,6 +28,7 @@ interface EnhancedDashboardProps {
     totalFarmers: number;
     totalTraders: number;
     verifiedUsers: number;
+    pendingApprovalUsers?: number;
     totalPurchaseOrders: number;
     totalSaleOrders: number;
     totalConfirmedSalesOrders: number;
@@ -20,10 +38,13 @@ interface EnhancedDashboardProps {
   };
   orders: Order[];
   offers: Offer[];
+  onPendingApprovalClick?: () => void;
 }
 
-export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardProps) {
-  const [vendorPerformance, setVendorPerformance] = useState<any[]>([]);
+export default function EnhancedDashboard({ stats, onPendingApprovalClick }: EnhancedDashboardProps) {
+  const [recentOrders, setRecentOrders] = useState<ConfirmedOrderRow[]>([]);
+  const [vendorPerformance, setVendorPerformance] = useState<VendorPerformanceRow[]>([]);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
   // Add safety checks for stats
   if (!stats) {
@@ -50,77 +71,66 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
   };
 
   useEffect(() => {
-    // Get admin user ID from session
-    supabase.auth.getSession().then(({ data: { session } }: any) => {
-      if (session?.user?.id) {
-        const userId = session.user.id;
-        // Check cache first
-        const cached = DashboardCache.getAdminData(userId) as { vendorPerformance: any[] } | null;
-        if (cached && cached.vendorPerformance) {
-          setVendorPerformance(cached.vendorPerformance || []);
-          // Still load fresh data in background
-          loadVendorPerformance(userId);
-        } else {
-          loadVendorPerformance(userId);
+    const loadDashboardData = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          setDashboardLoading(false);
+          return;
         }
+        const response = await fetch(`${apiUrl}/admin/dashboard`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          setDashboardLoading(false);
+          return;
+        }
+        const data = await response.json();
+        setRecentOrders(data.recentOrders || []);
+        setVendorPerformance(data.vendorPerformance || []);
+      } catch (err) {
+        console.error('Dashboard data load error:', err);
+      } finally {
+        setDashboardLoading(false);
       }
-    });
-  }, [orders]);
-
-  const loadVendorPerformance = async (userId?: string) => {
-    const { data: suppliers } = await supabase
-      .from('profiles')
-      .select('id, name, role')
-      .in('role', ['farmer', 'fpo', 'corporate'])
-      .limit(5);
-
-    let performanceData: any[] = [];
-    if (suppliers) {
-      const performance = await Promise.all(
-        suppliers.map(async (supplier: any) => {
-          const { data: supplierOffers } = await supabase
-            .from('offers')
-            .select('id')
-            .eq('seller_id', supplier.id);
-
-          const offerIds = (supplierOffers || []).map((o: any) => o.id);
-
-          const { data: supplierOrders } = await supabase
-            .from('orders')
-            .select('id, status')
-            .in('offer_id', offerIds);
-
-          const completedCount = supplierOrders?.filter((o: any) => o.status === 'Completed').length || 0;
-          const totalCount = supplierOrders?.length || 0;
-
-          return {
-            name: supplier.name,
-            completionRate: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
-            totalOrders: totalCount
-          };
-        })
-      );
-
-      performanceData = performance;
-      setVendorPerformance(performanceData);
-    }
-
-    // Cache the data
-    if (userId) {
-      DashboardCache.setAdminData(userId, {
-        shipments: [],
-        vendorPerformance: performanceData
-      });
-    }
-  };
-
-  const recentOrders = orders.slice(0, 10);
+    };
+    loadDashboardData();
+  }, []);
 
 
 
 
   return (
     <div className="space-y-6">
+      {/* Pending Approval – users who just signed up, need to be approved */}
+      {(stats?.pendingApprovalUsers ?? 0) > 0 && (
+        <div className="rounded-lg shadow-lg p-4 bg-amber-50 border-2 border-amber-200">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center">
+                <UserCheck className="w-6 h-6 text-amber-700" />
+              </div>
+              <div>
+                <p className="font-semibold text-amber-900">
+                  {stats.pendingApprovalUsers} user{stats.pendingApprovalUsers !== 1 ? 's' : ''} pending approval
+                </p>
+                <p className="text-sm text-amber-800">New sign-ups waiting for approval to login</p>
+              </div>
+            </div>
+            {onPendingApprovalClick && (
+              <button
+                type="button"
+                onClick={onPendingApprovalClick}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium"
+              >
+                Approve in User Management
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* First Row: All Users, Total Purchase Orders, Total Sales Orders, Total Confirmed Sales Orders */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
@@ -187,10 +197,9 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Confirmed Sales Amount</p>
-              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedSalesAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
+              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedSalesAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               <p className="text-xs opacity-75 mt-2">All confirmed sales orders</p>
             </div>
-            <DollarSign className="w-16 h-16 opacity-30" />
           </div>
         </div>
 
@@ -198,10 +207,9 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm opacity-90">Total Confirmed Purchase Amount</p>
-              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedPurchaseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}</p>
+              <p className="text-3xl font-bold mt-2">₹{(stats?.totalConfirmedPurchaseAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               <p className="text-xs opacity-75 mt-2">All confirmed purchase orders</p>
             </div>
-            <DollarSign className="w-16 h-16 opacity-30" />
           </div>
         </div>
       </div>
@@ -217,107 +225,93 @@ export default function EnhancedDashboard({ stats, orders }: EnhancedDashboardPr
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-800">Recent Orders</h3>
+          <p className="text-sm text-gray-500 mt-1">From Confirmed Sales & Purchase Orders</p>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Order ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commodity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Buyer</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Seller</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {recentOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-600 font-mono">
-                    {order.id.slice(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {order.offer?.commodity || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {order.buyer?.name || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {order.offer?.seller?.name || 'N/A'}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{order.quantity_mt} MT</td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    ₹{(order.quantity_mt * 10 * order.final_price_per_quintal).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                      order.status === 'Completed' ? 'bg-green-100 text-green-800' :
-                      order.status === 'Pending Approval' ? 'bg-yellow-100 text-yellow-800' :
-                      order.status === 'Approved - Awaiting Logistics' ? 'bg-purple-100 text-purple-800' :
-                      order.status === 'Approved' ? 'bg-blue-100 text-blue-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {formatDate(order.sauda_confirmation_date || order.created_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {recentOrders.length === 0 && (
-            <div className="text-center py-12 text-gray-500">
-              <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-30" />
-              <p>No orders yet</p>
-            </div>
+          {dashboardLoading ? (
+            <div className="text-center py-12 text-gray-500">Loading recent orders...</div>
+          ) : (
+            <>
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Commodity</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Seller / Supplier</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Weight (MT)</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {recentOrders.map((order, index) => (
+                    <tr key={`${order.orderType}-${order.id || index}-${index}`} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                          order.orderType === 'sales' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'
+                        }`}>
+                          {order.orderType === 'sales' ? 'Sales' : 'Purchase'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{formatDate(order.transaction_date || order.createdAt)}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">{order.commodity || '–'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{order.partyName || '–'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{Number(order.net_weight_mt ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 3 })}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-gray-900">₹{(Number(order.net_amount ?? 0)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {recentOrders.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-30" />
+                  <p>No confirmed orders yet</p>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
 
-      {/* Vendor Performance */}
+      {/* Vendor Performance (Seller/Supplier from Confirmed Sales & Purchase Orders) */}
       <div className="bg-white rounded-lg shadow">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-green-600" />
             <h3 className="text-lg font-semibold text-gray-800">Vendor Performance</h3>
           </div>
+          <p className="text-sm text-gray-500 mt-1">By order count from Confirmed Sales & Purchase Orders</p>
         </div>
         <div className="p-6">
-          {vendorPerformance.length === 0 ? (
+          {dashboardLoading ? (
             <p className="text-gray-500 text-center py-8">Loading performance data...</p>
+          ) : vendorPerformance.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No vendor data yet</p>
           ) : (
             <div className="space-y-4">
-              {vendorPerformance.map((vendor, index) => (
-                <div key={index} className="border-b border-gray-200 last:border-0 pb-4 last:pb-0">
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <p className="font-medium text-gray-800">{vendor.name}</p>
-                      <p className="text-xs text-gray-500">{vendor.totalOrders} orders</p>
+              {vendorPerformance.map((vendor, index) => {
+                const maxOrders = Math.max(...vendorPerformance.map(v => v.totalOrders), 1);
+                const pct = maxOrders > 0 ? Math.round((vendor.totalOrders / maxOrders) * 100) : 0;
+                return (
+                  <div key={`${vendor.name}-${index}`} className="border-b border-gray-200 last:border-0 pb-4 last:pb-0">
+                    <div className="flex justify-between items-center mb-2">
+                      <div>
+                        <p className="font-medium text-gray-800">{vendor.name}</p>
+                        <p className="text-xs text-gray-500">{vendor.totalOrders} orders · ₹{(vendor.totalAmount ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</p>
+                      </div>
+                      <span className="px-3 py-1 rounded-full text-sm font-bold bg-green-100 text-green-800">
+                        {vendor.totalOrders} orders
+                      </span>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                      vendor.completionRate >= 80 ? 'bg-green-100 text-green-800' :
-                      vendor.completionRate >= 50 ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {vendor.completionRate}%
-                    </span>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full bg-green-500 transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all ${
-                        vendor.completionRate >= 80 ? 'bg-green-500' :
-                        vendor.completionRate >= 50 ? 'bg-yellow-500' :
-                        'bg-red-500'
-                      }`}
-                      style={{ width: `${vendor.completionRate}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

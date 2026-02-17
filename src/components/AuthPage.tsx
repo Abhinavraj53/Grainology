@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Sprout, Shield, CheckCircle } from 'lucide-react';
 import Navigation from './Navigation';
@@ -31,6 +31,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
+  const [loginId, setLoginId] = useState(''); // Mobile number OR email for login
 
   // KYC Verification state
   const [verificationMethod, setVerificationMethod] = useState<'pan' | 'aadhaar' | 'gst' | 'cin' | ''>('');
@@ -123,6 +124,27 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
       return; // Don't proceed if not on final step
     }
 
+    // Login validation: need mobile number OR email, and password
+    if (isLogin) {
+      const trimmed = loginId.trim();
+      if (!trimmed) {
+        setError('Enter your mobile number or email address');
+        return;
+      }
+      if (!password) {
+        setError('Password is required');
+        return;
+      }
+      const isEmail = trimmed.includes('@');
+      if (!isEmail) {
+        const digits = trimmed.replace(/\D/g, '');
+        if (digits.length !== 10) {
+          setError('Mobile number must be 10 digits');
+          return;
+        }
+      }
+    }
+
     // Final validation for step 4 (final step - create account)
     if (!isLogin && step === 4) {
       if (!password || password.length < 6) {
@@ -148,9 +170,12 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
     try {
       if (isLogin) {
-        // Login with mobile number and password
-        await signIn(mobileNumber, password);
-        // Redirect to dashboard after successful login
+        const trimmed = loginId.trim();
+        const isEmail = trimmed.includes('@');
+        const credentials = isEmail
+          ? { email: trimmed.toLowerCase(), password }
+          : { mobile_number: trimmed.replace(/\D/g, '').slice(0, 10), password };
+        await signIn(credentials);
         navigate('/dashboard');
       } else {
         // Complete signup with verified KYC data
@@ -302,11 +327,20 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
       }
     } catch (err: any) {
       console.error('Auth error:', err);
-      const errorMessage = err.message || 
-                          err.error?.message || 
-                          err.error ||
-                          err.details || 
-                          'An error occurred. Please try again.';
+      const rawMessage = typeof err === 'string' ? err : (err?.message || err?.error?.message || err?.error || err?.details);
+      const isRejected = rawMessage && (
+        (typeof rawMessage === 'string' && /account rejected|not approved/i.test(rawMessage)) ||
+        err?.error === 'Account rejected'
+      );
+      const isPendingApproval = rawMessage && !isRejected && (
+        (typeof rawMessage === 'string' && /pending approval|under review/i.test(rawMessage)) ||
+        err?.error === 'Account pending approval'
+      );
+      const errorMessage = isRejected
+        ? 'Your account was not approved. Please contact support.'
+        : isPendingApproval
+          ? 'Your account is not approved. Please wait for approval.'
+          : (rawMessage || 'An error occurred. Please try again.');
       setError(errorMessage);
       setLoading(false);
     }
@@ -388,16 +422,16 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
             >
               Login
             </button>
-            <button
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-3 px-4 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 ${
+            <Link
+              to="/register"
+              className={`flex-1 py-3 px-4 rounded-lg text-sm sm:text-base font-semibold transition-all duration-200 text-center block ${
                 !isLogin
                   ? 'bg-white text-green-600 shadow-md'
                   : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               Register
-            </button>
+            </Link>
           </div>
 
           {!isLogin && step <= 4 && (
@@ -1712,21 +1746,21 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
               </>
             )}
 
-            {/* Mobile Number and Password fields only for Login */}
+            {/* Login: Mobile number OR Email, and Password */}
             {isLogin && (
               <>
                 <div>
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                    Mobile Number <span className="text-red-500">*</span>
+                    Mobile Number or Email <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="tel"
-                    value={mobileNumber}
-                    onChange={(e) => setMobileNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    type="text"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
                     required
                     className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                    placeholder="Enter 10-digit mobile number"
-                    maxLength={10}
+                    placeholder="Enter 10-digit mobile number or email"
+                    autoComplete="username"
                   />
                 </div>
 
@@ -1741,6 +1775,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                     required
                     className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
                     placeholder="Enter your password"
+                    autoComplete="current-password"
                   />
                 </div>
               </>

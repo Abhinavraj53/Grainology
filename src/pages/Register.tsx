@@ -1,11 +1,10 @@
-import Navigation from '../components/Navigation';
-import Footer from '../components/Footer';
-import AuthPage from '../components/AuthPage';
+// New Simple Registration Flow - No Cashfree, No Aadhaar Verification`
+import SimpleRegistration from '../components/SimpleRegistration';
 
 export default function Register() {
   return (
     <div className="min-h-screen">
-      <AuthPage initialMode="register" />
+      <SimpleRegistration />
     </div>
   );
 }

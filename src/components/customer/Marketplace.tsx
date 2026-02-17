@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Offer, Profile } from '../../lib/supabase';
+import { Offer, Profile } from '../../lib/client';
 import { Search, MapPin, Package, X, ShoppingCart } from 'lucide-react';
 
 interface MarketplaceProps {

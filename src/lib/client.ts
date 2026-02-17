@@ -1,8 +1,7 @@
-// Compatibility layer - redirects to new Node.js API
+// JWT-based API client and shared types (no Supabase)
 import { api } from './api';
 
-// Export api as supabase for backward compatibility
-export const supabase = api;
+export { api };
 
 export type Profile = {
   id: string;
@@ -24,6 +23,7 @@ export type Profile = {
   business_name?: string;
   business_type?: 'private_limited' | 'partnership' | 'proprietorship' | 'llp';
   created_at: string;
+  approval_status?: 'pending' | 'approved' | 'rejected';
 };
 
 export type MandiPrice = {

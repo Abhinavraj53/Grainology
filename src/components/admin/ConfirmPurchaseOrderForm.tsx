@@ -31,14 +31,14 @@ export default function ConfirmPurchaseOrderForm() {
   const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
   const [varieties, setVarieties] = useState<string[]>([]);
   const [warehouses, setWarehouses] = useState<string[]>([]);
-  const [locations, setLocations] = useState<string[]>([]);
+  const [locations, setLocations] = useState<Array<{ id: string; name: string; state?: string }>>([]);
 
   // Form fields
   const [customerId, setCustomerId] = useState('');
   const [transactionDate, setTransactionDate] = useState('');
   const [state, setState] = useState('');
-  const [supplierName, setSupplierName] = useState(''); // Changed from sellerName
-  const [location, setLocation] = useState('');
+  const [supplierName, setSupplierName] = useState('');
+  const [locationId, setLocationId] = useState('');
   const [warehouseName, setWarehouseName] = useState('');
   const [chamberNo, setChamberNo] = useState('');
   const [commodity, setCommodity] = useState('Paddy');
@@ -80,13 +80,30 @@ export default function ConfirmPurchaseOrderForm() {
 
   useEffect(() => {
     fetchCustomers();
-    // Fetch commodities on mount
     fetchCommodities().then(setCommodities).catch(() => {
       setCommodities(['Paddy', 'Maize', 'Wheat']);
     });
-    fetchWarehouses();
-    fetchLocations();
   }, []);
+
+  useEffect(() => {
+    if (!state) {
+      setLocations([]);
+      setLocationId('');
+      setWarehouseName('');
+      setWarehouses([]);
+      return;
+    }
+    fetchLocationsByState(state);
+  }, [state]);
+
+  useEffect(() => {
+    if (!locationId) {
+      setWarehouses([]);
+      setWarehouseName('');
+      return;
+    }
+    fetchWarehousesByLocation(locationId);
+  }, [locationId]);
 
   useEffect(() => {
     // Fetch varieties when commodity changes
@@ -153,43 +170,47 @@ export default function ConfirmPurchaseOrderForm() {
     }
   };
 
-  const fetchWarehouses = async () => {
+  const fetchLocationsByState = async (stateName: string) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
       const token = localStorage.getItem('auth_token');
       if (!token) return;
-
-      const response = await fetch(`${apiUrl}/warehouse-master?is_active=true`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setWarehouses(data.map((w: any) => w.name));
-      }
-    } catch (error) {
-      console.error('Failed to fetch warehouses:', error);
-    }
-  };
-
-  const fetchLocations = async () => {
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      const token = localStorage.getItem('auth_token');
-      if (!token) return;
-
-      const response = await fetch(`${apiUrl}/location-master?is_active=true`, {
+      const response = await fetch(`${apiUrl}/location-master?is_active=true&state=${encodeURIComponent(stateName)}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-
       if (response.ok) {
         const data = await response.json();
-        setLocations(data.map((l: { name: string }) => l.name));
+        setLocations(data.map((l: any) => ({ id: l.id, name: l.name, state: l.state })));
+        setLocationId('');
+        setWarehouseName('');
+        setWarehouses([]);
+      } else {
+        setLocations([]);
       }
     } catch (error) {
       console.error('Failed to fetch locations:', error);
+      setLocations([]);
+    }
+  };
+
+  const fetchWarehousesByLocation = async (locId: string) => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) return;
+      const response = await fetch(`${apiUrl}/warehouse-master?is_active=true&location_id=${encodeURIComponent(locId)}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWarehouses(data.map((w: any) => w.name));
+        setWarehouseName('');
+      } else {
+        setWarehouses([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch warehouses:', error);
+      setWarehouses([]);
     }
   };
 
@@ -234,12 +255,13 @@ export default function ConfirmPurchaseOrderForm() {
         return;
       }
 
+      const locationName = locations.find((l) => l.id === locationId)?.name ?? '';
       const orderData = {
         customer_id: customerId,
         transaction_date: transactionDate,
         state,
-        supplier_name: supplierName, // Changed from seller_name
-        location,
+        supplier_name: supplierName,
+        location: locationName,
         warehouse_name: warehouseName,
         chamber_no: chamberNo,
         commodity,
@@ -545,7 +567,7 @@ export default function ConfirmPurchaseOrderForm() {
                         fetch(`${apiUrl}/commodity-master?is_active=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
                         fetch(`${apiUrl}/admin/users`, { headers: { 'Authorization': `Bearer ${token}` } }),
                       ]);
-                      const locList = locRes.ok ? (await locRes.json()).map((l: any) => l.name) : locations.length ? locations : ['GULABBAGH', 'BUXAR'];
+                      const locList = locRes.ok ? (await locRes.json()).map((l: any) => l.name) : ['GULABBAGH', 'BUXAR'];
                       const whList = whRes.ok ? (await whRes.json()).map((w: any) => w.name) : warehouses.length ? warehouses : ['SATISH KUMAR WAREHOUSE', 'SIDDHASHRAM WAREHOUSE'];
                       const commList = commRes.ok ? (await commRes.json()).map((c: any) => c.name) : commodities.length ? commodities : ['Maize', 'Wheat'];
                       const usersData = usersRes.ok ? await usersRes.json() : [];
@@ -749,7 +771,6 @@ export default function ConfirmPurchaseOrderForm() {
                         return;
                       }
                       const authHeaders = { headers: { 'Authorization': `Bearer ${token}` } };
-                      // Always fetch latest master data from API so dropdowns in Excel are up to date
                       const [locRes, whRes, commRes, usersRes, varietiesRes, statesRes] = await Promise.all([
                         fetch(`${apiUrl}/location-master?is_active=true`, authHeaders),
                         fetch(`${apiUrl}/warehouse-master?is_active=true`, authHeaders),
@@ -758,15 +779,39 @@ export default function ConfirmPurchaseOrderForm() {
                         fetch(`${apiUrl}/variety-master`, authHeaders),
                         fetch(`${apiUrl}/weather/states`, authHeaders),
                       ]);
-                      const locList = locRes.ok ? (await locRes.json()).map((l: any) => l.name) : ['GULABBAGH', 'BUXAR'];
-                      const whList = whRes.ok ? (await whRes.json()).map((w: any) => w.name) : ['SATISH KUMAR WAREHOUSE', 'SIDDHASHRAM WAREHOUSE'];
+                      const locData: Array<{ id: string; name: string; state: string }> = locRes.ok ? await locRes.json() : [];
+                      const whData: Array<{ id: string; name: string; location_id: string }> = whRes.ok ? await whRes.json() : [];
                       const commList = commRes.ok ? (await commRes.json()).map((c: any) => c.name) : ['Maize', 'Wheat'];
                       const usersData = usersRes.ok ? await usersRes.json() : [];
                       const customerList = (usersData.length ? usersData : customers).filter((u: any) => u.role !== 'admin');
-                      const allVarieties: string[] = varietiesRes.ok
-                        ? [...new Set((await varietiesRes.json()).filter((v: any) => v.is_active !== false).map((v: any) => v.variety_name))]
-                        : [];
+                      const allVarietiesData = varietiesRes.ok ? await varietiesRes.json() : [];
                       const statesList: string[] = statesRes.ok ? await statesRes.json() : indianStates;
+                      const locList = locData.map((l: any) => l.name);
+                      const whList = whData.map((w: any) => w.name);
+                      const key = (s: string) => String(s || '').replace(/\s+/g, '');
+                      const locationsByState: Record<string, string[]> = {};
+                      for (const s of statesList) locationsByState[s] = [];
+                      for (const l of locData) {
+                        const s = (l.state || '').trim() || 'Other';
+                        if (!locationsByState[s]) locationsByState[s] = [];
+                        locationsByState[s].push(l.name);
+                      }
+                      const warehousesByLocationKey: Record<string, string[]> = {};
+                      for (const l of locData) warehousesByLocationKey[key(l.name)] = [];
+                      for (const w of whData) {
+                        const loc = locData.find((l: any) => l.id === w.location_id);
+                        const locKey = loc ? key(loc.name) : w.location_id;
+                        if (!warehousesByLocationKey[locKey]) warehousesByLocationKey[locKey] = [];
+                        warehousesByLocationKey[locKey].push(w.name);
+                      }
+                      const varietiesByCommodityKey: Record<string, string[]> = {};
+                      for (const c of commList) varietiesByCommodityKey[key(c)] = [];
+                      for (const v of (allVarietiesData as any[]).filter((x: any) => x.is_active !== false)) {
+                        const c = (v.commodity_name || '').trim() || 'Other';
+                        const cKey = key(c);
+                        if (!varietiesByCommodityKey[cKey]) varietiesByCommodityKey[cKey] = [];
+                        varietiesByCommodityKey[cKey].push(v.variety_name);
+                      }
                       const sampleState = statesList[0] || 'Bihar';
                       const sampleLocation = locList[0] || 'GULABBAGH';
                       const sampleLocation2 = (locList[1] ?? locList[0]) || 'BUXAR';
@@ -776,6 +821,7 @@ export default function ConfirmPurchaseOrderForm() {
                       const sampleCommodity2 = (commList[1] ?? commList[0]) || 'Wheat';
                       const sampleSupplier1 = customerList[0]?.name || 'FARMKEN VENTURES';
                       const sampleSupplier2 = customerList[1]?.name || customerList[0]?.name || 'Agro Valley Trading';
+                      const allVarieties = (allVarietiesData as any[]).filter((x: any) => x.is_active !== false).map((x: any) => x.variety_name);
                       const finalVariety1 = allVarieties[0] || 'Hybrid';
                       const finalVariety2 = allVarieties[1] || allVarieties[0] || 'Dara';
                       const headers = [
@@ -797,17 +843,19 @@ export default function ConfirmPurchaseOrderForm() {
                           warehouses: whList,
                           commodities: commList,
                           customers: customerList.map((c: any) => c.name),
-                          varieties: allVarieties,
                           states: statesList,
+                          locationsByState,
+                          warehousesByLocationKey,
+                          varietiesByCommodityKey: Object.keys(varietiesByCommodityKey).length > 0 ? varietiesByCommodityKey : undefined,
                         },
                         sheetName: 'Sample Data',
                         dropdownColumns: [
-                          { columnIndex: 2, masterListRow: 9 },  // State
-                          { columnIndex: 3, masterListRow: 6 },  // Supplier Name
-                          { columnIndex: 4, masterListRow: 3 },  // Location
-                          { columnIndex: 5, masterListRow: 4 },  // Warehouse Name
-                          { columnIndex: 7, masterListRow: 5 },  // Commodity
-                          { columnIndex: 8, masterListRow: 7 },  // Variety
+                          { columnIndex: 2, formula: 'States' },     // State (B)
+                          { columnIndex: 3, formula: 'Customers' },   // Supplier (C)
+                          { columnIndex: 4, formula: 'Locations' },  // Location (D) - fixed list, opens in all Excel
+                          { columnIndex: 5, formula: 'Warehouses' },  // Warehouse (E) - fixed list, opens in all Excel
+                          { columnIndex: 7, formula: 'Commodities' }, // Commodity (G)
+                          { columnIndex: 8, formula: 'Varieties' },   // Variety (H) - fixed list, opens in all Excel
                         ],
                       });
                       downloadExcelBuffer(buffer, 'sample_confirmed_purchase_order.xlsx');
@@ -1002,13 +1050,14 @@ export default function ConfirmPurchaseOrderForm() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
               <select
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                disabled={!state}
               >
                 <option value="">Select Location</option>
                 {locations.map((loc) => (
-                  <option key={loc} value={loc}>{loc}</option>
+                  <option key={loc.id} value={loc.id}>{loc.name}</option>
                 ))}
               </select>
             </div>
@@ -1019,6 +1068,7 @@ export default function ConfirmPurchaseOrderForm() {
                 value={warehouseName}
                 onChange={(e) => setWarehouseName(e.target.value)}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                disabled={!locationId}
               >
                 <option value="">Select Warehouse</option>
                 {warehouses.map((wh) => (

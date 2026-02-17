@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Store, Package, DollarSign, MapPin, ClipboardCheck, Calendar, Archive } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 import CSVUpload from '../CSVUpload';
 import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
@@ -70,7 +70,7 @@ export default function SaleOrder({ userId }: SaleOrderProps) {
   }, [commodity, varieties]);
 
   const fetchVarieties = async () => {
-    const { data } = await supabase
+    const { data } = await api
       .from('variety_master')
       .select('*')
       .eq('is_active', true)
@@ -100,7 +100,7 @@ export default function SaleOrder({ userId }: SaleOrderProps) {
     }
 
     // Fallback to database if not one of our standard commodities
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('quality_parameters_master')
       .select('*')
       .eq('commodity', selectedCommodity)
@@ -136,7 +136,7 @@ export default function SaleOrder({ userId }: SaleOrderProps) {
     setLoading(true);
 
     try {
-      const { error: insertError } = await supabase
+      const { error: insertError } = await api
         .from('sale_orders')
         .insert({
           seller_id: userId,

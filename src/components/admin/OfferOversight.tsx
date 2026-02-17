@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Offer, supabase } from '../../lib/supabase';
+import { Offer, api } from '../../lib/client';
 import { Search, Filter, Package, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import CSVUpload from '../CSVUpload';
 
@@ -39,7 +39,7 @@ export default function OfferOversight({ offers, onRefresh }: OfferOversightProp
 
     const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await api
       .from('offers')
       .update({ status: newStatus })
       .eq('id', offerId);

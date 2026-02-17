@@ -43,7 +43,7 @@ const groupByOptions = [
 
 export default function AnalyticsDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('time-based');
-  const [period, setPeriod] = useState('month');
+  const [period, setPeriod] = useState('all');
   const [groupBy, setGroupBy] = useState('day');
   const [customerType, setCustomerType] = useState<'sales' | 'purchase'>('sales');
   const [refreshKey, setRefreshKey] = useState(0);

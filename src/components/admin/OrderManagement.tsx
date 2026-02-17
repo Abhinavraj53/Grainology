@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Order } from '../../lib/supabase';
+import { Order } from '../../lib/client';
 import { CheckCircle, XCircle, Package, X } from 'lucide-react';
 
 interface OrderManagementProps {

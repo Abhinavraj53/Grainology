@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Truck, Plus, Edit2, Trash2, Package, MapPin, FileText, Calendar, Weight, ClipboardCheck } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 import SupplierQualityReport from './SupplierQualityReport';
 
 interface Supplier {
@@ -84,7 +84,7 @@ export default function SupplierCommodityManagement() {
   }, [commodity, varieties]);
 
   const loadSupplies = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('supplier_commodity_supplies')
       .select(`
         *,
@@ -98,7 +98,7 @@ export default function SupplierCommodityManagement() {
   };
 
   const loadSuppliers = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('profiles')
       .select('id, name, email, mobile_number')
       .eq('role', 'customer')
@@ -111,7 +111,7 @@ export default function SupplierCommodityManagement() {
   };
 
   const loadVarieties = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('variety_master')
       .select('*')
       .eq('is_active', true)
@@ -192,7 +192,7 @@ export default function SupplierCommodityManagement() {
       };
 
       if (editingSupply) {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await api
           .from('supplier_commodity_supplies')
           .update(supplyData)
           .eq('id', editingSupply.id);
@@ -200,7 +200,7 @@ export default function SupplierCommodityManagement() {
         if (updateError) throw updateError;
         setSuccess('Supply record updated successfully!');
       } else {
-        const { error: insertError } = await supabase
+        const { error: insertError } = await api
           .from('supplier_commodity_supplies')
           .insert(supplyData);
 
@@ -220,7 +220,7 @@ export default function SupplierCommodityManagement() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this supply record?')) return;
 
-    const { error } = await supabase
+    const { error } = await api
       .from('supplier_commodity_supplies')
       .delete()
       .eq('id', id);

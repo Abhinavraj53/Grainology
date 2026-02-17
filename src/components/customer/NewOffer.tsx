@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { QualityParameter } from '../../lib/supabase';
+import { QualityParameter } from '../../lib/client';
 import { Package } from 'lucide-react';
 
 interface NewOfferProps {

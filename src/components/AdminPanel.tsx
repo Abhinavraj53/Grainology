@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Profile, supabase, Order, Offer } from '../lib/supabase';
-import { LayoutDashboard, LogOut, Users, Package, Truck, TrendingUp, Cloud, FileText, ShoppingBag, Menu, X, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Profile, api, Order, Offer } from '../lib/client';
+import { LayoutDashboard, LogOut, Users, Package, Truck, TrendingUp, Cloud, FileText, ShoppingBag, Menu, X, BarChart3, MapPin } from 'lucide-react';
 // Commented out unused imports - can be restored if needed
 // import { ClipboardCheck, Calculator, PackageCheck } from 'lucide-react';
 import EnhancedDashboard from './admin/EnhancedDashboard';
 import UserManagement from './admin/UserManagement';
 import MandiBhaav from './MandiBhaav';
+import CedaAgmarknetEmbed from './CedaAgmarknetEmbed';
 import WeatherForecast from './WeatherForecast';
 import LogisticsProviderManagement from './admin/LogisticsProviderManagement';
 import AllPurchaseOrders from './admin/AllPurchaseOrders';
@@ -15,6 +17,7 @@ import ConfirmPurchaseOrderForm from './admin/ConfirmPurchaseOrderForm';
 import AllConfirmedOrders from './admin/AllConfirmedOrders';
 import CommodityVarietyManagement from './admin/CommodityVarietyManagement';
 import WarehouseManagement from './admin/WarehouseManagement';
+import LocationManagement from './admin/LocationManagement';
 import { AnalyticsDashboard } from './admin/analytics';
 import { DashboardCache } from '../lib/sessionStorage';
 // Commented out unused component imports - can be restored if needed
@@ -27,7 +30,12 @@ import { DashboardCache } from '../lib/sessionStorage';
 // import CustomerCommoditySales from './admin/CustomerCommoditySales';
 // import SupplyTransactionsView from './admin/SupplyTransactionsView';
 
-type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders' | 'commodity-variety-management' | 'warehouse-management' | 'analytics';
+type View = 'dashboard' | 'orders' | 'users' | 'offers' | 'quality' | 'logistics' | 'mandi' | 'ceda-agmarknet' | 'weather' | 'reports' | 'supplier-commodity' | 'customer-sales' | 'logistics-providers' | 'supply-transactions' | 'all-purchase-orders' | 'all-sale-orders' | 'confirm-sales-order' | 'confirm-purchase-order' | 'all-confirmed-orders' | 'commodity-variety-management' | 'warehouse-management' | 'location-management' | 'analytics';
+
+const VIEW_KEYS: View[] = ['dashboard', 'orders', 'users', 'offers', 'quality', 'logistics', 'mandi', 'ceda-agmarknet', 'weather', 'reports', 'supplier-commodity', 'customer-sales', 'logistics-providers', 'supply-transactions', 'all-purchase-orders', 'all-sale-orders', 'confirm-sales-order', 'confirm-purchase-order', 'all-confirmed-orders', 'commodity-variety-management', 'warehouse-management', 'location-management', 'analytics'];
+function isView(s: string | null): s is View {
+  return s !== null && VIEW_KEYS.includes(s as View);
+}
 
 interface AdminPanelProps {
   profile: Profile;
@@ -45,7 +53,9 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
       </div>
     );
   }
-  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewFromUrl = searchParams.get('view');
+  const [currentView, setCurrentView] = useState<View>(() => (isView(viewFromUrl) ? viewFromUrl : 'dashboard'));
   const [orders, setOrders] = useState<Order[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
@@ -57,6 +67,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
     totalFarmers: 0,
     totalTraders: 0,
     verifiedUsers: 0,
+    pendingApprovalUsers: 0,
     totalPurchaseOrders: 0,
     totalSaleOrders: 0,
     totalConfirmedSalesOrders: 0,
@@ -65,23 +76,31 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
     totalConfirmedPurchaseAmount: 0,
   });
 
+  // Sync URL with currentView so refresh keeps same page
   useEffect(() => {
-    // Check cache first
-    const cached = DashboardCache.getAdminData(profile.id);
-    if (cached) {
-      // Note: Admin dashboard data (shipments, vendorPerformance) is loaded in EnhancedDashboard
-      // We'll still load stats, orders, offers, users from API
-      loadData();
-    } else {
-      loadData();
+    const urlView = searchParams.get('view');
+    if (isView(urlView) && urlView !== currentView) setCurrentView(urlView);
+  }, [searchParams]);
+
+  useEffect(() => {
+    const cached = DashboardCache.getAdminListData(profile.id);
+    if (cached?.stats && cached?.users) {
+      setStats(cached.stats);
+      setUsers(cached.users);
+      if (cached.orders) setOrders(cached.orders);
+      if (cached.offers) setOffers(cached.offers);
+      setLoading(false);
+      return;
     }
+    loadData();
   }, []);
 
   const loadData = async () => {
     try {
-      setLoading(true);
+      const hadCache = Boolean(DashboardCache.getAdminListData(profile.id)?.users?.length);
+      if (!hadCache) setLoading(true);
       setErrorMessage('');
-      const session = await supabase.auth.getSession();
+      const session = await api.auth.getSession();
       const token = session.data.session?.access_token;
 
       if (!token) {
@@ -102,22 +121,24 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
         }
       });
 
+      let newStats = null as typeof stats | null;
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         console.log('Stats received:', statsData);
-        // Ensure all required fields are present with defaults
-        setStats({
+        newStats = {
           totalUsers: statsData.totalUsers || 0,
           totalFarmers: statsData.totalFarmers || 0,
           totalTraders: statsData.totalTraders || 0,
           verifiedUsers: statsData.verifiedUsers || 0,
+          pendingApprovalUsers: statsData.pendingApprovalUsers ?? 0,
           totalPurchaseOrders: statsData.totalPurchaseOrders || 0,
           totalSaleOrders: statsData.totalSaleOrders || 0,
           totalConfirmedSalesOrders: statsData.totalConfirmedSalesOrders || 0,
           totalConfirmedPurchaseOrders: statsData.totalConfirmedPurchaseOrders || 0,
           totalConfirmedSalesAmount: statsData.totalConfirmedSalesAmount || 0,
           totalConfirmedPurchaseAmount: statsData.totalConfirmedPurchaseAmount || 0,
-        });
+        };
+        setStats(newStats);
       } else {
         const errorData = await statsResponse.json().catch(() => ({}));
         console.error('Stats fetch error:', statsResponse.status, errorData);
@@ -128,6 +149,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           totalFarmers: 0,
           totalTraders: 0,
           verifiedUsers: 0,
+          pendingApprovalUsers: 0,
           totalPurchaseOrders: 0,
           totalSaleOrders: 0,
           totalConfirmedSalesOrders: 0,
@@ -149,6 +171,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
         const usersData = await usersResponse.json();
         console.log('Users received:', usersData.length, 'users');
         setUsers(usersData);
+        if (newStats) DashboardCache.setAdminListData(profile.id, { stats: newStats, users: usersData });
       } else {
         const errorData = await usersResponse.json().catch(() => ({}));
         console.error('Users fetch error:', usersResponse.status, errorData);
@@ -157,11 +180,11 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
 
       // Fetch orders and offers using the API client
       const [ordersData, offersData] = await Promise.all([
-        supabase
+        api
           .from('orders')
           .select('*, offer:offers(*, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
           .order('created_at', { ascending: false }),
-        supabase
+        api
           .from('offers')
           .select('*, seller:profiles!offers_seller_id_fkey(name)')
           .order('created_at', { ascending: false }),
@@ -185,8 +208,17 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
 
   const handleViewChange = (view: View) => {
     setCurrentView(view);
+    setSearchParams({ view });
     setIsMobileMenuOpen(false);
   };
+
+  const handleUserUpdated = useCallback((userId: string, updates: Partial<Profile>) => {
+    if (!userId) return;
+    setUsers(prev => prev.map(u => {
+      const id = String((u as any).id ?? (u as any)._id ?? '');
+      return id === String(userId) ? { ...u, ...updates } : u;
+    }));
+  }, []);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -327,7 +359,20 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <span className="font-medium">Mandi Bhaav</span>
           </button>
 
-          {/* 9. Weather Forecast */}
+          {/* 9. CEDA Agri Market Data */}
+          <button
+            onClick={() => handleViewChange('ceda-agmarknet')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'ceda-agmarknet'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <BarChart3 className="w-5 h-5" />
+            <span className="font-medium">CEDA Agri Market Data</span>
+          </button>
+
+          {/* 10. Weather Forecast */}
           <button
             onClick={() => handleViewChange('weather')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -377,6 +422,19 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           >
             <Package className="w-5 h-5" />
             <span className="font-medium">Warehouse Management</span>
+          </button>
+
+          {/* 13. Location Management */}
+          <button
+            onClick={() => handleViewChange('location-management')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              currentView === 'location-management'
+                ? 'bg-slate-700 text-white'
+                : 'text-slate-300 hover:bg-slate-700/50'
+            }`}
+          >
+            <MapPin className="w-5 h-5" />
+            <span className="font-medium">Location Management</span>
           </button>
 
           {/* ========== COMMENTED OUT - NOT IN USE ========== */}
@@ -522,10 +580,12 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             {currentView === 'confirm-purchase-order' && 'Confirm Purchase Order'}
             {currentView === 'all-confirmed-orders' && 'All Confirmed Orders'}
             {currentView === 'mandi' && 'Mandi Bhaav - Market Prices'}
+            {currentView === 'ceda-agmarknet' && 'CEDA Agri Market Data'}
             {currentView === 'weather' && 'Weather Forecast'}
             {currentView === 'logistics-providers' && 'Logistics Provider Management'}
             {currentView === 'commodity-variety-management' && 'Commodity & Variety Management'}
             {currentView === 'warehouse-management' && 'Warehouse Management'}
+            {currentView === 'location-management' && 'Location Management'}
             {/* Commented out header titles for unused views */}
             {/* {currentView === 'orders' && 'Order Management & Quality Control'} */}
             {/* {currentView === 'offers' && 'Offer Oversight & Inventory'} */}
@@ -551,13 +611,13 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             </div>
           )}
           {currentView === 'dashboard' && (
-            <EnhancedDashboard stats={stats} orders={orders} offers={offers} />
+            <EnhancedDashboard stats={stats} orders={orders} offers={offers} onPendingApprovalClick={() => handleViewChange('users')} />
           )}
           {currentView === 'analytics' && (
             <AnalyticsDashboard />
           )}
           {currentView === 'users' && (
-            <UserManagement users={users} onRefresh={loadData} />
+            <UserManagement users={users} onRefresh={loadData} onUserUpdated={handleUserUpdated} />
           )}
           {currentView === 'all-purchase-orders' && (
             <AllPurchaseOrders />
@@ -577,6 +637,9 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           {currentView === 'mandi' && (
             <MandiBhaav />
           )}
+          {currentView === 'ceda-agmarknet' && (
+            <CedaAgmarknetEmbed />
+          )}
           {currentView === 'weather' && (
             <WeatherForecast />
           )}
@@ -588,6 +651,9 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
           )}
           {currentView === 'warehouse-management' && (
             <WarehouseManagement />
+          )}
+          {currentView === 'location-management' && (
+            <LocationManagement />
           )}
           {/* ========== COMMENTED OUT - NOT IN USE ========== */}
           {/* 

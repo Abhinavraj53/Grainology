@@ -1,4 +1,4 @@
-import { Profile, Order, Offer } from '../../lib/supabase';
+import { Profile, Order, Offer } from '../../lib/client';
 import { Package, ShoppingCart, AlertCircle } from 'lucide-react';
 import MandiBhaav from '../MandiBhaav';
 import Weathersonu from '../weathersonu';

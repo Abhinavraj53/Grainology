@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, WeatherData } from '../lib/supabase';
+import { api, WeatherData } from '../lib/client';
 import { Cloud, Droplets, Wind, Thermometer, MapPin, Calendar, RefreshCw, Loader2 } from 'lucide-react';
 import { WeatherCache } from '../lib/sessionStorage';
 import Weathersonu from './weathersonu';
@@ -101,7 +101,7 @@ export default function WeatherForecast() {
         return;
       }
 
-      const session = await supabase.auth.getSession();
+      const session = await api.auth.getSession();
       const token = session.data.session?.access_token;
       
       // Use city name and state to fetch weather from backend

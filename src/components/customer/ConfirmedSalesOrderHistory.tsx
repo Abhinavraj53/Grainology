@@ -146,7 +146,6 @@ export default function ConfirmedSalesOrderHistory({ userId }: ConfirmedSalesOrd
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Invoice No.</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Date</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Commodity</th>
                   <th className="px-6 py-3 text-left text-sm font-medium text-gray-700">Vehicle No.</th>
@@ -158,7 +157,6 @@ export default function ConfirmedSalesOrderHistory({ userId }: ConfirmedSalesOrd
               <tbody className="divide-y divide-gray-200">
                 {orders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{order.invoice_number}</td>
                     <td className="px-6 py-4 text-sm text-gray-600">{formatDate(order.transaction_date)}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {order.commodity} {order.variety && `- ${order.variety}`}
@@ -216,10 +214,6 @@ export default function ConfirmedSalesOrderHistory({ userId }: ConfirmedSalesOrd
                   <div className="border-b border-gray-200 pb-6 mb-6">
                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Transaction Details</h3>
                     <div className="grid grid-cols-3 gap-6">
-                      <div>
-                        <p className="text-sm text-gray-500 font-medium">Invoice Number</p>
-                        <p className="text-lg text-gray-900 font-bold">{selectedOrder.invoice_number}</p>
-                      </div>
                       <div>
                         <p className="text-sm text-gray-500 font-medium">Transaction Date</p>
                         <p className="text-lg text-gray-900 font-bold">{formatDate(selectedOrder.transaction_date)}</p>

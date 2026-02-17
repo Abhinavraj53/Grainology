@@ -5,14 +5,22 @@ export interface MasterListForExcel {
   warehouses: string[];
   commodities: string[];
   customers: string[];
-  varieties?: string[]; // optional, can be for one commodity
+  varieties?: string[]; // optional, flat list (used when no varietiesByCommodityKey)
   states?: string[]; // optional; if not provided, default Indian states are used
+  /** State → location names for dependent Location dropdown (State → Location). */
+  locationsByState?: Record<string, string[]>;
+  /** Location key (name with spaces removed) → warehouse names for dependent Warehouse dropdown (Location → Warehouse). */
+  warehousesByLocationKey?: Record<string, string[]>;
+  /** Commodity key (name with spaces removed) → variety names for dependent Variety dropdown (Commodity → Variety). */
+  varietiesByCommodityKey?: Record<string, string[]>;
 }
 
-/** Column index (1-based) and Master List row number for dropdown source. */
+/** Column index (1-based). Use either masterListRow (fixed list) or formula (dependent list e.g. INDIRECT). */
 export interface DropdownColumn {
   columnIndex: number;
-  masterListRow: number;
+  masterListRow?: number;
+  /** Excel formula for dependent dropdown, e.g. INDIRECT("Locations_"&SUBSTITUTE(B2," ","")). */
+  formula?: string;
 }
 
 /** Get Excel column letter from 1-based column index (1=A, 2=B, ..., 27=AA). */
@@ -36,10 +44,15 @@ const DEFAULT_STATES = [
   'Andaman and Nicobar Islands', 'Chandigarh', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry',
 ];
 
+/** Safe key for Excel defined names: remove spaces. */
+function excelKey(s: string): string {
+  return String(s || '').replace(/\s+/g, '');
+}
+
 /**
  * Generate sample Excel file with Master List sheet + Sample Data sheet.
- * Dropdowns for State, Supplier/Seller, Location, Warehouse, Commodity, Variety reference Master List.
- * Returns buffer for download.
+ * Dropdowns: State (fixed); Location by State; Warehouse by Location; Commodity (fixed); Variety by Commodity; Customer (fixed).
+ * When locationsByState/warehousesByLocationKey/varietiesByCommodityKey are provided, dependent dropdowns use INDIRECT.
  */
 export async function generateSampleExcel(
   options: {
@@ -48,7 +61,6 @@ export async function generateSampleExcel(
     masterList: MasterListForExcel;
     sheetName?: string;
     filename?: string;
-    /** Columns that get dropdown validation (reference Master List). 1-based column index + Master List row. */
     dropdownColumns?: DropdownColumn[];
   }
 ): Promise<ArrayBuffer> {
@@ -56,30 +68,11 @@ export async function generateSampleExcel(
   workbook.creator = 'Grainology';
   workbook.created = new Date();
 
-  const states = (options.masterList.states && options.masterList.states.length > 0)
-    ? options.masterList.states
-    : DEFAULT_STATES;
+  const ml = options.masterList;
+  const states = (ml.states && ml.states.length > 0) ? ml.states : DEFAULT_STATES;
+  const useCascaded = !!(ml.locationsByState && ml.warehousesByLocationKey);
 
-  // Sheet 1: Master List (create first so we can reference it for dropdowns)
-  const masterSheet = workbook.addWorksheet('Master List', { state: 'visible' });
-  masterSheet.getColumn(1).width = 22;
-  for (let c = 2; c <= 26; c++) {
-    masterSheet.getColumn(c).width = 18;
-  }
-  masterSheet.addRow(['Use only these values in the Sample Data sheet.']);
-  masterSheet.getRow(1).getCell(1).font = { bold: true };
-  masterSheet.addRow([]);
-  masterSheet.addRow(['Locations', ...options.masterList.locations]);
-  masterSheet.addRow(['Warehouses', ...options.masterList.warehouses]);
-  masterSheet.addRow(['Commodities', ...options.masterList.commodities]);
-  masterSheet.addRow(['Customers / Sellers', ...options.masterList.customers]);
-  if (options.masterList.varieties && options.masterList.varieties.length > 0) {
-    masterSheet.addRow(['Varieties (sample)', ...options.masterList.varieties]);
-  }
-  masterSheet.addRow([]);
-  masterSheet.addRow(['States (India)', ...states]);
-
-  // Sheet 2: Sample Data (bulk upload template - open this sheet first via sheet order)
+  // Build Master List sheet (add as second sheet so Sample Data can be first)
   const dataSheetName = options.sheetName || 'Sample Data';
   const dataSheet = workbook.addWorksheet(dataSheetName, {
     state: 'visible',
@@ -96,13 +89,128 @@ export async function generateSampleExcel(
     col.width = Math.min(36, Math.max(14, String(h).length + 2));
   });
 
-  // Add dropdown validations: reference Master List rows (B to Z)
+  const masterSheet = workbook.addWorksheet('Master List', { state: 'visible' });
+  masterSheet.getColumn(1).width = 28;
+  for (let c = 2; c <= 26; c++) masterSheet.getColumn(c).width = 18;
+  masterSheet.addRow(['Use only these values in the Sample Data sheet.']);
+  masterSheet.getRow(1).getCell(1).font = { bold: true };
+  masterSheet.addRow([]);
+
+  let currentRow = 3;
+  const rowMap: Record<string, number> = {}; // e.g. States -> 3, Locations_Bihar -> 4
+
+  if (useCascaded && ml.locationsByState) {
+    // Row: States (India)
+    masterSheet.addRow(['States (India)', ...states]);
+    rowMap['States'] = currentRow++;
+    // Single "Locations" row with ALL locations (fixed list - works in all Excel, no INDIRECT)
+    const allLocations = [...new Set((Object.values(ml.locationsByState) as string[][]).flat())];
+    masterSheet.addRow(['Locations', ...allLocations.length ? allLocations : ml.locations]);
+    rowMap['Locations'] = currentRow++;
+    // Single "Warehouses" row with ALL warehouses (fixed list - works in all Excel, no INDIRECT)
+    const allWarehouses = ml.warehousesByLocationKey
+      ? [...new Set((Object.values(ml.warehousesByLocationKey) as string[][]).flat())]
+      : ml.warehouses;
+    masterSheet.addRow(['Warehouses', ...(allWarehouses.length ? allWarehouses : ml.warehouses)]);
+    rowMap['Warehouses'] = currentRow++;
+  } else {
+    masterSheet.addRow(['Locations', ...ml.locations]);
+    rowMap['Locations'] = currentRow++;
+    masterSheet.addRow(['Warehouses', ...ml.warehouses]);
+    rowMap['Warehouses'] = currentRow++;
+  }
+
+  masterSheet.addRow(['Commodities', ...ml.commodities]);
+  rowMap['Commodities'] = currentRow++;
+  masterSheet.addRow(['Customers / Sellers', ...ml.customers]);
+  rowMap['Customers'] = currentRow++;
+
+  if (useCascaded && ml.varietiesByCommodityKey) {
+    // Single "Varieties" row with ALL varieties (fixed list - works in all Excel)
+    const allVarieties = [...new Set((Object.values(ml.varietiesByCommodityKey) as string[][]).flat())];
+    masterSheet.addRow(['Varieties', ...allVarieties.length ? allVarieties : (ml.varieties || [])]);
+    rowMap['Varieties'] = currentRow++;
+  } else if (ml.varieties && ml.varieties.length > 0) {
+    masterSheet.addRow(['Varieties (sample)', ...ml.varieties]);
+    rowMap['Varieties'] = currentRow++;
+  }
+
+  if (!useCascaded) {
+    masterSheet.addRow([]);
+    masterSheet.addRow(['States (India)', ...states]);
+    rowMap['States'] = currentRow++;
+  }
+
+  // Defined names for dropdowns (dependent and fixed)
+  const masterName = "'Master List'";
+  if (useCascaded && rowMap['States'] != null) {
+    workbook.definedNames.add('States', `${masterName}!$B$${rowMap['States']}:$Z$${rowMap['States']}`);
+  }
+  if (rowMap['Commodities'] != null) {
+    workbook.definedNames.add('Commodities', `${masterName}!$B$${rowMap['Commodities']}:$Z$${rowMap['Commodities']}`);
+  }
+  if (rowMap['Customers'] != null) {
+    workbook.definedNames.add('Customers', `${masterName}!$B$${rowMap['Customers']}:$Z$${rowMap['Customers']}`);
+  }
+  if (useCascaded && ml.locationsByState) {
+    for (const stateName of states) {
+      const key = 'Locations_' + excelKey(stateName);
+      const r = rowMap[key];
+      if (r != null) workbook.definedNames.add(key, `${masterName}!$B$${r}:$Z$${r}`);
+    }
+    if (ml.warehousesByLocationKey) {
+      for (const locKey of Object.keys(ml.warehousesByLocationKey)) {
+        const key = 'Warehouses_' + locKey;
+        const r = rowMap[key];
+        if (r != null) workbook.definedNames.add(key, `${masterName}!$B$${r}:$Z$${r}`);
+      }
+    }
+  }
+  if (useCascaded && ml.varietiesByCommodityKey) {
+    for (const commKey of Object.keys(ml.varietiesByCommodityKey)) {
+      const key = 'Varieties_' + commKey;
+      const r = rowMap[key];
+      if (r != null) workbook.definedNames.add(key, `${masterName}!$B$${r}:$Z$${r}`);
+    }
+  }
+
+  // Dropdown validations: use direct range ref for fixed lists (reliable in all Excel), formula with = for named/INDIRECT
   const dropdownColumns = options.dropdownColumns || [];
   const maxDataRow = Math.max(2 + options.sampleRows.length, 300);
-  for (const { columnIndex, masterListRow } of dropdownColumns) {
-    const formula = `'Master List'!$B$${masterListRow}:$Z$${masterListRow}`;
+  const resolveFormula = (dc: DropdownColumn): string | null => {
+    if (dc.masterListRow != null) {
+      return `='Master List'!$B$${dc.masterListRow}:$Z$${dc.masterListRow}`;
+    }
+    if (!dc.formula) return null;
+    const f = dc.formula.trim();
+    if (f === 'States' && rowMap['States'] != null) {
+      return `='Master List'!$B$${rowMap['States']}:$Z$${rowMap['States']}`;
+    }
+    if (f === 'Commodities' && rowMap['Commodities'] != null) {
+      return `='Master List'!$B$${rowMap['Commodities']}:$Z$${rowMap['Commodities']}`;
+    }
+    if (f === 'Customers' && rowMap['Customers'] != null) {
+      return `='Master List'!$B$${rowMap['Customers']}:$Z$${rowMap['Customers']}`;
+    }
+    if (f === 'Locations' && rowMap['Locations'] != null) {
+      return `='Master List'!$B$${rowMap['Locations']}:$Z$${rowMap['Locations']}`;
+    }
+    if (f === 'Warehouses' && rowMap['Warehouses'] != null) {
+      return `='Master List'!$B$${rowMap['Warehouses']}:$Z$${rowMap['Warehouses']}`;
+    }
+    if (f === 'Varieties' && rowMap['Varieties'] != null) {
+      return `='Master List'!$B$${rowMap['Varieties']}:$Z$${rowMap['Varieties']}`;
+    }
+    if (f.startsWith('INDIRECT') || f.startsWith('=')) {
+      return f.startsWith('=') ? f : '=' + f;
+    }
+    return '=' + f;
+  };
+  for (const dc of dropdownColumns) {
+    const formula = resolveFormula(dc);
+    if (!formula) continue;
     for (let r = 2; r <= maxDataRow; r++) {
-      const cell = dataSheet.getCell(r, columnIndex);
+      const cell = dataSheet.getCell(r, dc.columnIndex);
       cell.dataValidation = {
         type: 'list',
         allowBlank: true,
@@ -113,24 +221,6 @@ export async function generateSampleExcel(
       };
     }
   }
-
-  // Move Sample Data to first tab: remove Master List and re-add so order becomes [Sample Data, Master List]
-  workbook.removeWorksheet('Master List');
-  const masterAgain = workbook.addWorksheet('Master List', { state: 'visible' });
-  masterAgain.getColumn(1).width = 22;
-  for (let c = 2; c <= 26; c++) masterAgain.getColumn(c).width = 18;
-  masterAgain.addRow(['Use only these values in the Sample Data sheet.']);
-  masterAgain.getRow(1).getCell(1).font = { bold: true };
-  masterAgain.addRow([]);
-  masterAgain.addRow(['Locations', ...options.masterList.locations]);
-  masterAgain.addRow(['Warehouses', ...options.masterList.warehouses]);
-  masterAgain.addRow(['Commodities', ...options.masterList.commodities]);
-  masterAgain.addRow(['Customers / Sellers', ...options.masterList.customers]);
-  if (options.masterList.varieties && options.masterList.varieties.length > 0) {
-    masterAgain.addRow(['Varieties (sample)', ...options.masterList.varieties]);
-  }
-  masterAgain.addRow([]);
-  masterAgain.addRow(['States (India)', ...states]);
 
   const buffer = await workbook.xlsx.writeBuffer();
   return buffer as ArrayBuffer;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Store, Plus, Edit2, Trash2, ClipboardCheck } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 import CustomerQualityReport from './CustomerQualityReport';
 
 interface Customer {
@@ -100,7 +100,7 @@ export default function CustomerCommoditySales() {
   }, [commodity, varieties]);
 
   const loadSales = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('customer_commodity_sales')
       .select(`
         *,
@@ -115,7 +115,7 @@ export default function CustomerCommoditySales() {
   };
 
   const loadCustomers = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('profiles')
       .select('id, name, email, mobile_number')
       .eq('role', 'customer')
@@ -128,7 +128,7 @@ export default function CustomerCommoditySales() {
   };
 
   const loadVarieties = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('variety_master')
       .select('*')
       .eq('is_active', true)
@@ -141,10 +141,9 @@ export default function CustomerCommoditySales() {
   };
 
   const loadLogisticsProviders = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('logistics_providers')
-      .select('id, company_name, pickup_city, delivery_city, contact_person, mobile_number')
-      .eq('kyc_verified', true)
+      .select('id, company_name, mobile_number')
       .eq('is_active', true)
       .order('company_name', { ascending: true });
 
@@ -222,7 +221,7 @@ export default function CustomerCommoditySales() {
       };
 
       if (editingSale) {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await api
           .from('customer_commodity_sales')
           .update(saleData)
           .eq('id', editingSale.id);
@@ -230,7 +229,7 @@ export default function CustomerCommoditySales() {
         if (updateError) throw updateError;
         setSuccess('Sale record updated successfully!');
       } else {
-        const { error: insertError } = await supabase
+        const { error: insertError } = await api
           .from('customer_commodity_sales')
           .insert(saleData);
 
@@ -250,7 +249,7 @@ export default function CustomerCommoditySales() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this sale record?')) return;
 
-    const { error } = await supabase
+    const { error } = await api
       .from('customer_commodity_sales')
       .delete()
       .eq('id', id);
@@ -476,7 +475,7 @@ export default function CustomerCommoditySales() {
             {/* Logistics Provider */}
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Logistics Provider (KYC Verified)
+                Logistics Provider
               </label>
               <select
                 value={logisticsProviderId}
@@ -486,12 +485,12 @@ export default function CustomerCommoditySales() {
                 <option value="">Select Logistics Provider (Optional)</option>
                 {logisticsProviders.map((provider) => (
                   <option key={provider.id} value={provider.id}>
-                    {provider.company_name} - {provider.pickup_city} → {provider.delivery_city} ({provider.mobile_number})
+                    {provider.company_name} ({provider.mobile_number})
                   </option>
                 ))}
               </select>
               <p className="text-xs text-gray-500 mt-1">
-                Only KYC-verified and active logistics providers are shown
+                Active logistics providers added in Logistics Provider Management
               </p>
             </div>
 

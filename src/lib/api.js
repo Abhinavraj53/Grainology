@@ -1,5 +1,5 @@
-// API Client to replace Supabase - maintains same interface for frontend compatibility
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// JWT-based API client for backend auth and data
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://grainology-rmg1.onrender.com/api';
 
 class ApiClient {
   constructor() {
@@ -30,9 +30,9 @@ class ApiClient {
       this.token = token;
     }
 
-    // Create an AbortController for timeout (30 seconds)
+    // Create an AbortController for timeout (90s to allow Render free-tier cold start)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 90000); // 90 second timeout
 
     try {
       const response = await fetch(url, {
@@ -73,13 +73,13 @@ class ApiClient {
     } catch (error) {
       clearTimeout(timeoutId);
       
-      // Handle timeout/abort errors
+      // Handle timeout/abort errors (e.g. Render cold start)
       if (error.name === 'AbortError' || error.name === 'TimeoutError') {
         console.error('Request timeout:', url);
         throw {
           error: 'Request timeout',
-          message: 'The request took too long. Please check your internet connection and try again.',
-          details: 'Network timeout after 30 seconds'
+          message: 'The server is taking longer than usual (it may be starting up). Please try again in a moment.',
+          details: 'Request timed out after 90 seconds'
         };
       }
       
@@ -101,7 +101,7 @@ class ApiClient {
     }
   }
 
-  // Auth methods compatible with Supabase interface
+  // Auth methods (JWT from backend)
   auth = {
     getSession: async () => {
       try {
@@ -188,20 +188,24 @@ class ApiClient {
       }
     },
 
-    signInWithPassword: async ({ mobile_number, password }) => {
+    signInWithPassword: async ({ mobile_number, email, password }) => {
       try {
+        const payload = { password };
+        if (email) payload.email = email;
+        if (mobile_number) payload.mobile_number = mobile_number;
         console.log('🔐 Sign in request:', {
-          mobile_number: mobile_number,
+          hasEmail: !!email,
+          hasMobile: !!mobile_number,
           passwordLength: password?.length,
           apiUrl: `${API_BASE_URL}/auth/signin`
         });
-        
+
         const response = await fetch(`${API_BASE_URL}/auth/signin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ mobile_number, password }),
+          body: JSON.stringify(payload),
         });
 
         console.log('📥 Sign in response status:', response.status);
@@ -214,9 +218,10 @@ class ApiClient {
 
         if (!response.ok) {
           console.error('❌ Sign in failed:', data);
+          const message = data.message || (typeof data.error === 'string' ? data.error : data.error?.message) || 'Invalid credentials';
           return {
             data: { user: null, session: null },
-            error: data.error || { message: 'Invalid credentials' }
+            error: typeof data.error === 'object' ? data.error : { message, error: data.error }
           };
         }
 
@@ -287,7 +292,90 @@ class ApiClient {
     }
   };
 
-  // Database methods compatible with Supabase interface
+  // Registration methods for simple registration flow
+  registration = {
+    checkUser: async ({ mobile_number, email } = {}) => {
+      try {
+        const body = {};
+        if (mobile_number != null) body.mobile_number = String(mobile_number).trim().replace(/\D/g, '').slice(0, 10);
+        if (email != null) body.email = String(email).trim().toLowerCase();
+        const data = await this.request('/auth/check-user', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+
+    sendWhatsAppOTP: async (mobile_number) => {
+      try {
+        const data = await this.request('/registration/send-whatsapp-otp', {
+          method: 'POST',
+          body: JSON.stringify({ mobile_number }),
+        });
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+
+    sendEmailOTP: async (email) => {
+      try {
+        const data = await this.request('/registration/send-email-otp', {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        });
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+
+    getDocumentOptions: async (user_type) => {
+      try {
+        const data = await this.request('/registration/get-document-options', {
+          method: 'POST',
+          body: JSON.stringify({ user_type }),
+        });
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+
+    register: async (formData) => {
+      try {
+        // This will be a multipart/form-data request
+        const url = `${API_BASE_URL}/registration/register`;
+        const token = localStorage.getItem('auth_token');
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          body: formData, // FormData object with file
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Registration failed' }));
+          throw error;
+        }
+
+        const data = await response.json();
+        
+        if (data.session?.access_token) {
+          this.setToken(data.session.access_token);
+        }
+        
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    }
+  };
+
+  // Database/table methods (proxied to backend)
   from(table) {
     const self = this;
     
@@ -352,7 +440,7 @@ class ApiClient {
       }
 
       or(conditionString) {
-        // Parse Supabase-style or condition: "column1.eq.value1,column2.eq.value2"
+        // Parse query condition: "column1.eq.value1,column2.eq.value2"
         // Store as special filter for backend to handle
         this.filters._or = conditionString;
         return this;

@@ -1,4 +1,4 @@
-import { Offer, Profile } from '../../lib/supabase';
+import { Offer, Profile } from '../../lib/client';
 import { MapPin, Package } from 'lucide-react';
 
 interface ActiveTradesProps {

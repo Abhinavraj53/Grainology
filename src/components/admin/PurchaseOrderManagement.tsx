@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ShoppingCart, Eye, CheckCircle, XCircle, Clock, Filter, Plus } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 import { formatQuantityWithUnit, UnitType } from '../../utils/unitConversion';
 import CSVUpload from '../CSVUpload';
 import AdminPurchaseOrderForm from './AdminPurchaseOrderForm';
@@ -50,7 +50,7 @@ export default function PurchaseOrderManagement() {
 
   const loadPurchaseOrders = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('purchase_orders')
       .select(`
         *,
@@ -66,7 +66,7 @@ export default function PurchaseOrderManagement() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdating(true);
-    const { error } = await supabase
+    const { error } = await api
       .from('purchase_orders')
       .update({ status: newStatus })
       .eq('id', orderId);

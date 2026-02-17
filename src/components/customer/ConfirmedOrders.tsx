@@ -235,9 +235,6 @@ export default function ConfirmedOrders({ userId, userName }: ConfirmedOrdersPro
                     Order Type
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Invoice No.
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Date
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -268,9 +265,6 @@ export default function ConfirmedOrders({ userId, userName }: ConfirmedOrdersPro
                       }`}>
                         {order.orderType === 'sales' ? 'Sales Order' : 'Purchase Order'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {order.invoice_number}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {formatDate(order.transaction_date)}
@@ -311,7 +305,7 @@ export default function ConfirmedOrders({ userId, userName }: ConfirmedOrdersPro
             <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  Order Details - {selectedOrder.invoice_number}
+                  Order Details
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
                   <span className={`px-2 py-1 rounded text-xs font-semibold ${
@@ -346,10 +340,6 @@ export default function ConfirmedOrders({ userId, userName }: ConfirmedOrdersPro
                 <div className="col-span-3 border-b border-gray-200 pb-4 mb-4">
                   <h3 className="text-lg font-semibold text-gray-800 mb-3">Transaction Details</h3>
                   <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-sm font-medium text-gray-600">Invoice Number</label>
-                      <p className="text-gray-900 font-medium">{selectedOrder.invoice_number}</p>
-                    </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Transaction Date</label>
                       <p className="text-gray-900">{formatDate(selectedOrder.transaction_date)}</p>

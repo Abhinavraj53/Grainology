@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, Profile, Order, Offer } from '../../lib/supabase';
+import { api, Profile, Order, Offer } from '../../lib/client';
 import { FileText, Download, TrendingUp, Users, Package, DollarSign, Calendar } from 'lucide-react';
 
 export default function Reports() {
@@ -39,13 +39,13 @@ export default function Reports() {
 
       setReportData(data);
 
-      await supabase.from('reports').insert({
+      await api.from('reports').insert({
         report_type: reportType,
         report_title: `${reportType.replace('_', ' ').toUpperCase()} Report`,
         report_data: data,
         date_from: dateFrom || null,
         date_to: dateTo || null,
-        generated_by: (await supabase.auth.getUser()).data.user?.id
+        generated_by: (await api.auth.getUser()).data.user?.id
       });
     } catch (error) {
       console.error('Error generating report:', error);
@@ -55,7 +55,7 @@ export default function Reports() {
   };
 
   const generateSupplierReport = async () => {
-    let query = supabase
+    let query = api
       .from('profiles')
       .select('id, name, email, role, entity_type, business_name, kyc_status, created_at')
       .in('role', ['farmer', 'fpo', 'corporate']);
@@ -64,12 +64,12 @@ export default function Reports() {
 
     const supplierStats = await Promise.all(
       (suppliers || []).map(async (supplier) => {
-        const { data: offers } = await supabase
+        const { data: offers } = await api
           .from('offers')
           .select('id, quantity_mt, price_per_quintal, status')
           .eq('seller_id', supplier.id);
 
-        const { data: orders } = await supabase
+        const { data: orders } = await api
           .from('orders')
           .select('id, quantity_mt, final_price_per_quintal, status')
           .in('offer_id', (offers || []).map(o => o.id));
@@ -93,7 +93,7 @@ export default function Reports() {
   };
 
   const generateVendorReport = async () => {
-    let query = supabase
+    let query = api
       .from('profiles')
       .select('id, name, email, role, entity_type, business_name, kyc_status, created_at')
       .in('role', ['trader', 'miller', 'corporate']);
@@ -102,7 +102,7 @@ export default function Reports() {
 
     const vendorStats = await Promise.all(
       (vendors || []).map(async (vendor) => {
-        const { data: orders } = await supabase
+        const { data: orders } = await api
           .from('orders')
           .select('id, quantity_mt, final_price_per_quintal, status, created_at')
           .eq('buyer_id', vendor.id);
@@ -125,7 +125,7 @@ export default function Reports() {
   };
 
   const generateOrderTrackingReport = async () => {
-    let query = supabase
+    let query = api
       .from('orders')
       .select('*, offer:offers(commodity, variety, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
       .order('created_at', { ascending: false });
@@ -146,7 +146,7 @@ export default function Reports() {
   };
 
   const generateTransactionReport = async () => {
-    let query = supabase
+    let query = api
       .from('orders')
       .select('*, offer:offers(commodity, variety, price_per_quintal, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
       .eq('status', 'Completed')
@@ -171,26 +171,26 @@ export default function Reports() {
   };
 
   const generatePerformanceReport = async () => {
-    const { data: suppliers } = await supabase
+    const { data: suppliers } = await api
       .from('profiles')
       .select('id, name, role')
       .in('role', ['farmer', 'fpo', 'corporate']);
 
     const performanceData = await Promise.all(
       (suppliers || []).map(async (supplier) => {
-        const { data: offers } = await supabase
+        const { data: offers } = await api
           .from('offers')
           .select('id')
           .eq('seller_id', supplier.id);
 
         const offerIds = (offers || []).map(o => o.id);
 
-        const { data: orders } = await supabase
+        const { data: orders } = await api
           .from('orders')
           .select('id, status, created_at')
           .in('offer_id', offerIds);
 
-        const { data: shipments } = await supabase
+        const { data: shipments } = await api
           .from('logistics_shipments')
           .select('id, status, created_at, actual_delivery_date, expected_delivery_date')
           .in('order_id', (orders || []).map(o => o.id));
@@ -221,7 +221,7 @@ export default function Reports() {
   };
 
   const generateDeliveryStatusReport = async () => {
-    let query = supabase
+    let query = api
       .from('logistics_shipments')
       .select('*, order:orders(id, offer:offers(commodity, variety, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name))')
       .order('created_at', { ascending: false });

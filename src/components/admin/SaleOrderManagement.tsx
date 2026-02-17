@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Store, Eye, CheckCircle, XCircle, Clock, Filter, Plus } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 import CSVUpload from '../CSVUpload';
 import AdminSaleOrderForm from './AdminSaleOrderForm';
 
@@ -47,7 +47,7 @@ export default function SaleOrderManagement() {
 
   const loadSaleOrders = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('sale_orders')
       .select(`
         *,
@@ -63,7 +63,7 @@ export default function SaleOrderManagement() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdating(true);
-    const { error } = await supabase
+    const { error } = await api
       .from('sale_orders')
       .update({ status: newStatus })
       .eq('id', orderId);

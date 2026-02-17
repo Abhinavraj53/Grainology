@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { QualityParameter } from '../../lib/supabase';
+import { QualityParameter } from '../../lib/client';
 import { FileText, Info, Package, Calendar, DollarSign, ClipboardCheck, PlusCircle } from 'lucide-react';
 import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';

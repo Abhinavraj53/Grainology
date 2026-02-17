@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, Order, LogisticsShipment } from '../../lib/supabase';
+import { api, Order, LogisticsShipment } from '../../lib/client';
 import { Truck, MapPin, Calendar, Phone, User, Package, CheckCircle, XCircle } from 'lucide-react';
 import CSVUpload from '../CSVUpload';
 
@@ -29,7 +29,7 @@ export default function LogisticsManagement() {
   }, []);
 
   const loadOrders = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('orders')
       .select('*, offer:offers(commodity, variety, location, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
       .eq('status', 'Approved - Awaiting Logistics')
@@ -41,7 +41,7 @@ export default function LogisticsManagement() {
   };
 
   const loadShipments = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('logistics_shipments')
       .select('*')
       .order('created_at', { ascending: false });
@@ -60,7 +60,7 @@ export default function LogisticsManagement() {
     setSuccess('');
 
     try {
-      const { error: shipmentError } = await supabase
+      const { error: shipmentError } = await api
         .from('logistics_shipments')
         .insert({
           order_id: selectedOrder.id,
@@ -106,7 +106,7 @@ export default function LogisticsManagement() {
         updateData.actual_delivery_date = new Date().toISOString().split('T')[0];
       }
 
-      const { error: updateError } = await supabase
+      const { error: updateError } = await api
         .from('logistics_shipments')
         .update(updateData)
         .eq('id', shipmentId);
@@ -116,7 +116,7 @@ export default function LogisticsManagement() {
       if (newStatus === 'delivered') {
         const shipment = shipments.find(s => s.id === shipmentId);
         if (shipment) {
-          await supabase
+          await api
             .from('orders')
             .update({ status: 'Completed' })
             .eq('id', shipment.order_id);

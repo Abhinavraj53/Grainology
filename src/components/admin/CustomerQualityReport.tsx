@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ClipboardCheck, ArrowLeft, FileSpreadsheet } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 
 interface QualityParameter {
   s_no: number;
@@ -43,7 +43,7 @@ export default function CustomerQualityReport({ sale, onClose }: CustomerQuality
   const loadQualityParameters = async () => {
     setLoading(true);
 
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('quality_parameters_master')
       .select('*')
       .eq('commodity', sale.commodity)

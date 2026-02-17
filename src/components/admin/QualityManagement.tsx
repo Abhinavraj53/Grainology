@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase, Order, QualityParameter, QualityDeduction } from '../../lib/supabase';
+import { api, Order, QualityParameter, QualityDeduction } from '../../lib/client';
 import { AlertTriangle, CheckCircle, Calculator, Save } from 'lucide-react';
 import CSVUpload from '../CSVUpload';
 
@@ -18,7 +18,7 @@ export default function QualityManagement() {
   }, []);
 
   const loadOrders = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('orders')
       .select('*, offer:offers(commodity, variety, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
       .in('status', ['Approved', 'Approved - Awaiting Logistics'])
@@ -30,7 +30,7 @@ export default function QualityManagement() {
   };
 
   const loadParameters = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('quality_parameters')
       .select('*')
       .order('commodity', { ascending: true });
@@ -77,13 +77,13 @@ export default function QualityManagement() {
       }
 
       if (deductionRecords.length > 0) {
-        const { error: insertError } = await supabase
+        const { error: insertError } = await api
           .from('quality_deductions')
           .insert(deductionRecords);
 
         if (insertError) throw insertError;
 
-        const { error: updateError } = await supabase
+        const { error: updateError } = await api
           .from('orders')
           .update({ deduction_amount: totalDeduction })
           .eq('id', selectedOrder.id);

@@ -176,6 +176,16 @@ export const DashboardCache = {
     const key = `cache_admin_dashboard_${userId}`;
     setCachedData(key, data);
   },
+  // Admin panel list (stats, users) – short TTL to avoid refetch on every refresh
+  ADMIN_LIST_TTL: 2 * 60 * 1000, // 2 minutes
+  getAdminListData: (userId: string) => {
+    const key = `cache_admin_list_${userId}`;
+    return getCachedData(key, 2 * 60 * 1000);
+  },
+  setAdminListData: (userId: string, data: { stats: any; users: any[]; orders?: any[]; offers?: any[] }) => {
+    const key = `cache_admin_list_${userId}`;
+    setCachedData(key, data);
+  },
 };
 
 /**

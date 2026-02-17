@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Order, supabase } from '../../lib/supabase';
+import { Order, api } from '../../lib/client';
 import { Search, Filter, CheckCircle, XCircle, Package, Eye, FileText, Plus } from 'lucide-react';
 import CSVUpload from '../CSVUpload';
 import AdminTradeOrderForm from './AdminTradeOrderForm';
@@ -34,7 +34,7 @@ export default function OrderManagementEnhanced({ orders, onRefresh }: OrderMana
     setLoading(true);
     setError('');
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await api
       .from('orders')
       .update({ status: 'Approved - Awaiting Logistics' })
       .eq('id', orderId);
@@ -52,7 +52,7 @@ export default function OrderManagementEnhanced({ orders, onRefresh }: OrderMana
     setLoading(true);
     setError('');
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await api
       .from('orders')
       .update({ status: 'Rejected' })
       .eq('id', orderId);
@@ -70,7 +70,7 @@ export default function OrderManagementEnhanced({ orders, onRefresh }: OrderMana
     setLoading(true);
     setError('');
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await api
       .from('orders')
       .update({
         status: 'Completed',

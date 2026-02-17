@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ClipboardCheck, ArrowLeft, Save, FileSpreadsheet } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/client';
 
 interface QualityParameter {
   s_no: number;
@@ -46,7 +46,7 @@ export default function SupplierQualityReport({ supply, onClose, onSave }: Suppl
 
   const loadQualityReport = async () => {
     // Check if quality report already exists
-    const { data: existingReports } = await supabase
+    const { data: existingReports } = await api
       .from('supplier_quality_reports')
       .select('*')
       .eq('supply_id', supply.id)
@@ -63,7 +63,7 @@ export default function SupplierQualityReport({ supply, onClose, onSave }: Suppl
   };
 
   const loadStandardParameters = async () => {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('quality_parameters_master')
       .select('*')
       .eq('commodity', supply.commodity)
@@ -165,14 +165,14 @@ export default function SupplierQualityReport({ supply, onClose, onSave }: Suppl
       };
 
       if (existingReport) {
-        const { error: updateError } = await supabase
+        const { error: updateError } = await api
           .from('supplier_quality_reports')
           .update(reportData)
           .eq('id', existingReport.id);
 
         if (updateError) throw updateError;
       } else {
-        const { error: insertError } = await supabase
+        const { error: insertError } = await api
           .from('supplier_quality_reports')
           .insert(reportData);
 
@@ -180,7 +180,7 @@ export default function SupplierQualityReport({ supply, onClose, onSave }: Suppl
       }
 
       // Update deduction in supplier_commodity_supplies
-      const { error: supplyUpdateError } = await supabase
+      const { error: supplyUpdateError } = await api
         .from('supplier_commodity_supplies')
         .update({
           deduction_amount: totalDeduction,

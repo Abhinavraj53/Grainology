@@ -49,7 +49,8 @@ const purchaseOrderSchema = new mongoose.Schema({
   }
 });
 
+purchaseOrderSchema.index({ updatedAt: -1 });
+
 const PurchaseOrder = mongoose.model('PurchaseOrder', purchaseOrderSchema);
 
 export default PurchaseOrder;
-

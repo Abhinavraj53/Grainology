@@ -44,7 +44,7 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     required: true,
-    enum: ['admin', 'farmer', 'trader', 'fpo', 'corporate', 'miller', 'financer'],
+    enum: ['admin', 'super_admin', 'farmer', 'trader', 'fpo', 'corporate', 'miller', 'financer'],
     default: 'farmer'
   },
   approval_status: {
@@ -53,6 +53,7 @@ const userSchema = new mongoose.Schema({
     default: 'pending'
   },
   approved_at: Date,
+  declined_reason: { type: String, trim: true, default: '' },
   entity_type: {
     type: String,
     enum: ['individual', 'company'],
@@ -129,6 +130,7 @@ userSchema.index({ 'verification_documents.aadhaar_number': 1 }, { unique: true,
 userSchema.index({ 'verification_documents.pan_number': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.gstin': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.cin': 1 }, { unique: true, sparse: true });
+userSchema.index({ updatedAt: -1 });
 // mobile_number: unique index is created by schema field option above, do not duplicate here
 
 // Hash password before saving
@@ -146,4 +148,3 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 const User = mongoose.model('User', userSchema);
 
 export default User;
-

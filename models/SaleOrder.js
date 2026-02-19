@@ -52,7 +52,8 @@ const saleOrderSchema = new mongoose.Schema({
   }
 });
 
+saleOrderSchema.index({ updatedAt: -1 });
+
 const SaleOrder = mongoose.model('SaleOrder', saleOrderSchema);
 
 export default SaleOrder;
-

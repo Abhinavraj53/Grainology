@@ -7,6 +7,10 @@ const CACHE_DURATION = {
   WEATHER: 60 * 60 * 1000, // 1 hour
   MANDI: 60 * 60 * 1000, // 1 hour
   DASHBOARD: 15 * 60 * 1000, // 15 minutes
+  ADMIN_STATS: 60 * 1000, // 1 minute
+  ADMIN_USERS: 5 * 60 * 1000, // 5 minutes
+  ADMIN_DASHBOARD: 60 * 1000, // 1 minute
+  ADMIN_VERSION: 30 * 1000, // 30 seconds
   FILTERS: 24 * 60 * 60 * 1000, // 24 hours
 };
 
@@ -176,15 +180,64 @@ export const DashboardCache = {
     const key = `cache_admin_dashboard_${userId}`;
     setCachedData(key, data);
   },
-  // Admin panel list (stats, users) – short TTL to avoid refetch on every refresh
-  ADMIN_LIST_TTL: 2 * 60 * 1000, // 2 minutes
+  // Fine-grained admin cache keys
+  getAdminStatsData: (userId: string) => {
+    const key = `cache_admin_stats_${userId}`;
+    return getCachedData(key, CACHE_DURATION.ADMIN_STATS);
+  },
+  setAdminStatsData: (userId: string, stats: any) => {
+    const key = `cache_admin_stats_${userId}`;
+    setCachedData(key, stats);
+  },
+  getAdminUsersData: (userId: string) => {
+    const key = `cache_admin_users_${userId}`;
+    return getCachedData(key, CACHE_DURATION.ADMIN_USERS);
+  },
+  setAdminUsersData: (userId: string, users: any[]) => {
+    const key = `cache_admin_users_${userId}`;
+    setCachedData(key, users);
+  },
+  getAdminDashboardData: (userId: string) => {
+    const key = `cache_admin_dashboard_cards_${userId}`;
+    return getCachedData(key, CACHE_DURATION.ADMIN_DASHBOARD);
+  },
+  setAdminDashboardData: (userId: string, data: { recentOrders: any[]; vendorPerformance: any[]; dataVersion?: number }) => {
+    const key = `cache_admin_dashboard_cards_${userId}`;
+    setCachedData(key, data);
+  },
+  getAdminDataVersion: (userId: string) => {
+    const key = `cache_admin_data_version_${userId}`;
+    return getCachedData(key, CACHE_DURATION.ADMIN_VERSION) as { dataVersion: number } | null;
+  },
+  setAdminDataVersion: (userId: string, dataVersion: number) => {
+    const key = `cache_admin_data_version_${userId}`;
+    setCachedData(key, { dataVersion });
+  },
+  invalidateAdmin: (userId: string) => {
+    sessionStorage.removeItem(`cache_admin_stats_${userId}`);
+    sessionStorage.removeItem(`cache_admin_users_${userId}`);
+    sessionStorage.removeItem(`cache_admin_dashboard_cards_${userId}`);
+    sessionStorage.removeItem(`cache_admin_data_version_${userId}`);
+    sessionStorage.removeItem(`cache_admin_list_${userId}`);
+  },
+
+  // Backward-compatible admin list cache (stats + users bundle).
+  ADMIN_LIST_TTL: 2 * 60 * 1000,
   getAdminListData: (userId: string) => {
     const key = `cache_admin_list_${userId}`;
-    return getCachedData(key, 2 * 60 * 1000);
+    const bundled = getCachedData(key, 2 * 60 * 1000) as any;
+    if (bundled) return bundled;
+
+    const stats = DashboardCache.getAdminStatsData(userId);
+    const users = DashboardCache.getAdminUsersData(userId);
+    if (!stats && !users) return null;
+    return { stats, users: users || [] };
   },
   setAdminListData: (userId: string, data: { stats: any; users: any[]; orders?: any[]; offers?: any[] }) => {
     const key = `cache_admin_list_${userId}`;
     setCachedData(key, data);
+    if (data?.stats) DashboardCache.setAdminStatsData(userId, data.stats);
+    if (data?.users) DashboardCache.setAdminUsersData(userId, data.users);
   },
 };
 
@@ -211,4 +264,3 @@ export function clearCacheByPrefix(prefix: string): void {
     }
   });
 }
-

@@ -9,12 +9,22 @@ const warehouseMasterSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
+    uppercase: true
   },
   is_active: {
     type: Boolean,
     default: true
-  }
+  },
+  approval_status: {
+    type: String,
+    enum: ['pending', 'approved', 'declined'],
+    default: 'pending'
+  },
+  approved_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  approved_at: { type: Date, default: null },
+  declined_reason: { type: String, trim: true, default: '' },
+  submitted_by: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
 }, {
   timestamps: true,
   toJSON: {
@@ -28,8 +38,8 @@ const warehouseMasterSchema = new mongoose.Schema({
 });
 
 warehouseMasterSchema.index({ location_id: 1, name: 1 }, { unique: true, sparse: true });
+warehouseMasterSchema.index({ updatedAt: -1 });
 
 const WarehouseMaster = mongoose.model('WarehouseMaster', warehouseMasterSchema);
 
 export default WarehouseMaster;
-

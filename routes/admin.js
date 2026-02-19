@@ -7,11 +7,89 @@ import PurchaseOrder from '../models/PurchaseOrder.js';
 import SaleOrder from '../models/SaleOrder.js';
 import ConfirmedSalesOrder from '../models/ConfirmedSalesOrder.js';
 import ConfirmedPurchaseOrder from '../models/ConfirmedPurchaseOrder.js';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import LocationMaster from '../models/LocationMaster.js';
+import WarehouseMaster from '../models/WarehouseMaster.js';
+import { authenticate, requireAdmin, isSuperAdmin } from '../middleware/auth.js';
 import { createDocumentViewToken } from '../utils/documentViewToken.js';
 import { parseCloudinaryUrl, getSignedDeliveryUrl } from '../utils/cloudinary.js';
 
 const router = express.Router();
+
+const ADMIN_STATS_CACHE_TTL_MS = Number(process.env.ADMIN_STATS_CACHE_TTL_MS || 20000);
+const ADMIN_DASHBOARD_CACHE_TTL_MS = Number(process.env.ADMIN_DASHBOARD_CACHE_TTL_MS || 20000);
+const ADMIN_DATA_VERSION_CACHE_TTL_MS = Number(process.env.ADMIN_DATA_VERSION_CACHE_TTL_MS || 5000);
+
+const adminStatsCache = { data: null, version: 0, timestamp: 0 };
+const adminDashboardCache = { data: null, version: 0, timestamp: 0 };
+const adminVersionCache = { value: 0, timestamp: 0 };
+
+const DATA_VERSION_MODELS = [
+  User,
+  PurchaseOrder,
+  SaleOrder,
+  ConfirmedSalesOrder,
+  ConfirmedPurchaseOrder,
+  LocationMaster,
+  WarehouseMaster,
+];
+
+async function getLatestUpdatedAtMs(model) {
+  const doc = await model
+    .findOne({})
+    .select('updatedAt')
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  if (!doc?.updatedAt) return 0;
+  const value = new Date(doc.updatedAt).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+async function getAdminDataVersion({ force = false } = {}) {
+  const now = Date.now();
+  if (
+    !force &&
+    now - adminVersionCache.timestamp < ADMIN_DATA_VERSION_CACHE_TTL_MS
+  ) {
+    return adminVersionCache.value;
+  }
+
+  const timestamps = await Promise.all(DATA_VERSION_MODELS.map((model) => getLatestUpdatedAtMs(model)));
+  const dataVersion = Math.max(0, ...timestamps);
+  adminVersionCache.value = dataVersion;
+  adminVersionCache.timestamp = now;
+  return dataVersion;
+}
+
+async function getTotalNetAmount(model) {
+  const result = await model.aggregate([
+    { $match: { trash: { $ne: true } } },
+    {
+      $project: {
+        net_amount_for_sum: {
+          $cond: [
+            { $ne: ['$net_amount', null] },
+            { $ifNull: ['$net_amount', 0] },
+            {
+              $subtract: [
+                { $ifNull: ['$gross_amount', 0] },
+                { $ifNull: ['$total_deduction', 0] }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: '$net_amount_for_sum' }
+      }
+    }
+  ]);
+
+  return Number(result?.[0]?.total || 0);
+}
 
 async function fetchCloudinaryAsset(url) {
   let response = await fetch(url, { method: 'GET' });
@@ -29,9 +107,38 @@ async function fetchCloudinaryAsset(url) {
 router.use(authenticate);
 router.use(requireAdmin);
 
+// Lightweight version endpoint for frontend polling.
+// Frontend can call this endpoint frequently and only refresh heavy data when version changes.
+router.get('/data-version', async (req, res) => {
+  try {
+    const dataVersion = await getAdminDataVersion();
+    res.json({
+      dataVersion,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get admin data version error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch data version' });
+  }
+});
+
 // Get dashboard stats
 router.get('/stats', async (req, res) => {
   try {
+    const dataVersion = await getAdminDataVersion();
+    const now = Date.now();
+    const canUseCache =
+      adminStatsCache.data &&
+      adminStatsCache.version === dataVersion &&
+      now - adminStatsCache.timestamp < ADMIN_STATS_CACHE_TTL_MS;
+
+    if (canUseCache) {
+      return res.json({
+        ...adminStatsCache.data,
+        cached: true,
+      });
+    }
+
     const [
       totalUsers,
       totalFarmers,
@@ -41,7 +148,19 @@ router.get('/stats', async (req, res) => {
       totalPurchaseOrders,
       totalSaleOrders,
       totalConfirmedSalesOrders,
-      totalConfirmedPurchaseOrders
+      totalConfirmedPurchaseOrders,
+      locationPendingCount,
+      locationApprovedCount,
+      locationDeclinedCount,
+      warehousePendingCount,
+      warehouseApprovedCount,
+      warehouseDeclinedCount,
+      confirmedSalesPendingCount,
+      confirmedPurchasePendingCount,
+      confirmedSalesApprovedCount,
+      confirmedPurchaseApprovedCount,
+      confirmedSalesDeclinedCount,
+      confirmedPurchaseDeclinedCount
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ role: 'farmer' }),
@@ -50,41 +169,33 @@ router.get('/stats', async (req, res) => {
       User.countDocuments({ approval_status: 'pending' }),
       PurchaseOrder.countDocuments(),
       SaleOrder.countDocuments(),
-      ConfirmedSalesOrder.countDocuments(),
-      ConfirmedPurchaseOrder.countDocuments()
+      ConfirmedSalesOrder.countDocuments({ trash: { $ne: true } }),
+      ConfirmedPurchaseOrder.countDocuments({ trash: { $ne: true } }),
+      LocationMaster.countDocuments({ approval_status: 'pending' }),
+      LocationMaster.countDocuments({ approval_status: 'approved' }),
+      LocationMaster.countDocuments({ approval_status: { $in: ['declined', 'rejected'] } }),
+      WarehouseMaster.countDocuments({ approval_status: 'pending' }),
+      WarehouseMaster.countDocuments({ approval_status: 'approved' }),
+      WarehouseMaster.countDocuments({ approval_status: { $in: ['declined', 'rejected'] } }),
+      ConfirmedSalesOrder.countDocuments({ trash: { $ne: true }, approval_status: 'pending' }),
+      ConfirmedPurchaseOrder.countDocuments({ trash: { $ne: true }, approval_status: 'pending' }),
+      ConfirmedSalesOrder.countDocuments({ trash: { $ne: true }, approval_status: 'approved' }),
+      ConfirmedPurchaseOrder.countDocuments({ trash: { $ne: true }, approval_status: 'approved' }),
+      ConfirmedSalesOrder.countDocuments({ trash: { $ne: true }, approval_status: { $in: ['declined', 'rejected'] } }),
+      ConfirmedPurchaseOrder.countDocuments({ trash: { $ne: true }, approval_status: { $in: ['declined', 'rejected'] } })
     ]);
 
-    // Calculate total amounts for confirmed orders
-    const confirmedSalesOrders = await ConfirmedSalesOrder.find({});
-    const confirmedPurchaseOrders = await ConfirmedPurchaseOrder.find({});
-    
-    const totalConfirmedSalesAmount = confirmedSalesOrders.reduce((sum, order) => {
-      const netAmount = order.net_amount;
-      // Handle NaN, null, undefined, or invalid values
-      if (netAmount === null || netAmount === undefined || isNaN(netAmount) || typeof netAmount !== 'number') {
-        // Try to calculate from gross_amount and total_deduction if net_amount is invalid
-        const gross = order.gross_amount || 0;
-        const deduction = order.total_deduction || 0;
-        const calculated = gross - deduction;
-        return sum + (isNaN(calculated) ? 0 : calculated);
-      }
-      return sum + netAmount;
-    }, 0);
-    
-    const totalConfirmedPurchaseAmount = confirmedPurchaseOrders.reduce((sum, order) => {
-      const netAmount = order.net_amount;
-      // Handle NaN, null, undefined, or invalid values
-      if (netAmount === null || netAmount === undefined || isNaN(netAmount) || typeof netAmount !== 'number') {
-        // Try to calculate from gross_amount and total_deduction if net_amount is invalid
-        const gross = order.gross_amount || 0;
-        const deduction = order.total_deduction || 0;
-        const calculated = gross - deduction;
-        return sum + (isNaN(calculated) ? 0 : calculated);
-      }
-      return sum + netAmount;
-    }, 0);
+    const confirmedOrdersPendingCount = confirmedSalesPendingCount + confirmedPurchasePendingCount;
+    const confirmedOrdersApprovedCount = confirmedSalesApprovedCount + confirmedPurchaseApprovedCount;
+    const confirmedOrdersDeclinedCount = confirmedSalesDeclinedCount + confirmedPurchaseDeclinedCount;
 
-    res.json({
+    // Aggregate in DB instead of loading all rows into Node memory.
+    const [totalConfirmedSalesAmount, totalConfirmedPurchaseAmount] = await Promise.all([
+      getTotalNetAmount(ConfirmedSalesOrder),
+      getTotalNetAmount(ConfirmedPurchaseOrder),
+    ]);
+
+    const payload = {
       totalUsers,
       totalFarmers,
       totalTraders,
@@ -94,9 +205,26 @@ router.get('/stats', async (req, res) => {
       totalSaleOrders,
       totalConfirmedSalesOrders,
       totalConfirmedPurchaseOrders,
+      locationPendingCount,
+      locationApprovedCount,
+      locationDeclinedCount,
+      warehousePendingCount,
+      warehouseApprovedCount,
+      warehouseDeclinedCount,
+      confirmedOrdersPendingCount,
+      confirmedOrdersApprovedCount,
+      confirmedOrdersDeclinedCount,
       totalConfirmedSalesAmount,
-      totalConfirmedPurchaseAmount
-    });
+      totalConfirmedPurchaseAmount,
+      dataVersion,
+      generatedAt: new Date().toISOString()
+    };
+
+    adminStatsCache.data = payload;
+    adminStatsCache.version = dataVersion;
+    adminStatsCache.timestamp = now;
+
+    res.json(payload);
   } catch (error) {
     console.error('Get admin stats error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch stats' });
@@ -106,13 +234,27 @@ router.get('/stats', async (req, res) => {
 // Dashboard: recent confirmed orders + vendor (seller/supplier) performance from confirmed sales/purchase
 router.get('/dashboard', async (req, res) => {
   try {
+    const dataVersion = await getAdminDataVersion();
+    const now = Date.now();
+    const canUseCache =
+      adminDashboardCache.data &&
+      adminDashboardCache.version === dataVersion &&
+      now - adminDashboardCache.timestamp < ADMIN_DASHBOARD_CACHE_TTL_MS;
+
+    if (canUseCache) {
+      return res.json({
+        ...adminDashboardCache.data,
+        cached: true,
+      });
+    }
+
     const [recentSales, recentPurchase] = await Promise.all([
-      ConfirmedSalesOrder.find()
+      ConfirmedSalesOrder.find({ trash: { $ne: true } })
         .select('invoice_number transaction_date commodity seller_name net_weight_mt net_amount createdAt')
         .sort({ createdAt: -1 })
         .limit(10)
         .lean(),
-      ConfirmedPurchaseOrder.find()
+      ConfirmedPurchaseOrder.find({ trash: { $ne: true } })
         .select('invoice_number transaction_date commodity supplier_name net_weight_mt net_amount createdAt')
         .sort({ createdAt: -1 })
         .limit(10)
@@ -126,12 +268,14 @@ router.get('/dashboard', async (req, res) => {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 10);
 
-    // Vendor performance: group by seller_name (sales) and supplier_name (purchase), order count + total amount
+    // Vendor performance: group by seller_name (sales) and supplier_name (purchase), order count + total amount.
     const salesAgg = await ConfirmedSalesOrder.aggregate([
+      { $match: { trash: { $ne: true } } },
       { $group: { _id: '$seller_name', totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } } } },
       { $match: { _id: { $nin: [null, '', 'N/A'] } } }
     ]);
     const purchaseAgg = await ConfirmedPurchaseOrder.aggregate([
+      { $match: { trash: { $ne: true } } },
       { $group: { _id: '$supplier_name', totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } } } },
       { $match: { _id: { $nin: [null, '', 'N/A'] } } }
     ]);
@@ -153,7 +297,18 @@ router.get('/dashboard', async (req, res) => {
       .slice(0, 10)
       .map(v => ({ name: v.name, totalOrders: v.totalOrders, totalAmount: v.totalAmount }));
 
-    res.json({ recentOrders, vendorPerformance });
+    const payload = {
+      recentOrders,
+      vendorPerformance,
+      dataVersion,
+      generatedAt: new Date().toISOString()
+    };
+
+    adminDashboardCache.data = payload;
+    adminDashboardCache.version = dataVersion;
+    adminDashboardCache.timestamp = now;
+
+    res.json(payload);
   } catch (error) {
     console.error('Get admin dashboard error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch dashboard data' });
@@ -163,9 +318,12 @@ router.get('/dashboard', async (req, res) => {
 // Get all users (include view_access for document viewing in admin panel)
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find({}).sort({ createdAt: -1 });
+    const users = await User.find({})
+      .select('-password -__v')
+      .sort({ createdAt: -1 })
+      .lean();
     const usersOut = users.map(u => {
-      const uu = u.toObject ? u.toObject() : { ...u };
+      const uu = { ...u };
       uu.id = uu._id ? uu._id.toString() : uu._id;
       if (uu.uploaded_document && uu.uploaded_document.view_url) {
         uu.uploaded_document.view_access = createDocumentViewToken(uu.uploaded_document.view_url);
@@ -192,26 +350,66 @@ router.put('/users/:id', async (req, res) => {
     if (!id || id === 'undefined' || id === 'null') {
       return res.status(400).json({ error: 'Invalid user id' });
     }
-    const wasApproved = req.body.approval_status === 'approved';
-    const isDisapprove = req.body.approval_status === 'pending' || req.body.approval_status === 'rejected';
-    const update = { ...req.body };
-    if (wasApproved) {
-      update.approved_at = new Date();
-    } else if (isDisapprove) {
-      update.approved_at = null; // clear so user cannot login until re-approved
+
+    const existingUser = await User.findById(id).select('approval_status');
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      { $set: update },
-      { new: true, runValidators: true }
+    if (!isSuperAdmin(req.user) && existingUser.approval_status === 'approved') {
+      return res.status(403).json({ error: 'Cannot edit user after Super Admin approval' });
+    }
+
+    const approvalSensitiveFields = ['approval_status', 'approved_at', 'declined_reason'];
+    const approvalUpdateRequested = approvalSensitiveFields.some((field) =>
+      Object.prototype.hasOwnProperty.call(req.body, field)
     );
 
+    if (approvalUpdateRequested && !isSuperAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only Super Admin can approve or decline user registration' });
+    }
+
+    if (approvalUpdateRequested && isSuperAdmin(req.user) && existingUser.approval_status !== 'pending') {
+      return res.status(400).json({
+        error: 'Approval already decided. Ask Admin to re-submit before reviewing again.'
+      });
+    }
+
+    const requestedApprovalStatus = Object.prototype.hasOwnProperty.call(req.body, 'approval_status')
+      ? String(req.body.approval_status)
+      : null;
+    const wasApproved = requestedApprovalStatus === 'approved';
+    const wasRejected = requestedApprovalStatus === 'rejected';
+    const isPendingAgain = requestedApprovalStatus === 'pending';
+    const update = { ...req.body };
+
+    // Admin can edit and resubmit non-approved user registrations only.
+    // Any admin update moves the record back to pending for Super Admin review.
+    if (!isSuperAdmin(req.user)) {
+      update.approval_status = 'pending';
+      update.approved_at = null;
+      update.declined_reason = '';
+    } else if (wasApproved) {
+      update.approved_at = new Date();
+      update.declined_reason = '';
+    } else if (wasRejected) {
+      const declinedReason = String(update.declined_reason || '').trim();
+      if (!declinedReason) {
+        return res.status(400).json({ error: 'Decline reason is required' });
+      }
+      update.declined_reason = declinedReason;
+      update.approved_at = null; // clear so user cannot login until re-approved
+    } else if (isPendingAgain) {
+      update.approved_at = null; // clear so user cannot login until re-approved
+      update.declined_reason = '';
+    }
+
+    const user = await User.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true });
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // When admin approves, send welcome/approval email if user has email
+    // When Super Admin approves, send welcome/approval email if user has email
     if (wasApproved && user.email) {
       try {
         const loginId = user.email;
@@ -387,4 +585,3 @@ router.get('/users-with-documents', async (req, res) => {
 });
 
 export default router;
-

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Order, Offer } from '../../lib/client';
-import { Users, Package, ShoppingCart, TrendingUp, CheckCircle, UserCheck } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Users, Package, ShoppingCart, TrendingUp, CheckCircle, UserCheck, MapPin, Warehouse } from 'lucide-react';
 import MandiBhaav from '../MandiBhaav';
 import Weathersonu from '../weathersonu';
+import { DashboardCache } from '../../lib/sessionStorage';
 
 interface ConfirmedOrderRow {
   _id?: string;
@@ -23,12 +23,23 @@ interface VendorPerformanceRow {
 }
 
 interface EnhancedDashboardProps {
+  userId: string;
+  dataVersion?: number;
   stats: {
     totalUsers: number;
     totalFarmers: number;
     totalTraders: number;
     verifiedUsers: number;
     pendingApprovalUsers?: number;
+    locationPendingCount?: number;
+    locationApprovedCount?: number;
+    locationDeclinedCount?: number;
+    warehousePendingCount?: number;
+    warehouseApprovedCount?: number;
+    warehouseDeclinedCount?: number;
+    confirmedOrdersPendingCount?: number;
+    confirmedOrdersApprovedCount?: number;
+    confirmedOrdersDeclinedCount?: number;
     totalPurchaseOrders: number;
     totalSaleOrders: number;
     totalConfirmedSalesOrders: number;
@@ -36,15 +47,14 @@ interface EnhancedDashboardProps {
     totalConfirmedSalesAmount: number;
     totalConfirmedPurchaseAmount: number;
   };
-  orders: Order[];
-  offers: Offer[];
   onPendingApprovalClick?: () => void;
 }
 
-export default function EnhancedDashboard({ stats, onPendingApprovalClick }: EnhancedDashboardProps) {
+export default function EnhancedDashboard({ userId, dataVersion, stats, onPendingApprovalClick }: EnhancedDashboardProps) {
   const [recentOrders, setRecentOrders] = useState<ConfirmedOrderRow[]>([]);
   const [vendorPerformance, setVendorPerformance] = useState<VendorPerformanceRow[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const lastDashboardVersionRef = useRef<number>(0);
 
   // Add safety checks for stats
   if (!stats) {
@@ -70,33 +80,86 @@ export default function EnhancedDashboard({ stats, onPendingApprovalClick }: Enh
     }
   };
 
-  useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
+  const loadDashboardData = useCallback(async (force = false) => {
+    try {
+      if (!force) {
+        const cached = DashboardCache.getAdminDashboardData(userId) as
+          | { recentOrders?: ConfirmedOrderRow[]; vendorPerformance?: VendorPerformanceRow[]; dataVersion?: number }
+          | null;
+        if (cached) {
+          setRecentOrders(cached.recentOrders || []);
+          setVendorPerformance(cached.vendorPerformance || []);
+          if (typeof cached.dataVersion === 'number') {
+            lastDashboardVersionRef.current = cached.dataVersion;
+          }
           setDashboardLoading(false);
           return;
         }
-        const response = await fetch(`${apiUrl}/admin/dashboard`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!response.ok) {
-          setDashboardLoading(false);
-          return;
-        }
-        const data = await response.json();
-        setRecentOrders(data.recentOrders || []);
-        setVendorPerformance(data.vendorPerformance || []);
-      } catch (err) {
-        console.error('Dashboard data load error:', err);
-      } finally {
-        setDashboardLoading(false);
       }
-    };
-    loadDashboardData();
-  }, []);
+
+      setDashboardLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setDashboardLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/admin/dashboard`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        setDashboardLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      const nextRecentOrders = data.recentOrders || [];
+      const nextVendorPerformance = data.vendorPerformance || [];
+      const nextDataVersion = Number(data.dataVersion || dataVersion || Date.now());
+
+      setRecentOrders(nextRecentOrders);
+      setVendorPerformance(nextVendorPerformance);
+      lastDashboardVersionRef.current = nextDataVersion;
+
+      DashboardCache.setAdminDashboardData(userId, {
+        recentOrders: nextRecentOrders,
+        vendorPerformance: nextVendorPerformance,
+        dataVersion: nextDataVersion,
+      });
+      DashboardCache.setAdminDataVersion(userId, nextDataVersion);
+    } catch (err) {
+      console.error('Dashboard data load error:', err);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, [userId, dataVersion]);
+
+  useEffect(() => {
+    const cached = DashboardCache.getAdminDashboardData(userId) as
+      | { recentOrders?: ConfirmedOrderRow[]; vendorPerformance?: VendorPerformanceRow[]; dataVersion?: number }
+      | null;
+
+    if (cached) {
+      setRecentOrders(cached.recentOrders || []);
+      setVendorPerformance(cached.vendorPerformance || []);
+      if (typeof cached.dataVersion === 'number') {
+        lastDashboardVersionRef.current = cached.dataVersion;
+      }
+      setDashboardLoading(false);
+      void loadDashboardData(false);
+      return;
+    }
+
+    void loadDashboardData(true);
+  }, [userId, loadDashboardData]);
+
+  useEffect(() => {
+    const normalizedVersion = Number(dataVersion || 0);
+    if (!normalizedVersion) return;
+    if (normalizedVersion <= lastDashboardVersionRef.current) return;
+    void loadDashboardData(true);
+  }, [dataVersion, loadDashboardData]);
 
 
 
@@ -214,6 +277,95 @@ export default function EnhancedDashboard({ stats, onPendingApprovalClick }: Enh
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow border border-gray-100 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Location Approvals</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">
+                {(stats?.locationPendingCount || 0) + (stats?.locationApprovedCount || 0) + (stats?.locationDeclinedCount || 0)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Locations by approval status</p>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center">
+              <MapPin className="w-6 h-6 text-emerald-700" />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-amber-700 uppercase">Pending</p>
+              <p className="text-xl font-bold text-amber-900">{stats?.locationPendingCount || 0}</p>
+            </div>
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-green-700 uppercase">Approved</p>
+              <p className="text-xl font-bold text-green-900">{stats?.locationApprovedCount || 0}</p>
+            </div>
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-red-700 uppercase">Rejected</p>
+              <p className="text-xl font-bold text-red-900">{stats?.locationDeclinedCount || 0}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow border border-gray-100 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Warehouse Approvals</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">
+                {(stats?.warehousePendingCount || 0) + (stats?.warehouseApprovedCount || 0) + (stats?.warehouseDeclinedCount || 0)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">Warehouses by approval status</p>
+            </div>
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+              <Warehouse className="w-6 h-6 text-blue-700" />
+            </div>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-amber-700 uppercase">Pending</p>
+              <p className="text-xl font-bold text-amber-900">{stats?.warehousePendingCount || 0}</p>
+            </div>
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-green-700 uppercase">Approved</p>
+              <p className="text-xl font-bold text-green-900">{stats?.warehouseApprovedCount || 0}</p>
+            </div>
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-red-700 uppercase">Rejected</p>
+              <p className="text-xl font-bold text-red-900">{stats?.warehouseDeclinedCount || 0}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow border border-gray-100 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">All Confirmed Orders Approval</p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">
+              {(stats?.confirmedOrdersPendingCount || 0) + (stats?.confirmedOrdersApprovedCount || 0) + (stats?.confirmedOrdersDeclinedCount || 0)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Combined Sales + Purchase confirmed orders</p>
+          </div>
+          <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center">
+            <CheckCircle className="w-6 h-6 text-slate-700" />
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+            <p className="text-[11px] font-semibold text-amber-700 uppercase">Pending</p>
+            <p className="text-xl font-bold text-amber-900">{stats?.confirmedOrdersPendingCount || 0}</p>
+          </div>
+          <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+            <p className="text-[11px] font-semibold text-green-700 uppercase">Approved</p>
+            <p className="text-xl font-bold text-green-900">{stats?.confirmedOrdersApprovedCount || 0}</p>
+          </div>
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+            <p className="text-[11px] font-semibold text-red-700 uppercase">Rejected</p>
+            <p className="text-xl font-bold text-red-900">{stats?.confirmedOrdersDeclinedCount || 0}</p>
+          </div>
+        </div>
+      </div>
+
       {/* Location & Weather Component */}
       <div className="grid grid-cols-1 gap-6">
         <Weathersonu />
@@ -319,4 +471,3 @@ export default function EnhancedDashboard({ stats, onPendingApprovalClick }: Enh
     </div>
   );
 }
-

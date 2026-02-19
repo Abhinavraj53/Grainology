@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Profile, api, Order, Offer } from '../lib/client';
+import { Profile, api } from '../lib/client';
 import { LayoutDashboard, LogOut, Users, Package, Truck, TrendingUp, Cloud, FileText, ShoppingBag, Menu, X, BarChart3, MapPin } from 'lucide-react';
 // Commented out unused imports - can be restored if needed
 // import { ClipboardCheck, Calculator, PackageCheck } from 'lucide-react';
@@ -42,6 +42,34 @@ interface AdminPanelProps {
   onSignOut: () => void;
 }
 
+const DEFAULT_ADMIN_STATS = {
+  totalUsers: 0,
+  totalFarmers: 0,
+  totalTraders: 0,
+  verifiedUsers: 0,
+  pendingApprovalUsers: 0,
+  locationPendingCount: 0,
+  locationApprovedCount: 0,
+  locationDeclinedCount: 0,
+  warehousePendingCount: 0,
+  warehouseApprovedCount: 0,
+  warehouseDeclinedCount: 0,
+  confirmedOrdersPendingCount: 0,
+  confirmedOrdersApprovedCount: 0,
+  confirmedOrdersDeclinedCount: 0,
+  totalPurchaseOrders: 0,
+  totalSaleOrders: 0,
+  totalConfirmedSalesOrders: 0,
+  totalConfirmedPurchaseOrders: 0,
+  totalConfirmedSalesAmount: 0,
+  totalConfirmedPurchaseAmount: 0,
+};
+
+const normalizeAdminStats = (statsLike?: any) => ({
+  ...DEFAULT_ADMIN_STATS,
+  ...(statsLike || {}),
+});
+
 export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
   if (!profile) {
     return (
@@ -56,25 +84,23 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewFromUrl = searchParams.get('view');
   const [currentView, setCurrentView] = useState<View>(() => (isView(viewFromUrl) ? viewFromUrl : 'dashboard'));
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [offers, setOffers] = useState<Offer[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [dataVersion, setDataVersion] = useState<number>(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalFarmers: 0,
-    totalTraders: 0,
-    verifiedUsers: 0,
-    pendingApprovalUsers: 0,
-    totalPurchaseOrders: 0,
-    totalSaleOrders: 0,
-    totalConfirmedSalesOrders: 0,
-    totalConfirmedPurchaseOrders: 0,
-    totalConfirmedSalesAmount: 0,
-    totalConfirmedPurchaseAmount: 0,
-  });
+  const [stats, setStats] = useState(DEFAULT_ADMIN_STATS);
+  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+  const toVersionNumber = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  };
+  const syncDataVersionCache = useCallback((nextVersion: number) => {
+    if (!nextVersion) return;
+    setDataVersion((prev) => (nextVersion > prev ? nextVersion : prev));
+    DashboardCache.setAdminDataVersion(profile.id, nextVersion);
+  }, [profile.id]);
 
   // Sync URL with currentView so refresh keeps same page
   useEffect(() => {
@@ -82,128 +108,213 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
     if (isView(urlView) && urlView !== currentView) setCurrentView(urlView);
   }, [searchParams]);
 
-  useEffect(() => {
-    const cached = DashboardCache.getAdminListData(profile.id);
-    if (cached?.stats && cached?.users) {
-      setStats(cached.stats);
-      setUsers(cached.users);
-      if (cached.orders) setOrders(cached.orders);
-      if (cached.offers) setOffers(cached.offers);
-      setLoading(false);
-      return;
-    }
-    loadData();
+  const getAuthToken = useCallback(async () => {
+    const session = await api.auth.getSession();
+    return session.data.session?.access_token || null;
   }, []);
 
-  const loadData = async () => {
+  const fetchAdminStats = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
     try {
-      const hadCache = Boolean(DashboardCache.getAdminListData(profile.id)?.users?.length);
-      if (!hadCache) setLoading(true);
-      setErrorMessage('');
-      const session = await api.auth.getSession();
-      const token = session.data.session?.access_token;
+      if (!force) {
+        const cachedStats = DashboardCache.getAdminStatsData(profile.id);
+        if (cachedStats) {
+          setStats(normalizeAdminStats(cachedStats));
+          return true;
+        }
+      }
+
+      const token = await getAuthToken();
 
       if (!token) {
-        console.error('No authentication token found');
         setErrorMessage('You are not authenticated. Please sign in again.');
-        setLoading(false);
-        return;
+        return false;
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      console.log('Fetching from API:', apiUrl);
-
-      // Fetch stats from backend API
       const statsResponse = await fetch(`${apiUrl}/admin/stats`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         }
       });
 
-      let newStats = null as typeof stats | null;
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        console.log('Stats received:', statsData);
-        newStats = {
-          totalUsers: statsData.totalUsers || 0,
-          totalFarmers: statsData.totalFarmers || 0,
-          totalTraders: statsData.totalTraders || 0,
-          verifiedUsers: statsData.verifiedUsers || 0,
-          pendingApprovalUsers: statsData.pendingApprovalUsers ?? 0,
-          totalPurchaseOrders: statsData.totalPurchaseOrders || 0,
-          totalSaleOrders: statsData.totalSaleOrders || 0,
-          totalConfirmedSalesOrders: statsData.totalConfirmedSalesOrders || 0,
-          totalConfirmedPurchaseOrders: statsData.totalConfirmedPurchaseOrders || 0,
-          totalConfirmedSalesAmount: statsData.totalConfirmedSalesAmount || 0,
-          totalConfirmedPurchaseAmount: statsData.totalConfirmedPurchaseAmount || 0,
-        };
-        setStats(newStats);
-      } else {
+      if (!statsResponse.ok) {
         const errorData = await statsResponse.json().catch(() => ({}));
-        console.error('Stats fetch error:', statsResponse.status, errorData);
         setErrorMessage(`Unable to load dashboard stats (${statsResponse.status}). Please check API/auth.`);
-        // Set default stats to prevent crashes
-        setStats({
-          totalUsers: 0,
-          totalFarmers: 0,
-          totalTraders: 0,
-          verifiedUsers: 0,
-          pendingApprovalUsers: 0,
-          totalPurchaseOrders: 0,
-          totalSaleOrders: 0,
-          totalConfirmedSalesOrders: 0,
-          totalConfirmedPurchaseOrders: 0,
-          totalConfirmedSalesAmount: 0,
-          totalConfirmedPurchaseAmount: 0,
-        });
+        console.error('Stats fetch error:', statsResponse.status, errorData);
+        setStats(DEFAULT_ADMIN_STATS);
+        return false;
       }
 
-      // Fetch users from backend API
+      const statsData = await statsResponse.json();
+      const normalizedStats = normalizeAdminStats({
+        totalUsers: statsData.totalUsers || 0,
+        totalFarmers: statsData.totalFarmers || 0,
+        totalTraders: statsData.totalTraders || 0,
+        verifiedUsers: statsData.verifiedUsers || 0,
+        pendingApprovalUsers: statsData.pendingApprovalUsers ?? 0,
+        locationPendingCount: statsData.locationPendingCount ?? 0,
+        locationApprovedCount: statsData.locationApprovedCount ?? 0,
+        locationDeclinedCount: statsData.locationDeclinedCount ?? 0,
+        warehousePendingCount: statsData.warehousePendingCount ?? 0,
+        warehouseApprovedCount: statsData.warehouseApprovedCount ?? 0,
+        warehouseDeclinedCount: statsData.warehouseDeclinedCount ?? 0,
+        confirmedOrdersPendingCount: statsData.confirmedOrdersPendingCount ?? 0,
+        confirmedOrdersApprovedCount: statsData.confirmedOrdersApprovedCount ?? 0,
+        confirmedOrdersDeclinedCount: statsData.confirmedOrdersDeclinedCount ?? 0,
+        totalPurchaseOrders: statsData.totalPurchaseOrders || 0,
+        totalSaleOrders: statsData.totalSaleOrders || 0,
+        totalConfirmedSalesOrders: statsData.totalConfirmedSalesOrders || 0,
+        totalConfirmedPurchaseOrders: statsData.totalConfirmedPurchaseOrders || 0,
+        totalConfirmedSalesAmount: statsData.totalConfirmedSalesAmount || 0,
+        totalConfirmedPurchaseAmount: statsData.totalConfirmedPurchaseAmount || 0,
+      });
+
+      setErrorMessage('');
+      setStats(normalizedStats);
+      DashboardCache.setAdminStatsData(profile.id, normalizedStats);
+      syncDataVersionCache(toVersionNumber(statsData.dataVersion));
+      return true;
+    } catch (error) {
+      console.error('Error loading admin stats:', error);
+      setErrorMessage('Failed to load dashboard data. Please check your connection and API.');
+      return false;
+    }
+  }, [apiUrl, getAuthToken, profile.id, syncDataVersionCache]);
+
+  const fetchAdminUsers = useCallback(async ({ force = false }: { force?: boolean } = {}) => {
+    try {
+      if (!force) {
+        const cachedUsers = DashboardCache.getAdminUsersData(profile.id) as Profile[] | null;
+        if (Array.isArray(cachedUsers)) {
+          setUsers(cachedUsers);
+          setUsersLoaded(true);
+          return true;
+        }
+      }
+
+      const token = await getAuthToken();
+      if (!token) {
+        setErrorMessage('You are not authenticated. Please sign in again.');
+        return false;
+      }
+
       const usersResponse = await fetch(`${apiUrl}/admin/users`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         }
       });
 
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
-        console.log('Users received:', usersData.length, 'users');
-        setUsers(usersData);
-        if (newStats) DashboardCache.setAdminListData(profile.id, { stats: newStats, users: usersData });
-      } else {
+      if (!usersResponse.ok) {
         const errorData = await usersResponse.json().catch(() => ({}));
-        console.error('Users fetch error:', usersResponse.status, errorData);
         setErrorMessage('Unable to load users. Please check API/auth.');
+        console.error('Users fetch error:', usersResponse.status, errorData);
+        return false;
       }
 
-      // Fetch orders and offers using the API client
-      const [ordersData, offersData] = await Promise.all([
-        api
-          .from('orders')
-          .select('*, offer:offers(*, seller:profiles!offers_seller_id_fkey(name)), buyer:profiles!orders_buyer_id_fkey(name)')
-          .order('created_at', { ascending: false }),
-        api
-          .from('offers')
-          .select('*, seller:profiles!offers_seller_id_fkey(name)')
-          .order('created_at', { ascending: false }),
-      ]);
+      const usersData = await usersResponse.json();
+      setErrorMessage('');
+      setUsers(usersData);
+      setUsersLoaded(true);
+      DashboardCache.setAdminUsersData(profile.id, usersData);
+      return true;
+    } catch (error) {
+      console.error('Error loading users:', error);
+      setErrorMessage('Failed to load users. Please check your connection and API.');
+      return false;
+    }
+  }, [apiUrl, getAuthToken, profile.id]);
 
-      if (!ordersData.error && ordersData.data) {
-        setOrders(ordersData.data as any);
-      }
+  const checkForAdminUpdates = useCallback(async () => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
 
-      if (!offersData.error && offersData.data) {
-        setOffers(offersData.data as any);
+      const versionResponse = await fetch(`${apiUrl}/admin/data-version`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!versionResponse.ok) return;
+
+      const versionData = await versionResponse.json();
+      const nextVersion = toVersionNumber(versionData.dataVersion);
+      if (!nextVersion) return;
+
+      const cachedVersion = toVersionNumber(DashboardCache.getAdminDataVersion(profile.id)?.dataVersion);
+      const currentMaxVersion = Math.max(cachedVersion, dataVersion);
+
+      if (nextVersion > currentMaxVersion) {
+        syncDataVersionCache(nextVersion);
+        await fetchAdminStats({ force: true });
+        if (usersLoaded || currentView === 'users') {
+          await fetchAdminUsers({ force: true });
+        }
       }
     } catch (error) {
-      console.error('Error loading data:', error);
-      setErrorMessage('Failed to load dashboard data. Please check your connection and API.');
-    } finally {
+      console.error('Admin update polling error:', error);
+    }
+  }, [
+    apiUrl,
+    getAuthToken,
+    profile.id,
+    dataVersion,
+    usersLoaded,
+    currentView,
+    fetchAdminStats,
+    fetchAdminUsers,
+    syncDataVersionCache
+  ]);
+
+  const loadData = useCallback(async () => {
+    await fetchAdminStats({ force: true });
+    await fetchAdminUsers({ force: true });
+  }, [fetchAdminStats, fetchAdminUsers]);
+
+  useEffect(() => {
+    const cachedStats = DashboardCache.getAdminStatsData(profile.id);
+    const cachedUsers = DashboardCache.getAdminUsersData(profile.id) as Profile[] | null;
+    const cachedVersion = toVersionNumber(DashboardCache.getAdminDataVersion(profile.id)?.dataVersion);
+
+    if (cachedStats) {
+      setStats(normalizeAdminStats(cachedStats));
       setLoading(false);
     }
-  };
+    if (Array.isArray(cachedUsers)) {
+      setUsers(cachedUsers);
+      setUsersLoaded(true);
+    }
+    if (cachedVersion) {
+      setDataVersion(cachedVersion);
+    }
+
+    let active = true;
+    const bootstrap = async () => {
+      if (!cachedStats) {
+        await fetchAdminStats({ force: true });
+      }
+      if (active) {
+        setLoading(false);
+      }
+      await checkForAdminUpdates();
+    };
+
+    void bootstrap();
+
+    const pollTimer = setInterval(() => {
+      void checkForAdminUpdates();
+    }, 15000);
+
+    return () => {
+      active = false;
+      clearInterval(pollTimer);
+    };
+  }, [profile.id, fetchAdminStats, checkForAdminUpdates]);
+
+  useEffect(() => {
+    if (currentView !== 'users') return;
+    if (usersLoaded) return;
+    setLoading(true);
+    void fetchAdminUsers().finally(() => setLoading(false));
+  }, [currentView, usersLoaded, fetchAdminUsers]);
 
 
   const handleViewChange = (view: View) => {
@@ -214,11 +325,15 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
 
   const handleUserUpdated = useCallback((userId: string, updates: Partial<Profile>) => {
     if (!userId) return;
-    setUsers(prev => prev.map(u => {
-      const id = String((u as any).id ?? (u as any)._id ?? '');
-      return id === String(userId) ? { ...u, ...updates } : u;
-    }));
-  }, []);
+    setUsers(prev => {
+      const nextUsers = prev.map(u => {
+        const id = String((u as any).id ?? (u as any)._id ?? '');
+        return id === String(userId) ? { ...u, ...updates } : u;
+      });
+      DashboardCache.setAdminUsersData(profile.id, nextUsers);
+      return nextUsers;
+    });
+  }, [profile.id]);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -230,7 +345,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <div>
               <h1 className="text-2xl font-bold text-white">Grainology</h1>
               <p className="text-sm text-slate-300 mt-1">{profile?.name || 'Admin User'}</p>
-              <p className="text-xs text-slate-400 capitalize">{profile?.role || 'admin'} Panel</p>
+              <p className="text-xs text-slate-400">{profile?.role === 'super_admin' ? 'Super Admin' : (profile?.role || 'Admin')} Panel</p>
             </div>
             <button
               onClick={() => setIsMobileMenuOpen(false)}
@@ -611,13 +726,18 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             </div>
           )}
           {currentView === 'dashboard' && (
-            <EnhancedDashboard stats={stats} orders={orders} offers={offers} onPendingApprovalClick={() => handleViewChange('users')} />
+            <EnhancedDashboard
+              userId={profile.id}
+              dataVersion={dataVersion}
+              stats={stats}
+              onPendingApprovalClick={() => handleViewChange('users')}
+            />
           )}
           {currentView === 'analytics' && (
             <AnalyticsDashboard />
           )}
           {currentView === 'users' && (
-            <UserManagement users={users} onRefresh={loadData} onUserUpdated={handleUserUpdated} />
+            <UserManagement users={users} onRefresh={loadData} onUserUpdated={handleUserUpdated} currentUserRole={profile.role} />
           )}
           {currentView === 'all-purchase-orders' && (
             <AllPurchaseOrders />
@@ -632,7 +752,7 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <ConfirmPurchaseOrderForm />
           )}
           {currentView === 'all-confirmed-orders' && (
-            <AllConfirmedOrders />
+            <AllConfirmedOrders currentUserRole={profile.role} />
           )}
           {currentView === 'mandi' && (
             <MandiBhaav />
@@ -647,13 +767,13 @@ export default function AdminPanel({ profile, onSignOut }: AdminPanelProps) {
             <LogisticsProviderManagement />
           )}
           {currentView === 'commodity-variety-management' && (
-            <CommodityVarietyManagement />
+            <CommodityVarietyManagement currentUserRole={profile.role} />
           )}
           {currentView === 'warehouse-management' && (
-            <WarehouseManagement />
+            <WarehouseManagement currentUserRole={profile.role} />
           )}
           {currentView === 'location-management' && (
-            <LocationManagement />
+            <LocationManagement currentUserRole={profile.role} />
           )}
           {/* ========== COMMENTED OUT - NOT IN USE ========== */}
           {/* 

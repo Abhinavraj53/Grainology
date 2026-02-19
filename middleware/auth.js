@@ -55,13 +55,19 @@ export const authenticate = async (req, res, next) => {
 // Export database check middleware for use in routes
 export { checkDatabaseConnection };
 
+/** True if user has admin or super_admin role (same backend access). */
+export const isAdminRole = (user) => user && (user.role === 'admin' || user.role === 'super_admin');
+
+/** True if user is super_admin only (approve/decline rights). */
+export const isSuperAdmin = (user) => user && user.role === 'super_admin';
+
 export const requireAdmin = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    if (req.user.role !== 'admin') {
+    if (!isAdminRole(req.user)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
@@ -71,3 +77,16 @@ export const requireAdmin = async (req, res, next) => {
   }
 };
 
+export const requireSuperAdmin = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (!isSuperAdmin(req.user)) {
+      return res.status(403).json({ error: 'Super Admin access required' });
+    }
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Authorization error' });
+  }
+};

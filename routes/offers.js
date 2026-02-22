@@ -1,7 +1,7 @@
 import express from 'express';
 import Offer from '../models/Offer.js';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -17,7 +17,7 @@ router.get('/', authenticate, async (req, res) => {
     }
 
     // Non-admin users see only Active offers or their own offers
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       query.$or = [
         { status: 'Active' },
         { seller_id: req.userId }
@@ -112,7 +112,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     // Only seller or admin can update
-    if (offer.seller_id.toString() !== req.userId && user.role !== 'admin') {
+    if (offer.seller_id.toString() !== req.userId && !isAdminRole(user)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -145,7 +145,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
 
     // Only seller or admin can delete
-    if (offer.seller_id.toString() !== req.userId && user.role !== 'admin') {
+    if (offer.seller_id.toString() !== req.userId && !isAdminRole(user)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

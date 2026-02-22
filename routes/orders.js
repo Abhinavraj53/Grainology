@@ -4,7 +4,7 @@ import PurchaseOrder from '../models/PurchaseOrder.js';
 import SaleOrder from '../models/SaleOrder.js';
 import Offer from '../models/Offer.js';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -45,7 +45,7 @@ router.get('/', authenticate, async (req, res) => {
       }
     } else {
       // Non-admin users can only see their own orders
-      if (user.role !== 'admin') {
+      if (!isAdminRole(user)) {
         // Get user's offers if farmer
         if (user.role === 'farmer') {
           const userOffers = await Offer.find({ seller_id: req.userId }).select('_id');
@@ -77,12 +77,12 @@ router.get('/', authenticate, async (req, res) => {
         .sort({ createdAt: -1 }),
       
       // Get purchase orders - admin sees all, customers see their own
-      PurchaseOrder.find(user.role === 'admin' ? {} : { buyer_id: req.userId })
+      PurchaseOrder.find(isAdminRole(user) ? {} : { buyer_id: req.userId })
         .populate('buyer_id', 'name email mobile_number')
         .sort({ createdAt: -1 }),
       
       // Get sale orders - admin sees all, customers see their own
-      SaleOrder.find(user.role === 'admin' ? {} : { seller_id: req.userId })
+      SaleOrder.find(isAdminRole(user) ? {} : { seller_id: req.userId })
         .populate('seller_id', 'name email mobile_number')
         .sort({ createdAt: -1 })
     ]);
@@ -248,7 +248,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id/status', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
@@ -294,7 +294,7 @@ router.put('/:id/status', authenticate, async (req, res) => {
 router.put('/:id/finalize', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 

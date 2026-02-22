@@ -1,7 +1,7 @@
 import express from 'express';
 import PurchaseOrder from '../models/PurchaseOrder.js';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get('/', authenticate, async (req, res) => {
     const query = {};
 
     // Non-admin users can only see their own orders
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       query.buyer_id = req.userId;
     }
 
@@ -47,7 +47,7 @@ router.post('/', authenticate, async (req, res) => {
     const { buyer_id, ...orderData } = req.body;
     
     // Admin can specify buyer_id, customers can only create for themselves
-    const targetBuyerId = user.role === 'admin' && buyer_id ? buyer_id : req.userId;
+    const targetBuyerId = isAdminRole(user) && buyer_id ? buyer_id : req.userId;
     
     const order = new PurchaseOrder({
       ...orderData,

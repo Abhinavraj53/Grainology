@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { encryptPassword, decryptPassword } from '../utils/passwordVault.js';
 
 const userSchema = new mongoose.Schema({
   email: {
@@ -13,6 +14,11 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: true
+  },
+  password_encrypted: {
+    type: String,
+    default: null,
+    select: false
   },
   name: {
     type: String,
@@ -119,6 +125,7 @@ const userSchema = new mongoose.Schema({
       delete ret._id;
       delete ret.__v;
       delete ret.password;
+      delete ret.password_encrypted;
       return ret;
     }
   }
@@ -136,13 +143,55 @@ userSchema.index({ updatedAt: -1 });
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
-  this.password = await bcrypt.hash(this.password, 10);
-  next();
+  try {
+    const plainPassword = this.password;
+    this.password_encrypted = encryptPassword(plainPassword);
+    this.password = await bcrypt.hash(plainPassword, 10);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Hash + encrypt password on findOneAndUpdate / findByIdAndUpdate
+userSchema.pre('findOneAndUpdate', async function(next) {
+  const update = this.getUpdate() || {};
+  const directPassword = typeof update.password === 'string' ? update.password : null;
+  const setPassword = typeof update.$set?.password === 'string' ? update.$set.password : null;
+  const plainPassword = directPassword || setPassword;
+
+  if (!plainPassword || /^\$2[aby]\$/.test(plainPassword)) {
+    return next();
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+    const encryptedPassword = encryptPassword(plainPassword);
+
+    if (directPassword) {
+      update.password = hashedPassword;
+      update.password_encrypted = encryptedPassword;
+    } else {
+      update.$set = update.$set || {};
+      update.$set.password = hashedPassword;
+      update.$set.password_encrypted = encryptedPassword;
+    }
+
+    this.setUpdate(update);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Compare password method
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Return stored original password when available (for super-admin support flows)
+userSchema.methods.getDecryptedPassword = function() {
+  return decryptPassword(this.password_encrypted);
 };
 
 const User = mongoose.model('User', userSchema);

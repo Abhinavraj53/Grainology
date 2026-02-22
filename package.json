@@ -16,7 +16,8 @@
     "import:supply-transactions": "node scripts/importSupplyTransactions.js",
     "seed:users": "node scripts/seedDemoUsers.js",
     "seed:data": "node scripts/seedDemoData.js",
-    "seed:all": "npm run seed:users && npm run seed:data"
+    "seed:all": "npm run seed:users && npm run seed:data",
+    "seed:super-admin": "node scripts/createSuperAdminUser.js"
   },
   "keywords": [
     "grainology",

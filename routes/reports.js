@@ -1,6 +1,6 @@
 import express from 'express';
 import Report from '../models/Report.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -62,7 +62,7 @@ router.delete('/:id', authenticate, async (req, res) => {
     }
 
     // Only creator or admin can delete
-    if (report.generated_by.toString() !== req.userId && req.user.role !== 'admin') {
+    if (report.generated_by.toString() !== req.userId && !isAdminRole(req.user)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

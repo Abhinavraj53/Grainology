@@ -322,7 +322,9 @@ router.post('/register', upload.array('documents', 10), async (req, res) => {
     // Send "waiting for approval" email if user has email (no login until admin approves)
     if (cleanEmail) {
       try {
-        await sendWaitingForApprovalEmail(cleanEmail, name.trim());
+        const loginId = cleanEmail || cleanMobile;
+        const passwordNote = `Password: ${password}`;
+        await sendWaitingForApprovalEmail(cleanEmail, name.trim(), loginId, passwordNote);
         console.log(`Waiting-for-approval email sent to ${cleanEmail}`);
       } catch (emailError) {
         console.error('Waiting-for-approval email error:', emailError);

@@ -373,13 +373,24 @@ router.get('/sample/:type', async (req, res) => {
         return res.status(400).json({ error: 'Invalid sample type' });
     }
 
+    const upperCaseFields = new Set(['State', 'Commodity', 'Variety']);
+    const normalizedSampleData = sampleData.map((row) => {
+      const normalizedRow = { ...row };
+      for (const fieldName of upperCaseFields) {
+        if (normalizedRow[fieldName] !== undefined && normalizedRow[fieldName] !== null) {
+          normalizedRow[fieldName] = String(normalizedRow[fieldName]).trim().toUpperCase();
+        }
+      }
+      return normalizedRow;
+    });
+
     if (format === 'excel') {
-      const buffer = generateExcel(sampleData, headers, type);
+      const buffer = generateExcel(normalizedSampleData, headers, type);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
       res.send(buffer);
     } else {
-      const csvContent = generateCSV(sampleData, headers);
+      const csvContent = generateCSV(normalizedSampleData, headers);
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}.csv"`);
       res.send(csvContent);
@@ -391,4 +402,3 @@ router.get('/sample/:type', async (req, res) => {
 });
 
 export default router;
-

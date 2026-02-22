@@ -12,6 +12,7 @@ import WarehouseMaster from '../models/WarehouseMaster.js';
 import { authenticate, requireAdmin, isSuperAdmin } from '../middleware/auth.js';
 import { createDocumentViewToken } from '../utils/documentViewToken.js';
 import { parseCloudinaryUrl, getSignedDeliveryUrl } from '../utils/cloudinary.js';
+import { decryptPassword } from '../utils/passwordVault.js';
 
 const router = express.Router();
 
@@ -319,7 +320,7 @@ router.get('/dashboard', async (req, res) => {
 router.get('/users', async (req, res) => {
   try {
     const users = await User.find({})
-      .select('-password -__v')
+      .select('-password -password_encrypted -__v')
       .sort({ createdAt: -1 })
       .lean();
     const usersOut = users.map(u => {
@@ -340,6 +341,35 @@ router.get('/users', async (req, res) => {
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch users' });
+  }
+});
+
+// Super Admin only: view user's original password (if available)
+router.get('/users/:id/password', async (req, res) => {
+  try {
+    if (!isSuperAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only Super Admin can view user passwords' });
+    }
+
+    const id = req.params.id;
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const user = await User.findById(id).select('name email mobile_number +password_encrypted');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const plainPassword = decryptPassword(user.password_encrypted);
+    return res.json({
+      success: true,
+      available: Boolean(plainPassword),
+      password: plainPassword || null,
+    });
+  } catch (error) {
+    console.error('Get user password error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch user password' });
   }
 });
 
@@ -404,7 +434,8 @@ router.put('/users/:id', async (req, res) => {
       update.declined_reason = '';
     }
 
-    const user = await User.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true });
+    const user = await User.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true })
+      .select('+password_encrypted');
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -412,8 +443,11 @@ router.put('/users/:id', async (req, res) => {
     // When Super Admin approves, send welcome/approval email if user has email
     if (wasApproved && user.email) {
       try {
-        const loginId = user.email;
-        const passwordNote = 'Use the password you set during registration.';
+        const loginId = user.email || user.mobile_number;
+        const plainPassword = decryptPassword(user.password_encrypted);
+        const passwordNote = plainPassword
+          ? `Password: ${plainPassword}`
+          : 'Use the password you set during registration.';
         await sendWelcomeEmail(user.email, user.name, loginId, passwordNote);
         console.log(`Approval email sent to ${user.email}`);
       } catch (emailError) {

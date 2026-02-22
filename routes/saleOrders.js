@@ -1,7 +1,7 @@
 import express from 'express';
 import SaleOrder from '../models/SaleOrder.js';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ router.get('/', authenticate, async (req, res) => {
     const query = {};
 
     // Non-admin users can only see their own orders
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       query.seller_id = req.userId;
     }
 
@@ -47,7 +47,7 @@ router.post('/', authenticate, async (req, res) => {
     const { seller_id, ...orderData } = req.body;
     
     // Admin can specify seller_id, customers can only create for themselves
-    const targetSellerId = user.role === 'admin' && seller_id ? seller_id : req.userId;
+    const targetSellerId = isAdminRole(user) && seller_id ? seller_id : req.userId;
     
     const order = new SaleOrder({
       ...orderData,

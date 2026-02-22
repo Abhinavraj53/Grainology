@@ -2,7 +2,7 @@ import express from 'express';
 import axios from 'axios';
 import MandiPrice from '../models/MandiPrice.js';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 import { fetchCedaAgmarknet } from '../utils/cedaAgmarknet.js';
 
 const router = express.Router();
@@ -628,7 +628,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 

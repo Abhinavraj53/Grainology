@@ -1,7 +1,7 @@
 import express from 'express';
 import SupplyTransaction from '../models/SupplyTransaction.js';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -230,7 +230,7 @@ router.put('/:id', authenticate, async (req, res) => {
 router.delete('/:id', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (user.role !== 'admin') {
+    if (!isAdminRole(user)) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 

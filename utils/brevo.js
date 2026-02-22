@@ -207,8 +207,16 @@ export async function sendWelcomeEmail(to, name, loginId, passwordNote) {
 /**
  * Send "waiting for approval" email after registration
  */
-export async function sendWaitingForApprovalEmail(to, name) {
+export async function sendWaitingForApprovalEmail(to, name, loginId, passwordNote) {
   const subject = 'Grainology – Registration Received, Pending Approval';
+  const credentialsHtml = loginId
+    ? `
+          <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin: 20px 0;">
+            <p style="margin: 0 0 8px 0; font-weight: 600;">Your login details (after approval):</p>
+            <p style="margin: 0 0 4px 0;"><strong>Login ID:</strong> ${loginId}</p>
+            <p style="margin: 0;">${passwordNote || 'Use the password you set during registration.'}</p>
+          </div>`
+    : '';
   const html = `
     <!DOCTYPE html>
     <html>
@@ -231,6 +239,7 @@ export async function sendWaitingForApprovalEmail(to, name) {
         <div class="content">
           <h2>Hello ${name}!</h2>
           <p>Thank you for registering with Grainology.</p>
+          ${credentialsHtml}
           <div class="notice">
             <strong>Please wait for approval.</strong> Your account is under review. You will receive an email once an admin approves your account. Until then, you will not be able to log in.
           </div>
@@ -244,6 +253,9 @@ export async function sendWaitingForApprovalEmail(to, name) {
     </body>
     </html>
   `;
-  const text = `Hello ${name}, your Grainology registration is received. Please wait for admin approval. You will get an email when your account is approved.`;
+  const credentialsText = loginId
+    ? ` Login ID: ${loginId}. ${passwordNote || 'Use the password you set during registration.'}`
+    : '';
+  const text = `Hello ${name}, your Grainology registration is received.${credentialsText} Please wait for admin approval. You will get an email when your account is approved.`;
   return sendEmail(to, subject, html, text);
 }

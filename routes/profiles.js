@@ -1,6 +1,6 @@
 import express from 'express';
 import User from '../models/User.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, isAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -47,7 +47,7 @@ router.get('/me/current', authenticate, async (req, res) => {
 router.put('/:id', authenticate, async (req, res) => {
   try {
     // Users can only update their own profile unless admin
-    if (req.params.id !== req.userId && req.user.role !== 'admin') {
+    if (req.params.id !== req.userId && !isAdminRole(req.user)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

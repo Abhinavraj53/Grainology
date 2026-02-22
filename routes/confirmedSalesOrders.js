@@ -5,7 +5,7 @@ import CommodityMaster from '../models/CommodityMaster.js';
 import VarietyMaster from '../models/VarietyMaster.js';
 import WarehouseMaster from '../models/WarehouseMaster.js';
 import LocationMaster from '../models/LocationMaster.js';
-import { authenticate, requireAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, isAdminRole, isSuperAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import { parseFile } from '../utils/csvParser.js';
 import { getMappedValue, parseDate, parseNumeric, toNA, getAvailableColumns } from '../utils/columnMapper.js';
@@ -39,16 +39,22 @@ router.get('/customer/:customerId', async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     const { customerId } = req.params;
+    const isAdminUser = isAdminRole(user);
 
     // Non-admin users can only see their own orders
-    if (user.role !== 'admin' && customerId !== req.userId) {
+    if (!isAdminUser && customerId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const orders = await ConfirmedSalesOrder.find({
+    const query = {
       customer_id: customerId,
       trash: { $ne: true }
-    })
+    };
+    if (!isAdminUser) {
+      query.approval_status = 'approved';
+    }
+
+    const orders = await ConfirmedSalesOrder.find(query)
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email')
       .sort({ createdAt: -1 });
@@ -74,9 +80,13 @@ router.get('/:id', async (req, res) => {
     }
 
     const user = await User.findById(req.userId);
+    const isAdminUser = isAdminRole(user);
     // Non-admin users can only see their own orders
-    if (user.role !== 'admin' && order.customer_id._id.toString() !== req.userId) {
+    if (!isAdminUser && order.customer_id._id.toString() !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
+    }
+    if (!isAdminUser && order.approval_status !== 'approved') {
+      return res.status(404).json({ error: 'Confirmed sales order not found' });
     }
 
     res.json(order);
@@ -112,7 +122,11 @@ router.post('/', requireAdmin, async (req, res) => {
       ...req.body,
       customer_id: customerId,
       created_by: req.userId,
-      unique_id: req.body.unique_id || `SO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      unique_id: req.body.unique_id || `SO-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      approval_status: 'pending',
+      approved_by: null,
+      approved_at: null,
+      declined_reason: ''
     };
 
     // Calculate total deduction
@@ -147,6 +161,22 @@ router.put('/:id', requireAdmin, async (req, res) => {
     if (!order) {
       return res.status(404).json({ error: 'Confirmed sales order not found' });
     }
+    if (order.approval_status === 'approved' && req.user?.role === 'admin') {
+      return res.status(403).json({ error: 'Cannot edit after Super Admin approval' });
+    }
+
+    const approvalFields = ['approval_status', 'approved_by', 'approved_at', 'declined_reason'];
+    const approvalUpdateRequested = approvalFields.some((field) =>
+      Object.prototype.hasOwnProperty.call(req.body, field)
+    );
+    if (approvalUpdateRequested && !isSuperAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only Super Admin can approve or decline confirmed sales orders' });
+    }
+    if (approvalUpdateRequested && isSuperAdmin(req.user) && order.approval_status !== 'pending') {
+      return res.status(400).json({
+        error: 'Approval already decided. Ask Admin to re-submit before reviewing again.'
+      });
+    }
 
     // Recalculate deductions if amounts changed
     if (req.body.gross_amount !== undefined || 
@@ -166,6 +196,31 @@ router.put('/:id', requireAdmin, async (req, res) => {
       req.body.net_amount = grossAmount - totalDeduction;
     }
 
+    if (!isSuperAdmin(req.user)) {
+      req.body.approval_status = 'pending';
+      req.body.approved_by = null;
+      req.body.approved_at = null;
+      req.body.declined_reason = '';
+    } else if (Object.prototype.hasOwnProperty.call(req.body, 'approval_status')) {
+      if (req.body.approval_status === 'approved') {
+        req.body.approved_by = req.userId;
+        req.body.approved_at = new Date();
+        req.body.declined_reason = '';
+      } else if (req.body.approval_status === 'declined') {
+        const declinedReason = String(req.body.declined_reason || '').trim();
+        if (!declinedReason) {
+          return res.status(400).json({ error: 'Decline reason is required' });
+        }
+        req.body.approved_by = null;
+        req.body.approved_at = null;
+        req.body.declined_reason = declinedReason;
+      } else if (req.body.approval_status === 'pending') {
+        req.body.approved_by = null;
+        req.body.approved_at = null;
+        req.body.declined_reason = '';
+      }
+    }
+
     const updatedOrder = await ConfirmedSalesOrder.findByIdAndUpdate(
       req.params.id,
       { $set: req.body },
@@ -181,17 +236,71 @@ router.put('/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Approve/decline confirmed sales order (super admin only)
+router.patch('/:id/approval', requireAdmin, async (req, res) => {
+  try {
+    if (!isSuperAdmin(req.user)) {
+      return res.status(403).json({ error: 'Super Admin access required' });
+    }
+
+    const { status, reason } = req.body;
+    if (!['approved', 'declined'].includes(String(status))) {
+      return res.status(400).json({ error: 'status must be approved or declined' });
+    }
+
+    const order = await ConfirmedSalesOrder.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Confirmed sales order not found' });
+    }
+    if (order.approval_status !== 'pending') {
+      return res.status(400).json({
+        error: 'Approval already decided. Ask Admin to re-submit before reviewing again.'
+      });
+    }
+
+    const declinedReason = String(reason || '').trim();
+    if (status === 'declined' && !declinedReason) {
+      return res.status(400).json({ error: 'Decline reason is required' });
+    }
+
+    const updatePayload = {
+      approval_status: status,
+      approved_by: status === 'approved' ? req.userId : null,
+      approved_at: status === 'approved' ? new Date() : null,
+      declined_reason: status === 'declined' ? declinedReason : ''
+    };
+
+    const updatedOrder = await ConfirmedSalesOrder.findByIdAndUpdate(
+      req.params.id,
+      updatePayload,
+      { new: true, runValidators: true }
+    )
+      .populate('customer_id', 'name email mobile_number')
+      .populate('created_by', 'name email');
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Confirmed sales order approval update error:', error);
+    res.status(500).json({ error: error.message || 'Failed to update approval status' });
+  }
+});
+
 // Delete confirmed sales order (admin only) - soft delete (trash in MongoDB, not shown to user)
 router.delete('/:id', requireAdmin, async (req, res) => {
   try {
+    const existingOrder = await ConfirmedSalesOrder.findById(req.params.id);
+    if (!existingOrder) {
+      return res.status(404).json({ error: 'Confirmed sales order not found' });
+    }
+    if (existingOrder.approval_status === 'approved' && req.user?.role === 'admin') {
+      return res.status(403).json({ error: 'Cannot delete after Super Admin approval' });
+    }
+
     const order = await ConfirmedSalesOrder.findByIdAndUpdate(
       req.params.id,
       { $set: { trash: true } },
       { new: true }
     );
-    if (!order) {
-      return res.status(404).json({ error: 'Confirmed sales order not found' });
-    }
     res.json({ message: 'Confirmed sales order deleted successfully' });
   } catch (error) {
     console.error('Delete confirmed sales order error:', error);
@@ -702,4 +811,3 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
 });
 
 export default router;
-

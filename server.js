@@ -37,6 +37,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const DB_RETRY_INTERVAL_MS = Number(process.env.DB_RETRY_INTERVAL_MS || 10000);
+let dbRetryTimer = null;
 
 // -----------------------------
 // CORS CONFIG
@@ -94,7 +97,8 @@ const connectDB = async () => {
       console.error('💡 Please add MONGODB_URI to your .env file');
       console.error('   Example: MONGODB_URI=mongodb://localhost:27017/grainology');
       console.error('   Or MongoDB Atlas: MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/grainology');
-      process.exit(1);
+      if (IS_PRODUCTION) process.exit(1);
+      return false;
     }
 
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
@@ -118,6 +122,12 @@ const connectDB = async () => {
       console.log('✅ MongoDB reconnected');
     });
 
+    if (dbRetryTimer) {
+      clearTimeout(dbRetryTimer);
+      dbRetryTimer = null;
+    }
+
+    return true;
   } catch (error) {
     console.error('❌ MongoDB connection failed!');
     console.error('Error:', error.message);
@@ -127,11 +137,32 @@ const connectDB = async () => {
     console.error('   3. If using local MongoDB: Ensure MongoDB service is running');
     console.error('   4. Verify your connection string format');
     console.error('   5. Check your network connection');
-    process.exit(1);
+    if (IS_PRODUCTION) {
+      process.exit(1);
+    }
+    return false;
   }
 };
 
-connectDB();
+const scheduleDbReconnect = () => {
+  if (dbRetryTimer) return;
+  dbRetryTimer = setTimeout(async () => {
+    dbRetryTimer = null;
+    console.log(`🔁 Retrying MongoDB connection in dev mode...`);
+    const connected = await connectDB();
+    if (!connected) {
+      scheduleDbReconnect();
+    }
+  }, DB_RETRY_INTERVAL_MS);
+};
+
+(async () => {
+  const connected = await connectDB();
+  if (!connected && !IS_PRODUCTION) {
+    console.warn('⚠️  Starting API without DB connection (dev mode).');
+    scheduleDbReconnect();
+  }
+})();
 
 // -----------------------------
 // HEALTH CHECK

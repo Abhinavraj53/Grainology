@@ -13,6 +13,7 @@ import { authenticate, requireAdmin, isSuperAdmin } from '../middleware/auth.js'
 import { createDocumentViewToken } from '../utils/documentViewToken.js';
 import { parseCloudinaryUrl, getSignedDeliveryUrl } from '../utils/cloudinary.js';
 import { decryptPassword } from '../utils/passwordVault.js';
+import { generateReentryToken, buildReentryUrl } from '../utils/reentryToken.js';
 
 const router = express.Router();
 
@@ -102,6 +103,23 @@ async function fetchCloudinaryAsset(url) {
     }
   }
   return response;
+}
+
+async function issueReentryLinkForUser(userId) {
+  const { token, tokenHash, expiresAt } = generateReentryToken();
+
+  await User.findByIdAndUpdate(userId, {
+    $set: {
+      reentry_token_hash: tokenHash,
+      reentry_token_expires_at: expiresAt,
+      reentry_link_generated_at: new Date(),
+    }
+  });
+
+  return {
+    reentryLink: buildReentryUrl(token),
+    reentryExpiresAt: expiresAt,
+  };
 }
 
 // All admin routes require authentication and admin role
@@ -412,6 +430,8 @@ router.put('/users/:id', async (req, res) => {
     const wasRejected = requestedApprovalStatus === 'rejected';
     const isPendingAgain = requestedApprovalStatus === 'pending';
     const update = { ...req.body };
+    let reentryLink = null;
+    let reentryExpiresAt = null;
 
     // Admin can edit and resubmit non-approved user registrations only.
     // Any admin update moves the record back to pending for Super Admin review.
@@ -419,19 +439,38 @@ router.put('/users/:id', async (req, res) => {
       update.approval_status = 'pending';
       update.approved_at = null;
       update.declined_reason = '';
+      update.reentry_token_hash = null;
+      update.reentry_token_expires_at = null;
+      update.reentry_link_generated_at = null;
+      update.reentry_last_submitted_at = new Date();
     } else if (wasApproved) {
       update.approved_at = new Date();
       update.declined_reason = '';
+      update.reentry_token_hash = null;
+      update.reentry_token_expires_at = null;
+      update.reentry_link_generated_at = null;
+      update.reentry_last_submitted_at = null;
     } else if (wasRejected) {
       const declinedReason = String(update.declined_reason || '').trim();
       if (!declinedReason) {
         return res.status(400).json({ error: 'Decline reason is required' });
       }
+      const tokenData = generateReentryToken();
       update.declined_reason = declinedReason;
       update.approved_at = null; // clear so user cannot login until re-approved
+      update.reentry_token_hash = tokenData.tokenHash;
+      update.reentry_token_expires_at = tokenData.expiresAt;
+      update.reentry_link_generated_at = new Date();
+      update.reentry_last_submitted_at = null;
+      reentryLink = buildReentryUrl(tokenData.token);
+      reentryExpiresAt = tokenData.expiresAt;
     } else if (isPendingAgain) {
       update.approved_at = null; // clear so user cannot login until re-approved
       update.declined_reason = '';
+      update.reentry_token_hash = null;
+      update.reentry_token_expires_at = null;
+      update.reentry_link_generated_at = null;
+      update.reentry_last_submitted_at = new Date();
     }
 
     const user = await User.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true })
@@ -456,10 +495,43 @@ router.put('/users/:id', async (req, res) => {
     }
 
     const out = user.toJSON();
-    res.json(out);
+    res.json({
+      ...out,
+      reentry_link: reentryLink,
+      reentry_expires_at: reentryExpiresAt
+    });
   } catch (error) {
     console.error('Update user error:', error);
     res.status(500).json({ error: error.message || 'Failed to update user' });
+  }
+});
+
+// Admin/Super Admin: generate fresh re-entry link for rejected registration
+router.post('/users/:id/reentry-link', async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id || id === 'undefined' || id === 'null') {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+
+    const user = await User.findById(id).select('approval_status');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.approval_status !== 'rejected') {
+      return res.status(400).json({ error: 'Re-entry link can be generated only for rejected users' });
+    }
+
+    const { reentryLink, reentryExpiresAt } = await issueReentryLinkForUser(user._id);
+    return res.json({
+      success: true,
+      reentry_link: reentryLink,
+      reentry_expires_at: reentryExpiresAt
+    });
+  } catch (error) {
+    console.error('Generate re-entry link error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate re-entry link' });
   }
 });
 

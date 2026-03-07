@@ -517,7 +517,7 @@ router.post('/signin', async (req, res) => {
       return res.status(403).json({
         error: isRejected ? 'Account rejected' : 'Account pending approval',
         message: isRejected
-          ? 'Your account was not approved. Please contact support.'
+          ? 'Your account was not approved. Please contact Admin/Super Admin to get a re-entry link and submit corrected details.'
           : 'Your account is under review. You will receive an email when an admin approves your account. Until then, you cannot log in.'
       });
     }
@@ -670,4 +670,3 @@ router.get('/user', authenticate, async (req, res) => {
 });
 
 export default router;
-

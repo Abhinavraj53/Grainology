@@ -60,6 +60,10 @@ const userSchema = new mongoose.Schema({
   },
   approved_at: Date,
   declined_reason: { type: String, trim: true, default: '' },
+  reentry_token_hash: { type: String, default: null, select: false },
+  reentry_token_expires_at: { type: Date, default: null },
+  reentry_link_generated_at: { type: Date, default: null },
+  reentry_last_submitted_at: { type: Date, default: null },
   entity_type: {
     type: String,
     enum: ['individual', 'company'],
@@ -137,6 +141,7 @@ userSchema.index({ 'verification_documents.aadhaar_number': 1 }, { unique: true,
 userSchema.index({ 'verification_documents.pan_number': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.gstin': 1 }, { unique: true, sparse: true });
 userSchema.index({ 'verification_documents.cin': 1 }, { unique: true, sparse: true });
+userSchema.index({ reentry_token_hash: 1 }, { sparse: true });
 userSchema.index({ updatedAt: -1 });
 // mobile_number: unique index is created by schema field option above, do not duplicate here
 

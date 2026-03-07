@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Sprout, Upload, CheckCircle, ArrowRight, ArrowLeft } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Sprout, Upload, CheckCircle, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import Navigation from './Navigation';
 import Footer from './Footer';
 // @ts-ignore - JS module without types
@@ -60,6 +60,7 @@ function ResendOtpButton({
 }
 
 export default function SimpleRegistration() {
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState(1);
   const [userType, setUserType] = useState('');
   const [documentType, setDocumentType] = useState('');
@@ -70,6 +71,7 @@ export default function SimpleRegistration() {
   const [mobileNumber, setMobileNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>([]);
   const [documentFiles, setDocumentFiles] = useState<Record<string, File>>({});
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -95,8 +97,17 @@ export default function SimpleRegistration() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [reentryMode, setReentryMode] = useState(false);
+  const [reentryToken, setReentryToken] = useState('');
+  const [reentryOriginalEmail, setReentryOriginalEmail] = useState('');
+  const [reentryDeclineReason, setReentryDeclineReason] = useState('');
+  const [loadingReentryData, setLoadingReentryData] = useState(false);
 
   const navigate = useNavigate();
+  const urlReentryToken = searchParams.get('reentry_token') || searchParams.get('reentryToken') || '';
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedOriginalReentryEmail = reentryOriginalEmail.trim().toLowerCase();
+  const requiresEmailOtp = Boolean(normalizedEmail) && (!reentryMode || normalizedEmail !== normalizedOriginalReentryEmail);
 
   // Fetch all document options once (same list for every role)
   useEffect(() => {
@@ -104,20 +115,79 @@ export default function SimpleRegistration() {
   }, []);
 
   useEffect(() => {
+    if (!urlReentryToken) return;
+
+    let cancelled = false;
+    (async () => {
+      setLoadingReentryData(true);
+      setError('');
+      try {
+        const { data, error } = await api.registration.getReentryData(urlReentryToken);
+        if (cancelled) return;
+        if (error || !data?.success || !data?.prefill) {
+          setError(error?.message || error?.error || 'Invalid or expired re-entry link. Ask Admin for a fresh link.');
+          return;
+        }
+
+        const prefill = data.prefill;
+        const prefillsDocTypes = Array.isArray(prefill.document_types) ? prefill.document_types : [];
+        const prefillName = String(prefill.name || '').trim();
+        const prefillTradeName = String(prefill.trade_name || '').trim();
+
+        setReentryMode(true);
+        setReentryToken(urlReentryToken);
+        setReentryDeclineReason(String(prefill.declined_reason || '').trim());
+        setName(prefillName);
+        setTradeName(prefillTradeName || prefillName);
+        setSameAsName(Boolean(prefillTradeName && prefillName && prefillTradeName === prefillName));
+        setMobileNumber(String(prefill.mobile_number || '').replace(/\D/g, '').slice(0, 10));
+        setEmail(String(prefill.email || '').trim());
+        setReentryOriginalEmail(String(prefill.email || '').trim());
+        setUserType(String(prefill.user_type || ''));
+        setAddressLine1(String(prefill.address_line1 || ''));
+        setAddressLine2(String(prefill.address_line2 || ''));
+        setDistrict(String(prefill.district || ''));
+        setState(String(prefill.state || ''));
+        setCountry(String(prefill.country || 'India') || 'India');
+        setPincode(String(prefill.pincode || '').replace(/\D/g, '').slice(0, 6));
+        setSelectedDocTypes(prefillsDocTypes);
+        setDocumentFiles({});
+        setEmailOtp('');
+        setEmailOtpSent(false);
+        setOtpSentAt(null);
+        setStep(1);
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to load re-entry form');
+        }
+      } finally {
+        if (!cancelled) setLoadingReentryData(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [urlReentryToken]);
+
+  useEffect(() => {
     if (sameAsName) setTradeName(name);
   }, [sameAsName, name]);
 
   // Auto-send OTP when user reaches step 4 and has email (no "Send OTP" click needed)
   useEffect(() => {
-    if (step !== 4 || !email || emailOtpSent || sendingOtp) return;
+    if (step !== 4 || !requiresEmailOtp || emailOtpSent || sendingOtp) return;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return;
+    if (!emailRegex.test(normalizedEmail)) return;
     let cancelled = false;
     (async () => {
       setSendingOtp(true);
       setError('');
       try {
-        const { data, error } = await api.registration.sendEmailOTP(email);
+        const { data, error } = await api.registration.sendEmailOTP(
+          normalizedEmail,
+          reentryMode && reentryToken ? { reentry_token: reentryToken } : {}
+        );
         if (cancelled) return;
         if (error) {
           setError(error.message || 'Failed to send OTP');
@@ -136,7 +206,7 @@ export default function SimpleRegistration() {
       }
     })();
     return () => { cancelled = true; };
-  }, [step, email]);
+  }, [step, normalizedEmail, requiresEmailOtp, reentryMode, reentryToken, emailOtpSent, sendingOtp]);
 
   const fetchDocumentOptions = async () => {
     try {
@@ -198,13 +268,17 @@ export default function SimpleRegistration() {
   };
 
   const handleSendEmailOTP = async () => {
-    if (!email) {
+    if (!requiresEmailOtp) {
+      return;
+    }
+
+    if (!normalizedEmail) {
       setError('Please enter your email address');
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(normalizedEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -213,7 +287,10 @@ export default function SimpleRegistration() {
     setError('');
 
     try {
-      const { data, error } = await api.registration.sendEmailOTP(email);
+      const { data, error } = await api.registration.sendEmailOTP(
+        normalizedEmail,
+        reentryMode && reentryToken ? { reentry_token: reentryToken } : {}
+      );
       if (error) {
         setError(error.message || 'Failed to send Email OTP');
         setSendingOtp(false);
@@ -253,6 +330,10 @@ export default function SimpleRegistration() {
       }
       if (!userType) {
         setError('Please select who you are');
+        return;
+      }
+      if (reentryMode) {
+        setStep(2);
         return;
       }
       setError('');
@@ -302,7 +383,7 @@ export default function SimpleRegistration() {
   };
 
   const handleSubmit = async () => {
-    if (email && (!emailOtpSent || !emailOtp)) {
+    if (requiresEmailOtp && (!emailOtpSent || !emailOtp)) {
       setError('Please verify Email OTP');
       return;
     }
@@ -316,9 +397,11 @@ export default function SimpleRegistration() {
       formData.append('trade_name', sameAsName ? name.trim() : tradeName.trim());
       formData.append('same_as_name', String(sameAsName));
       formData.append('mobile_number', mobileNumber);
-      if (email) {
-        formData.append('email', email.trim());
-        formData.append('email_otp', emailOtp);
+      if (normalizedEmail) {
+        formData.append('email', normalizedEmail);
+        if (requiresEmailOtp && emailOtp) {
+          formData.append('email_otp', emailOtp);
+        }
       }
       formData.append('password', password);
       formData.append('user_type', userType);
@@ -337,7 +420,9 @@ export default function SimpleRegistration() {
         if (file) formData.append('documents', file);
       });
 
-      const { data, error } = await api.registration.register(formData);
+      const { data, error } = reentryMode
+        ? await api.registration.registerReentry(reentryToken, formData)
+        : await api.registration.register(formData);
       
       if (error) {
         setError(error.message || error.error || 'Registration failed');
@@ -364,13 +449,30 @@ export default function SimpleRegistration() {
     }
   };
 
+  if (loadingReentryData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Loading Re-Entry Form</h2>
+          <p className="text-gray-600">Please wait while we fetch your rejected registration details.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-emerald-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Registration Received</h2>
-          <p className="text-gray-600 mb-4">Please wait for admin approval. You will receive an email when your account is approved. Until then, you cannot log in.</p>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">
+            {reentryMode ? 'Re-Submission Received' : 'Registration Received'}
+          </h2>
+          <p className="text-gray-600 mb-4">
+            {reentryMode
+              ? 'Your corrected details have been submitted. Please wait for Super Admin approval before login.'
+              : 'Please wait for admin approval. You will receive an email when your account is approved. Until then, you cannot log in.'}
+          </p>
           {email && (
             <p className="text-sm text-gray-500 mb-4">We have sent a confirmation to your email. You will get another email once an admin approves your account.</p>
           )}
@@ -478,34 +580,53 @@ export default function SimpleRegistration() {
                 </div>
               )}
 
+              {reentryMode && (
+                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm font-semibold text-amber-900">Rejected Registration Re-Entry</p>
+                  <p className="text-xs text-amber-800 mt-1">
+                    Update details and submit again. It will go back to Super Admin approval.
+                  </p>
+                  {reentryDeclineReason && (
+                    <p className="text-xs text-red-700 mt-2">Reason: {reentryDeclineReason}</p>
+                  )}
+                </div>
+              )}
+
               {/* Step 1: User Details & User Type Selection */}
               {step === 1 && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Step 1: Who Are You?</h3>
-                    <p className="text-sm text-gray-600 mb-4">Select your role to get started.</p>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                      {reentryMode ? 'Step 1: Review Details' : 'Step 1: Who Are You?'}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      {reentryMode ? 'Correct your details and continue for re-submission.' : 'Select your role to get started.'}
+                    </p>
                   </div>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       I am a <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={userType}
-                      onChange={(e) => {
-                        setUserType(e.target.value);
-                        setError('');
-                      }}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent appearance-none bg-white"
-                      required
-                    >
-                      <option value="">Select your role</option>
-                      {USER_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={userType}
+                        onChange={(e) => {
+                          setUserType(e.target.value);
+                          setError('');
+                        }}
+                        className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent appearance-none bg-white"
+                        required
+                      >
+                        <option value="">I am a --</option>
+                        {USER_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>
+                            {type.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                    </div>
                   </div>
 
                   <div>
@@ -580,15 +701,26 @@ export default function SimpleRegistration() {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Password <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="At least 6 characters"
-                      minLength={6}
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full px-4 py-3 pr-11 border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                        placeholder="At least 6 characters"
+                        minLength={6}
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="border-t border-gray-200 pt-4 mt-4">
@@ -766,15 +898,17 @@ export default function SimpleRegistration() {
               {step === 4 && (
                 <div className="space-y-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Step 4: {email ? 'Verify Email OTP' : 'Confirm & Register'}</h3>
-                    {email ? (
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Step 4: {requiresEmailOtp ? 'Verify Email OTP' : 'Confirm & Register'}</h3>
+                    {requiresEmailOtp ? (
                       <p className="text-sm text-gray-600 mb-4">Enter the OTP sent to your email for verification.</p>
                     ) : (
-                      <p className="text-sm text-gray-600 mb-4">You did not provide an email. Click Register to submit. You will need to wait for admin approval before you can log in.</p>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Click Register to submit. Your account will remain locked until approval.
+                      </p>
                     )}
                   </div>
                   
-                  {email ? (
+                  {requiresEmailOtp ? (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Email OTP <span className="text-red-500">*</span>
@@ -816,7 +950,7 @@ export default function SimpleRegistration() {
                   className="w-full py-3 px-6 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-all duration-200"
                 >
                   {step === 4 ? (
-                    loading ? 'Registering...' : 'Register'
+                    loading ? (reentryMode ? 'Resubmitting...' : 'Registering...') : (reentryMode ? 'Resubmit' : 'Register')
                   ) : step === 1 && checkingMobile ? (
                     'Checking...'
                   ) : (

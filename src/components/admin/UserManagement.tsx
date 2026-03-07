@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { type Profile } from '../../lib/client';
-import { Search, Filter, Shield, CheckCircle, XCircle, User, Building, Eye, FileText, Download, ThumbsUp, ThumbsDown, UserPlus } from 'lucide-react';
+import { Search, Filter, Shield, XCircle, User, Building, Eye, EyeOff, FileText, Download, ThumbsUp, ThumbsDown, UserPlus, Link2, Copy } from 'lucide-react';
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -41,13 +41,48 @@ async function adminUpdateUser(userId: string, body: Record<string, unknown>) {
   return res.json();
 }
 
+async function adminGetUserPassword(userId: string) {
+  const token = localStorage.getItem('auth_token');
+  const id = String(userId).trim();
+  if (!id || id === 'undefined') throw new Error('Invalid user id');
+  const res = await fetch(`${apiUrl}/admin/users/${encodeURIComponent(id)}/password`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || data.message || 'Failed to fetch password');
+  }
+  return data;
+}
+
+async function adminGenerateReentryLink(userId: string) {
+  const token = localStorage.getItem('auth_token');
+  const id = String(userId).trim();
+  if (!id || id === 'undefined') throw new Error('Invalid user id');
+  const res = await fetch(`${apiUrl}/admin/users/${encodeURIComponent(id)}/reentry-link`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error || data.message || 'Failed to generate re-entry link');
+  }
+  return data;
+}
+
 interface UserManagementProps {
   users: Profile[];
   onRefresh: () => void;
   onUserUpdated?: (userId: string, updates: Partial<Profile>) => void;
+  currentUserRole?: Profile['role'];
 }
 
-export default function UserManagement({ users, onRefresh, onUserUpdated }: UserManagementProps) {
+export default function UserManagement({ users, onRefresh, onUserUpdated, currentUserRole }: UserManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [kycFilter, setKycFilter] = useState<string>('all');
@@ -62,6 +97,14 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [disapproveConfirmUserId, setDisapproveConfirmUserId] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordValue, setPasswordValue] = useState<string | null>(null);
+  const [loadingPassword, setLoadingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [reentryLinks, setReentryLinks] = useState<Record<string, string>>({});
+  const [generatingReentryLinkFor, setGeneratingReentryLinkFor] = useState<string | null>(null);
+  const canApproveUsers = currentUserRole === 'super_admin';
+  const canGenerateReentryLink = currentUserRole === 'admin' || currentUserRole === 'super_admin';
 
   const filteredUsers = users.filter(user => {
     const matchesSearch =
@@ -150,66 +193,87 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
     };
   }, [viewerDoc?.view_url, viewerDoc?.view_access, viewerDoc?.file_name]);
 
-  const handleChangeRole = async (userId: string, newRole: 'farmer' | 'trader' | 'admin') => {
-    setLoading(true);
-    setError('');
-    try {
-      await adminUpdateUser(userId, { role: newRole });
-      onRefresh();
-      if (selectedUser?.id === userId) setSelectedUser({ ...selectedUser, role: newRole });
-    } catch (e: any) {
-      setError(e.message || 'Failed to update');
-    }
-    setLoading(false);
-  };
-
   const handleApprove = async (userId: string) => {
+    if (!canApproveUsers) {
+      setError('Only Super Admin can approve user registration');
+      return;
+    }
     const id = typeof userId === 'string' ? userId.trim() : '';
     if (!id) return;
     setLoading(true);
     setError('');
-    const patch = { approval_status: 'approved' as const };
+    const patch = { approval_status: 'approved' as const, declined_reason: '' };
     const previousStatus = (users.find(u => getUserId(u) === id) as any)?.approval_status;
+    const previousDeclinedReason = (users.find(u => getUserId(u) === id) as any)?.declined_reason ?? '';
     onUserUpdated?.(id, patch);
     if (selectedUser && getUserId(selectedUser) === id) setSelectedUser({ ...selectedUser, ...patch });
     try {
-      await adminUpdateUser(id, { approval_status: 'approved' });
+      await adminUpdateUser(id, { approval_status: 'approved', declined_reason: '' });
       onRefresh();
     } catch (e: any) {
-      onUserUpdated?.(id, { approval_status: previousStatus ?? 'pending' });
-      if (selectedUser && getUserId(selectedUser) === id) setSelectedUser(prev => prev ? { ...prev, approval_status: previousStatus ?? 'pending' } : null);
+      onUserUpdated?.(id, { approval_status: previousStatus ?? 'pending', declined_reason: previousDeclinedReason });
+      if (selectedUser && getUserId(selectedUser) === id) {
+        setSelectedUser(prev => prev
+          ? { ...prev, approval_status: previousStatus ?? 'pending', declined_reason: previousDeclinedReason }
+          : null);
+      }
       setError(e.message || 'Failed to approve');
     }
     setLoading(false);
   };
 
   const handleDisapprove = async (userId: string) => {
+    if (!canApproveUsers) {
+      setError('Only Super Admin can decline user registration');
+      return;
+    }
     const id = typeof userId === 'string' ? userId.trim() : '';
     if (!id || id === 'undefined') {
+      setDisapproveConfirmUserId(null);
+      return;
+    }
+    const declineReasonInput = window.prompt('Enter decline reason:', '');
+    if (declineReasonInput === null) {
+      setDisapproveConfirmUserId(null);
+      return;
+    }
+    const declineReason = declineReasonInput.trim();
+    if (!declineReason) {
+      setError('Decline reason is required');
       setDisapproveConfirmUserId(null);
       return;
     }
     setDisapproveConfirmUserId(null);
     setLoading(true);
     setError('');
-    const patch = { approval_status: 'rejected' as const };
+    const patch = { approval_status: 'rejected' as const, declined_reason: declineReason };
     // Optimistic update: update UI immediately so list/card updates without full refresh
     const previousStatus = (users.find(u => getUserId(u) === id) as any)?.approval_status;
+    const previousDeclinedReason = (users.find(u => getUserId(u) === id) as any)?.declined_reason ?? '';
     onUserUpdated?.(id, patch);
     if (selectedUser && getUserId(selectedUser) === id) setSelectedUser({ ...selectedUser, ...patch });
     try {
-      await adminUpdateUser(id, { approval_status: 'rejected' });
+      const updated = await adminUpdateUser(id, { approval_status: 'rejected', declined_reason: declineReason });
+      const generatedLink = String(updated?.reentry_link || '').trim();
+      if (generatedLink) {
+        setReentryLinks((prev) => ({ ...prev, [id]: generatedLink }));
+      }
       onRefresh(); // refetch in background to keep data in sync
     } catch (e: any) {
       // Revert on failure
-      onUserUpdated?.(id, { approval_status: previousStatus ?? 'pending' });
-      if (selectedUser && getUserId(selectedUser) === id) setSelectedUser(prev => prev ? { ...prev, approval_status: previousStatus ?? 'pending' } : null);
+      onUserUpdated?.(id, { approval_status: previousStatus ?? 'pending', declined_reason: previousDeclinedReason });
+      if (selectedUser && getUserId(selectedUser) === id) {
+        setSelectedUser(prev => prev
+          ? { ...prev, approval_status: previousStatus ?? 'pending', declined_reason: previousDeclinedReason }
+          : null);
+      }
       setError(e.message || 'Failed to disapprove');
     }
     setLoading(false);
   };
 
   const pendingUsers = users.filter(u => (u as any).approval_status === 'pending');
+  const rejectedUsers = users.filter(u => (u as any).approval_status === 'rejected');
 
   const getUserId = (user: Profile | null): string => {
     if (!user) return '';
@@ -218,15 +282,78 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
     return typeof raw === 'string' ? raw.trim() : String(raw);
   };
 
+  const copyToClipboard = async (text: string, successMessage = 'Link copied') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert(successMessage);
+    } catch {
+      window.prompt('Copy this link:', text);
+    }
+  };
+
+  const handleGenerateReentryLink = async (userId: string) => {
+    const id = String(userId || '').trim();
+    if (!id) return;
+    setGeneratingReentryLinkFor(id);
+    setError('');
+    try {
+      const data = await adminGenerateReentryLink(id);
+      const link = String(data?.reentry_link || '').trim();
+      if (!link) {
+        throw new Error('Link was not returned by server');
+      }
+      setReentryLinks((prev) => ({ ...prev, [id]: link }));
+      await copyToClipboard(link, 'Re-entry link generated and copied');
+    } catch (e: any) {
+      setError(e.message || 'Failed to generate re-entry link');
+    } finally {
+      setGeneratingReentryLinkFor(null);
+    }
+  };
+
   // Fetch user verification document when user is selected
   useEffect(() => {
     const userId = getUserId(selectedUser);
+    setShowPassword(false);
+    setPasswordValue(null);
+    setPasswordError(null);
     if (userId) {
       fetchUserDocument(userId);
     } else {
       setUserDocument(null);
     }
   }, [selectedUser]);
+
+  const handleTogglePassword = async () => {
+    if (!canApproveUsers) return;
+    if (showPassword) {
+      setShowPassword(false);
+      return;
+    }
+
+    if (passwordValue) {
+      setShowPassword(true);
+      return;
+    }
+
+    const userId = getUserId(selectedUser);
+    if (!userId) return;
+
+    setLoadingPassword(true);
+    setPasswordError(null);
+    try {
+      const data = await adminGetUserPassword(userId);
+      setPasswordValue(data?.password || null);
+      setShowPassword(true);
+      if (!data?.available) {
+        setPasswordError('Password not available for this user (older account).');
+      }
+    } catch (e: any) {
+      setPasswordError(e.message || 'Failed to load password');
+    } finally {
+      setLoadingPassword(false);
+    }
+  };
 
   const fetchUserDocument = async (userId: string) => {
     if (!userId || userId === 'undefined') {
@@ -414,29 +541,111 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
                       </button>
                     </div>
                     <div className="flex gap-2">
-                      <button
-                        onClick={() => handleApprove(getUserId(user) || '')}
-                        disabled={loading}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg disabled:opacity-50"
-                      >
-                        <ThumbsUp className="w-4 h-4" />
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => { const id = getUserId(user); if (id) setDisapproveConfirmUserId(id); }}
-                        disabled={loading}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-50"
-                        title="Set back to pending"
-                      >
-                        <ThumbsDown className="w-4 h-4" />
-                        Disapprove
-                      </button>
+                      {canApproveUsers ? (
+                        <>
+                          <button
+                            onClick={() => handleApprove(getUserId(user) || '')}
+                            disabled={loading}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg disabled:opacity-50"
+                          >
+                            <ThumbsUp className="w-4 h-4" />
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => { const id = getUserId(user); if (id) setDisapproveConfirmUserId(id); }}
+                            disabled={loading}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-50"
+                            title="Decline"
+                          >
+                            <ThumbsDown className="w-4 h-4" />
+                            Decline
+                          </button>
+                        </>
+                      ) : (
+                        <p className="text-xs text-amber-800 bg-amber-100 px-2 py-2 rounded-lg w-full text-center">
+                          Pending for Super Admin approval
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
               {pendingUsers.length > 12 && (
                 <p className="text-sm text-amber-800 mt-3">+ {pendingUsers.length - 12} more in table below</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {rejectedUsers.length > 0 && (
+          <div className="mb-2 rounded-xl border-2 border-red-200 bg-gradient-to-br from-red-50 to-rose-50 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-red-200 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-6 h-6 text-red-700" />
+                <h3 className="text-lg font-semibold text-red-900">Rejected Registrations</h3>
+                <span className="px-2.5 py-0.5 text-sm font-medium rounded-full bg-red-200 text-red-900">
+                  {rejectedUsers.length} rejected
+                </span>
+              </div>
+              <p className="text-sm text-red-800">Generate re-entry links and share with users for correction.</p>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {rejectedUsers.slice(0, 9).map((user, idx) => {
+                  const id = getUserId(user) || `rejected-${idx}`;
+                  const link = reentryLinks[id];
+                  return (
+                    <div key={id} className="bg-white rounded-lg border border-red-100 p-4 shadow-sm">
+                      <div className="mb-3">
+                        <p className="font-medium text-gray-900 truncate">{user.name}</p>
+                        <p className="text-xs text-gray-500 truncate">{user.email || (user as any).mobile_number}</p>
+                        {(user as any).declined_reason && (
+                          <p className="text-xs text-red-700 mt-1 line-clamp-2" title={(user as any).declined_reason}>
+                            {(user as any).declined_reason}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {canGenerateReentryLink ? (
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateReentryLink(id)}
+                            disabled={generatingReentryLinkFor === id}
+                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+                          >
+                            <Link2 className="w-4 h-4" />
+                            {generatingReentryLinkFor === id ? 'Generating...' : 'Generate Link'}
+                          </button>
+                        ) : (
+                          <p className="flex-1 text-xs text-red-700 bg-red-100 px-2 py-2 rounded-lg text-center">
+                            Admin access needed
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUser(user)}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg"
+                          title="View details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+                      {link && (
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(link)}
+                          className="mt-2 text-xs text-blue-700 hover:text-blue-800 underline break-all text-left"
+                          title={link}
+                        >
+                          Copy latest link
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {rejectedUsers.length > 9 && (
+                <p className="text-sm text-red-800 mt-3">+ {rejectedUsers.length - 9} more in table below</p>
               )}
             </div>
           </div>
@@ -493,12 +702,13 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full capitalize ${
+                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                      user.role === 'super_admin' ? 'bg-violet-100 text-violet-800' :
                       user.role === 'admin' ? 'bg-red-100 text-red-800' :
                       user.role === 'farmer' ? 'bg-green-100 text-green-800' :
                       'bg-blue-100 text-blue-800'
                     }`}>
-                      {user.role}
+                      {user.role === 'super_admin' ? 'Super Admin' : user.role}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -518,6 +728,11 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
                     }`}>
                       {(user as any).approval_status === 'approved' ? 'Approved' : (user as any).approval_status === 'rejected' ? 'Rejected' : 'Pending'}
                     </span>
+                    {(user as any).approval_status === 'rejected' && (user as any).declined_reason && (
+                      <p className="mt-1 text-xs text-red-700 max-w-xs truncate" title={(user as any).declined_reason}>
+                        {(user as any).declined_reason}
+                      </p>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {new Date((user as any).createdAt || user.created_at).toLocaleDateString()}
@@ -583,7 +798,40 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
                     )}
                     <div>
                       <span className="text-gray-600">Password:</span>
-                      <p className="text-gray-900 font-mono">•••••••• (stored securely – not visible)</p>
+                      {canApproveUsers ? (
+                        <div className="mt-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-gray-900 font-mono">
+                              {showPassword
+                                ? (passwordValue || 'Not available')
+                                : '••••••••'}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleTogglePassword}
+                              disabled={loadingPassword}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 rounded disabled:opacity-50"
+                            >
+                              {showPassword ? (
+                                <>
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                  Hide
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-3.5 h-3.5" />
+                                  {loadingPassword ? 'Loading...' : 'View'}
+                                </>
+                              )}
+                            </button>
+                          </div>
+                          {passwordError && (
+                            <p className="text-xs text-amber-700 mt-1">{passwordError}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-gray-900 font-mono">•••••••• (visible to Super Admin only)</p>
+                      )}
                     </div>
                     <div>
                       <span className="text-gray-600">Mobile Number:</span>
@@ -649,7 +897,7 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-600">Current Role:</span>
-                      <p className="capitalize font-medium text-gray-900">{selectedUser.role || 'N/A'}</p>
+                      <p className="capitalize font-medium text-gray-900">{selectedUser.role === 'super_admin' ? 'Super Admin' : (selectedUser.role || 'N/A')}</p>
                     </div>
                     <div>
                       <span className="text-gray-600">KYC Status:</span>
@@ -659,6 +907,12 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
                       <span className="text-gray-600">Approval Status:</span>
                       <p className="capitalize font-medium text-gray-900">{(selectedUser as any).approval_status ?? 'pending'}</p>
                     </div>
+                    {(selectedUser as any).approval_status === 'rejected' && (selectedUser as any).declined_reason && (
+                      <div>
+                        <span className="text-gray-600">Decline Reason:</span>
+                        <p className="text-red-700 font-medium">{(selectedUser as any).declined_reason}</p>
+                      </div>
+                    )}
                     <div>
                       <span className="text-gray-600">Created At:</span>
                       <p className="text-gray-900">{selectedUser.created_at ? new Date(selectedUser.created_at).toLocaleString() : 'N/A'}</p>
@@ -842,48 +1096,80 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Change User Role
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      defaultValue={selectedUser.role}
-                      onChange={(e) => handleChangeRole(getUserId(selectedUser) || '', e.target.value as any)}
-                      disabled={loading}
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-                    >
-                      <option value="farmer">Farmer</option>
-                      <option value="trader">Trader</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Account Approval
                   </label>
-                  <div className="flex gap-2">
-                    {(selectedUser as any).approval_status !== 'approved' ? (
-                      <button
-                        onClick={() => handleApprove(getUserId(selectedUser) || '')}
-                        disabled={loading}
-                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        <ThumbsUp className="w-4 h-4" />
-                        Approve (sends email if they have one)
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => { const id = getUserId(selectedUser); if (id) setDisapproveConfirmUserId(id); }}
-                        disabled={loading}
-                        className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        <ThumbsDown className="w-4 h-4" />
-                        Disapprove (user cannot login)
-                      </button>
+                  {canApproveUsers ? (
+                    <>
+                      {(selectedUser as any).approval_status === 'pending' ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleApprove(getUserId(selectedUser) || '')}
+                            disabled={loading}
+                            className="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            <ThumbsUp className="w-4 h-4" />
+                            Approve (sends email if they have one)
+                          </button>
+                          <button
+                            onClick={() => { const id = getUserId(selectedUser); if (id) setDisapproveConfirmUserId(id); }}
+                            disabled={loading}
+                            className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                          >
+                            <ThumbsDown className="w-4 h-4" />
+                            Decline
+                          </button>
+                        </div>
+                      ) : (selectedUser as any).approval_status === 'approved' ? (
+                        <p className="text-sm text-green-800 bg-green-100 px-3 py-2 rounded-lg">
+                          This registration is approved. Decision is locked.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-red-800 bg-red-100 px-3 py-2 rounded-lg">
+                          This registration is declined. Decision is locked until Admin re-submits.
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-amber-800 bg-amber-100 px-3 py-2 rounded-lg">
+                      Only Super Admin can approve or decline user registration.
+                    </p>
+                  )}
+                </div>
+
+                {(selectedUser as any).approval_status === 'rejected' && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <p className="text-sm font-medium text-red-900">Re-Entry Link</p>
+                        <p className="text-xs text-red-800">Share this link with user to refill and re-submit registration.</p>
+                      </div>
+                      {canGenerateReentryLink ? (
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateReentryLink(getUserId(selectedUser))}
+                          disabled={generatingReentryLinkFor === getUserId(selectedUser)}
+                          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+                        >
+                          <Link2 className="w-4 h-4" />
+                          {generatingReentryLinkFor === getUserId(selectedUser) ? 'Generating...' : 'Generate Link'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {reentryLinks[getUserId(selectedUser)] && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <p className="text-xs text-gray-700 break-all">{reentryLinks[getUserId(selectedUser)]}</p>
+                        <button
+                          type="button"
+                          onClick={() => copyToClipboard(reentryLinks[getUserId(selectedUser)])}
+                          className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-white border border-gray-200 rounded hover:bg-gray-50"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          Copy
+                        </button>
+                      </div>
                     )}
                   </div>
-                </div>
+                )}
 
               </div>
             </div>
@@ -984,8 +1270,8 @@ export default function UserManagement({ users, onRefresh, onUserUpdated }: User
       {disapproveConfirmUserId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setDisapproveConfirmUserId(null)}>
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Disapprove user?</h3>
-            <p className="text-gray-600 mb-6">This user will not be able to log in until approved again. Are you sure you want to disapprove?</p>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Decline user?</h3>
+            <p className="text-gray-600 mb-6">A reason popup will open next. After decline, decision will be locked until Admin re-submits.</p>
             <div className="flex gap-3 justify-end">
               <button
                 type="button"

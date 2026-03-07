@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { Sprout, Shield, CheckCircle } from 'lucide-react';
+import { Sprout, Shield, CheckCircle, ChevronDown } from 'lucide-react';
 import Navigation from './Navigation';
 import Footer from './Footer';
 // @ts-ignore - JS module without types
@@ -24,7 +24,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
   const [state, setState] = useState('');
   const [country, setCountry] = useState('India');
   const [pincode, setPincode] = useState('');
-  const [role, setRole] = useState<'farmer' | 'trader' | 'fpo' | 'corporate' | 'miller' | 'financer' | 'admin'>('farmer');
+  const [role, setRole] = useState<'' | 'farmer' | 'trader' | 'fpo' | 'corporate' | 'miller' | 'financer' | 'admin'>('');
   const [entityType, setEntityType] = useState<'individual' | 'company'>('individual');
   const [businessName, setBusinessName] = useState('');
   const [businessType, setBusinessType] = useState<'private_limited' | 'partnership' | 'proprietorship' | 'llp'>('private_limited');
@@ -337,7 +337,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
         err?.error === 'Account pending approval'
       );
       const errorMessage = isRejected
-        ? 'Your account was not approved. Please contact support.'
+        ? 'Your account was not approved. Please contact Admin/Super Admin for re-entry link.'
         : isPendingApproval
           ? 'Your account is not approved. Please wait for approval.'
           : (rawMessage || 'An error occurred. Please try again.');
@@ -455,28 +455,31 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                     I am a <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    value={role}
-                    onChange={(e) => {
-                      const newRole = e.target.value as any;
-                      setRole(newRole);
-                      // Auto-set entity_type based on role
-                      if (newRole === 'farmer' || newRole === 'trader') {
-                        setEntityType('individual');
-                      } else if (newRole === 'fpo' || newRole === 'corporate' || newRole === 'miller' || newRole === 'financer') {
-                        setEntityType('company');
-                      }
-                    }}
-                    className="w-full px-4 py-3 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all"
-                  >
-                    <option value="">Select your role</option>
-                    <option value="farmer">Farmer</option>
-                    <option value="trader">Trader</option>
-                    <option value="fpo">FPO (Farmer Producer Organization)</option>
-                    <option value="corporate">Corporate</option>
-                    <option value="miller">Miller/Processor</option>
-                    <option value="financer">Financer</option>
-                  </select>
+                  <div className="relative">
+                    <select
+                      value={role}
+                      onChange={(e) => {
+                        const newRole = e.target.value as any;
+                        setRole(newRole);
+                        // Auto-set entity_type based on role
+                        if (newRole === 'farmer' || newRole === 'trader') {
+                          setEntityType('individual');
+                        } else if (newRole === 'fpo' || newRole === 'corporate' || newRole === 'miller' || newRole === 'financer') {
+                          setEntityType('company');
+                        }
+                      }}
+                      className="w-full px-4 py-3 pr-10 text-sm sm:text-base border border-gray-300 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all appearance-none bg-white"
+                    >
+                      <option value="">I am a --</option>
+                      <option value="farmer">Farmer</option>
+                      <option value="trader">Trader</option>
+                      <option value="fpo">FPO (Farmer Producer Organization)</option>
+                      <option value="corporate">Corporate</option>
+                      <option value="miller">Miller/Processor</option>
+                      <option value="financer">Financer</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  </div>
                 </div>
               </>
             )}

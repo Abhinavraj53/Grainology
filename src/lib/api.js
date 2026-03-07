@@ -321,11 +321,13 @@ class ApiClient {
       }
     },
 
-    sendEmailOTP: async (email) => {
+    sendEmailOTP: async (email, options = {}) => {
       try {
+        const body = { email };
+        if (options?.reentry_token) body.reentry_token = options.reentry_token;
         const data = await this.request('/registration/send-email-otp', {
           method: 'POST',
-          body: JSON.stringify({ email }),
+          body: JSON.stringify(body),
         });
         return { data, error: null };
       } catch (error) {
@@ -368,6 +370,40 @@ class ApiClient {
           this.setToken(data.session.access_token);
         }
         
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+
+    getReentryData: async (token) => {
+      try {
+        const data = await this.request(`/registration/reentry/${encodeURIComponent(token)}`, {
+          method: 'GET',
+        });
+        return { data, error: null };
+      } catch (error) {
+        return { data: null, error };
+      }
+    },
+
+    registerReentry: async (token, formData) => {
+      try {
+        const url = `${API_BASE_URL}/registration/reentry/${encodeURIComponent(token)}`;
+        const authToken = localStorage.getItem('auth_token');
+
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {},
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Registration re-submission failed' }));
+          throw error;
+        }
+
+        const data = await response.json();
         return { data, error: null };
       } catch (error) {
         return { data: null, error };
@@ -636,4 +672,3 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
-

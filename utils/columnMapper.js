@@ -30,38 +30,52 @@ export const getMappedValue = (record, columnMapping, fallbackNames = [], defaul
 };
 
 /**
- * Parse date from various formats
+ * Parse date from various formats, returning both the normalized value and a validity flag.
+ * Accepts: DD/MM/YY, DD/MM/YYYY, YYYY-MM-DD, or any string parsable by Date().
+ * Blank / N/A values are treated as today's date and considered valid.
  * @param {string} dateValue - Date value from CSV
- * @returns {string} Date in YYYY-MM-DD format
+ * @returns {{ date: string|null, isValid: boolean }} Normalized date (YYYY-MM-DD) and validity
  */
 export const parseDate = (dateValue) => {
-  if (!dateValue || dateValue === '' || dateValue === 'N/A') {
-    return new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split('T')[0];
+
+  if (!dateValue || dateValue === '' || dateValue === 'N/A' || String(dateValue).trim() === '') {
+    return { date: today, isValid: true };
   }
-  
+
+  const raw = String(dateValue).trim();
+
   // Handle DD/MM/YY or DD/MM/YYYY format
-  if (dateValue.includes('/')) {
-    const parts = dateValue.split('/');
+  if (raw.includes('/')) {
+    const parts = raw.split('/');
     if (parts.length === 3) {
       const day = parts[0].padStart(2, '0');
       const month = parts[1].padStart(2, '0');
       const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
-      return `${year}-${month}-${day}`;
+      const candidate = `${year}-${month}-${day}`;
+      const parsed = new Date(candidate);
+      return isNaN(parsed.getTime())
+        ? { date: null, isValid: false }
+        : { date: parsed.toISOString().split('T')[0], isValid: true };
     }
+    return { date: null, isValid: false };
   }
-  
+
   // Handle YYYY-MM-DD format
-  if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return dateValue;
+  if (raw.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const parsed = new Date(raw);
+    return isNaN(parsed.getTime())
+      ? { date: null, isValid: false }
+      : { date: parsed.toISOString().split('T')[0], isValid: true };
   }
-  
-  // Try to parse as Date object
-  const parsed = new Date(dateValue);
+
+  // Try to parse as Date object (ISO, RFC2822, etc.)
+  const parsed = new Date(raw);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split('T')[0];
+    return { date: parsed.toISOString().split('T')[0], isValid: true };
   }
-  
-  return new Date().toISOString().split('T')[0];
+
+  return { date: null, isValid: false };
 };
 
 /**

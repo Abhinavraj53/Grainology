@@ -381,11 +381,12 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     };
     const buildDuplicateKey = (record) => {
       const state = toNAVal(getVal(record, columnMapping.state, ['State', 'state'], ''));
-      const seller = toNAVal(getVal(record, columnMapping.seller_name || columnMapping.customer_name, ['Seller Name', 'seller_name', 'Customer', 'customer'], ''));
+      const seller = toNAVal(getVal(record, columnMapping.seller_name, ['Seller Name', 'seller_name', 'Seller'], ''));
       const location = toNAVal(getVal(record, columnMapping.location, ['Location', 'location'], ''));
       const warehouse = toNAVal(getVal(record, columnMapping.warehouse_name, ['Warehouse Name', 'warehouse_name', 'Warehouse'], ''));
       const dateVal = getVal(record, columnMapping.transaction_date, ['Date of Transaction', 'transaction_date', 'Date'], '');
-      const date = dateVal ? parseDate(dateVal) : '';
+      const parsedDateVal = dateVal ? parseDate(dateVal) : { date: '', isValid: true };
+      const date = parsedDateVal && parsedDateVal.isValid ? (parsedDateVal.date || '') : '';
       const vehicle = toNAVal(getVal(record, columnMapping.vehicle_no, ['Vehicle No.', 'vehicle_no', 'Vehicle Number'], ''));
       const netWt = getVal(record, columnMapping.net_weight_mt, ['Net Weight in MT', 'net_weight_mt', 'Net Weight'], '');
       const netWtNorm = netWt === '' ? '' : String(parseNumeric(netWt, 0));
@@ -423,15 +424,18 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       User.find({ role: { $ne: 'admin' } })
     ]);
 
-    const validCommodities = new Set(commodities.map(c => c.name));
-    const validVarieties = new Map(); // commodity -> Set of varieties
-    varieties.forEach(v => {
-      if (!validVarieties.has(v.commodity_name)) {
-        validVarieties.set(v.commodity_name, new Set());
+    const normalize = (value) => (value === null || value === undefined ? '' : String(value).trim().toUpperCase());
+
+    const validCommodities = new Set(commodities.map((c) => normalize(c.name)));
+    const validVarieties = new Map(); // normalized commodity -> Set of normalized varieties
+    varieties.forEach((v) => {
+      const commodityKey = normalize(v.commodity_name);
+      if (!validVarieties.has(commodityKey)) {
+        validVarieties.set(commodityKey, new Set());
       }
-      validVarieties.get(v.commodity_name).add(v.variety_name);
+      validVarieties.get(commodityKey).add(normalize(v.variety_name));
     });
-    const validWarehouses = new Set(warehouses.map(w => w.name));
+    const validWarehouses = new Set(warehouses.map((w) => normalize(w.name)));
     const validStates = new Set([
       'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
       'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
@@ -441,13 +445,14 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       'Andaman and Nicobar Islands', 'Chandigarh', 'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
     ]);
     const locationDocs = await LocationMaster.find({ is_active: true }).select('name').lean();
-    const validLocations = new Set(locationDocs.map(l => (l.name || '').toUpperCase()));
+    const validLocations = new Set(locationDocs.map((l) => normalize(l.name)));
     const validSellerNames = new Set(allCustomers.map(c => c.name));
 
     // Transform and validate records - NO VALIDATION for CSV uploader (only warnings)
     const orders = [];
     const errors = [];
     const warnings = []; // For CSV uploader, use warnings instead of errors
+    const validationErrors = [];
 
     // Helper function to sanitize numeric fields in an order object (prevent NaN)
     const sanitizeNumericFields = (order) => {
@@ -503,6 +508,7 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
       const rowNum = i + 2; // +2 because row 1 is header, and arrays are 0-indexed
+      const rowErrors = [];
 
       if (skipDuplicates && duplicateRowNumbers.includes(rowNum)) {
         continue;
@@ -517,9 +523,22 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           ['Date of Transaction', 'transaction_date', 'Transaction Date', 'Date'],
           ''
         );
-        const transactionDate = parseDate(transactionDateValue);
+        const trimmedDate = String(transactionDateValue || '').trim();
+        let transactionDate = '';
+        if (trimmedDate) {
+          const ddmmyyyy = /^\d{2}\/\d{2}\/\d{4}$/;
+          if (!ddmmyyyy.test(trimmedDate)) {
+            rowErrors.push(`Row ${rowNum}: Transaction Date \"${transactionDateValue}\" is invalid. Please use DD/MM/YYYY format (dots or dashes are not allowed).`);
+          } else {
+            const parsed = parseDate(transactionDateValue);
+            transactionDate = parsed.date;
+            if (!parsed.isValid) {
+              rowErrors.push(`Row ${rowNum}: Transaction Date \"${transactionDateValue}\" is invalid. Please use DD/MM/YYYY format.`);
+            }
+          }
+        }
 
-        // Parse other deductions from columns Other Deduction 1-9 with remarks using column mapping
+        // Parse other deductions from columns Other Deduction 1-9 (single remark at order level only)
         const otherDeductions = [];
         for (let j = 1; j <= 9; j++) {
           const dedMappingKey = `other_deduction_${j}`;
@@ -529,83 +548,80 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
             [`Other Deduction ${j}`, `other_deduction_${j}`, `Other Deduction ${j} Amount`],
             ''
           );
-          const dedRemarksMappingKey = `other_deduction_${j}_remarks`;
-          const dedRemarks = getMappedValue(
-            record,
-            columnMapping[dedRemarksMappingKey],
-            [`Other Deduction ${j} Remarks`, `other_deduction_${j}_remarks`],
-            ''
-          );
           
           if (dedAmount && dedAmount !== '-' && dedAmount !== 'Not Available' && String(dedAmount).trim() !== '') {
             const amount = parseNumeric(dedAmount);
             if (amount > 0) {
               otherDeductions.push({
                 amount: amount,
-                remarks: dedRemarks || ''
+                remarks: '' // use only final Remarks column
               });
             }
           }
         }
 
-        // Get customer from CSV - Seller Name column (primary) or Customer column (fallback)
+        // Get customer from CSV - Seller Name column only
         const customerName = toNA(getMappedValue(
           record,
-          columnMapping.seller_name || columnMapping.customer_name,
-          ['Seller Name', 'seller_name', 'Seller', 'Customer', 'customer'],
+          columnMapping.seller_name,
+          ['Seller Name', 'seller_name', 'Seller'],
           ''
         ));
         
-        // Find customer by name - use fallback if not found (no validation errors for CSV upload)
-        let customer = allCustomers.find(c => c.name === customerName);
+        // Seller must exist in master data
+        const customer = allCustomers.find(c => c.name === customerName);
         if (!customer) {
-          // Use fallback customer instead of skipping row
-          const fallbackCustomer = allCustomers.length > 0 ? allCustomers[0] : null;
-          if (fallbackCustomer) {
-            customer = fallbackCustomer;
-            if (customerName && customerName !== 'N/A') {
-              warnings.push(`Row ${rowNum}: Customer "${customerName}" not found. Using "${customer.name}" instead.`);
-            }
-          } else {
-            errors.push(`Row ${rowNum}: No customers found in system.`);
-            continue;
-          }
+          rowErrors.push(`Row ${rowNum}: Seller "${customerName}" is not present in master data. Please add the seller before uploading.`);
         }
 
         // Get all fields from CSV using column mapping with fallbacks
         const state = toNA(getMappedValue(record, columnMapping.state, ['State', 'state'], ''));
-        const sellerName = toNA(getMappedValue(record, columnMapping.seller_name, ['Seller Name', 'seller_name', 'Seller', 'Customer', 'customer'], customerName));
+        const sellerName = toNA(getMappedValue(record, columnMapping.seller_name, ['Seller Name', 'seller_name', 'Seller'], customerName));
         const location = toNA(getMappedValue(record, columnMapping.location, ['Location', 'location'], ''));
         const warehouseName = toNA(getMappedValue(record, columnMapping.warehouse_name, ['Warehouse Name', 'warehouse_name', 'Warehouse'], ''));
         const commodity = toNA(getMappedValue(record, columnMapping.commodity, ['Commodity', 'commodity'], 'Paddy'));
         const variety = toNA(getMappedValue(record, columnMapping.variety, ['Variety', 'variety'], ''));
 
-        // No validation for CSV uploader - just warnings (all data accepted as-is)
+        // Master data validation (fail fast for the requested fields)
+        const normalizedLocation = normalize(location);
+        if (location && location !== 'N/A' && !validLocations.has(normalizedLocation)) {
+          rowErrors.push(`Row ${rowNum}: Location \"${location}\" is not present in master data. Please add the location before uploading.`);
+        }
+
+        const normalizedWarehouse = normalize(warehouseName);
+        if (warehouseName && warehouseName !== 'N/A' && !validWarehouses.has(normalizedWarehouse)) {
+          rowErrors.push(`Row ${rowNum}: Warehouse \"${warehouseName}\" is not present in master data. Please add the warehouse before uploading.`);
+        }
+
+        const normalizedCommodity = normalize(commodity);
+        if (commodity && commodity !== 'N/A' && !validCommodities.has(normalizedCommodity)) {
+          rowErrors.push(`Row ${rowNum}: Commodity \"${commodity}\" is not present in master data. Please add the commodity before uploading.`);
+        }
+
+        const normalizedVariety = normalize(variety);
+        if (variety && variety !== 'N/A') {
+          if (!commodity || commodity === 'N/A') {
+            rowErrors.push(`Row ${rowNum}: Variety \"${variety}\" provided but Commodity is missing; please add a valid commodity and variety in master data.`);
+          }
+          const commodityVarieties = validVarieties.get(normalizedCommodity);
+          if (!commodityVarieties || !commodityVarieties.has(normalizedVariety)) {
+            rowErrors.push(`Row ${rowNum}: Variety \"${variety}\" is not present for commodity \"${commodity}\" in master data. Please add it before uploading.`);
+          }
+        }
+
+        // If any validations failed for this row, collect and move on to next row
+        if (rowErrors.length > 0) {
+          validationErrors.push(...rowErrors);
+          continue;
+        }
+
+        // Non-blocking checks that can stay warnings
         if (state && !validStates.has(state)) {
-          warnings.push(`Row ${rowNum}: State "${state}" not in master list, but accepting as-is.`);
+          warnings.push(`Row ${rowNum}: State \"${state}\" not in master list, but accepting as-is.`);
         }
 
         if (sellerName && sellerName !== customerName) {
-          warnings.push(`Row ${rowNum}: Seller Name "${sellerName}" differs from Customer "${customerName}", but accepting as-is.`);
-        }
-
-        if (location && !validLocations.has(location.toUpperCase())) {
-          warnings.push(`Row ${rowNum}: Location "${location}" not in master list, but accepting as-is.`);
-        }
-
-        if (warehouseName && !validWarehouses.has(warehouseName)) {
-          warnings.push(`Row ${rowNum}: Warehouse "${warehouseName}" not in master list, but accepting as-is.`);
-        }
-
-        if (commodity && !validCommodities.has(commodity)) {
-          warnings.push(`Row ${rowNum}: Commodity "${commodity}" not in master list, but accepting as-is.`);
-        }
-
-        if (variety && commodity && validCommodities.has(commodity)) {
-          const commodityVarieties = validVarieties.get(commodity);
-          if (commodityVarieties && !commodityVarieties.has(variety)) {
-            warnings.push(`Row ${rowNum}: Variety "${variety}" not in master list for "${commodity}", but accepting as-is.`);
-          }
+          warnings.push(`Row ${rowNum}: Seller Name \"${sellerName}\" differs from Customer \"${customerName}\", but accepting as-is.`);
         }
 
         const orderData = {
@@ -649,14 +665,9 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
         };
 
         // Calculate total deduction - use mapped value if provided, otherwise calculate from all deductions
-        const mappedTotalDeduction = parseNumeric(getMappedValue(record, columnMapping.total_deduction, ['Total Deduction', 'total_deduction', 'Total Deduction Amount'], null));
-        if (mappedTotalDeduction !== null && mappedTotalDeduction !== 0 && !isNaN(mappedTotalDeduction)) {
-          orderData.total_deduction = mappedTotalDeduction;
-        } else {
-          // Calculate total deduction from all deduction sources (HLW + MOI+BDOI + All Other Deductions)
-          const otherDeductionsTotal = otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
-          orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bdoi + otherDeductionsTotal;
-        }
+        // Calculate total deduction from all deduction sources (HLW + MOI+BDOI + All Other Deductions)
+        const otherDeductionsTotal = otherDeductions.reduce((sum, ded) => sum + (ded.amount || 0), 0);
+        orderData.total_deduction = orderData.deduction_amount_hlw + orderData.deduction_amount_moi_bdoi + otherDeductionsTotal;
 
         // Calculate net_amount if not provided or is 0
         const mappedNetAmount = parseNumeric(getMappedValue(record, columnMapping.net_amount, ['Net Amount', 'net_amount'], null));
@@ -683,6 +694,28 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
       } catch (error) {
         errors.push(`Row ${rowNum}: ${error.message}`);
       }
+    }
+
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Master data validation failed',
+        message: 'Some rows use Seller, Location, Warehouse, Commodity, or Variety values that do not exist in master data.',
+        errors: validationErrors,
+        totalRows: records.length,
+        invalidRows: validationErrors.length
+      });
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'File contains invalid data',
+        message: 'Errors were found while preparing rows; nothing was saved.',
+        errors,
+        totalRows: records.length,
+        invalidRows: errors.length
+      });
     }
 
     if (orders.length === 0) {
@@ -788,16 +821,31 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
     }
     
     console.log(`Sales insertion complete: ${successCount} succeeded, ${failCount} failed out of ${orders.length} total`);
+
+    const totalInsertIssues = errors.length + insertErrors.length + failCount;
+    if (totalInsertIssues > 0 || successCount < orders.length) {
+      // Roll back any inserted docs to ensure all-or-nothing
+      if (savedOrders.length > 0) {
+        await ConfirmedSalesOrder.deleteMany({ _id: { $in: savedOrders.map((d) => d._id) } });
+      }
+      return res.status(400).json({
+        success: false,
+        error: 'Upload failed',
+        message: 'At least one row failed validation or insertion. No rows were saved.',
+        errors: [...errors, ...insertErrors],
+        totalRows: orders.length,
+        invalidRows: totalInsertIssues
+      });
+    }
     
     const dupMsg = duplicateSkippedCount > 0 ? ` (${duplicateSkippedCount} duplicate row(s) skipped)` : '';
     res.json({
       success: true,
-      message: `Successfully uploaded ${savedOrders.length} confirmed sales orders${dupMsg}${failCount > 0 ? ` (${failCount} failed)` : ''}${warnings.length > 0 ? ` (${warnings.length} warnings)` : ''}`,
+      message: `Successfully uploaded ${savedOrders.length} confirmed sales orders${dupMsg}${warnings.length > 0 ? ` (${warnings.length} warnings)` : ''}`,
       count: savedOrders.length,
       totalRows: orders.length,
       duplicateSkipped: duplicateSkippedCount,
       savedRows: savedOrders.length,
-      errors: errors.length > 0 || insertErrors.length > 0 ? [...errors, ...insertErrors] : undefined,
       warnings: warnings.length > 0 ? warnings : undefined,
       orders: savedOrders.slice(0, 10) // Return first 10 for preview
     });

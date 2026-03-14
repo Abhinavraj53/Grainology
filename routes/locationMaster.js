@@ -303,7 +303,7 @@ router.patch('/:id/approval', authenticate, async (req, res) => {
   }
 });
 
-// Delete location master (admin only) - soft delete by setting is_active to false
+// Delete location master
 router.delete('/:id', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -315,6 +315,14 @@ router.delete('/:id', authenticate, async (req, res) => {
     if (!existing) {
       return res.status(404).json({ error: 'Location not found' });
     }
+
+    // Super Admin: hard delete (permanent)
+    if (isSuperAdmin(user)) {
+      await LocationMaster.findByIdAndDelete(req.params.id);
+      return res.json({ message: 'Location permanently deleted' });
+    }
+
+    // Admin: soft delete (only if not super-approved)
     if (existing.approval_status === 'approved' && user.role === 'admin') {
       return res.status(403).json({ error: 'Cannot deactivate after Super Admin approval' });
     }

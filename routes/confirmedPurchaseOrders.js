@@ -594,8 +594,12 @@ router.post('/bulk-upload', requireAdmin, upload.single('file'), async (req, res
           'N/A'
         ));
         
-        // Supplier must exist in master data
-        let customer = allCustomers.find(c => c.name === supplierName);
+        // Supplier must exist in master data (match against name, trade_name, or business_name; case/space insensitive)
+        const supplierKey = normalize(supplierName);
+        let customer = allCustomers.find((c) => {
+          const names = [c.name, c.trade_name, c.business_name];
+          return names.some((n) => normalize(n) === supplierKey && supplierKey !== 'N/A');
+        });
         if (!customer) {
           rowErrors.push(`Row ${rowNum}: Supplier "${supplierName}" is not present in master data. Please add the supplier before uploading.`);
         }

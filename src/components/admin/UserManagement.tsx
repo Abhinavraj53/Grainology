@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { type Profile } from '../../lib/client';
 import { Search, Filter, Shield, XCircle, User, Building, Eye, EyeOff, FileText, Download, ThumbsUp, ThumbsDown, UserPlus, Link2, Copy } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -85,8 +86,8 @@ interface UserManagementProps {
 export default function UserManagement({ users, onRefresh, onUserUpdated, currentUserRole }: UserManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [kycFilter, setKycFilter] = useState<string>('all');
-  const [approvalFilter, setApprovalFilter] = useState<string>('all');
+  const [showPendingSection, setShowPendingSection] = useState(true);
+  const [showRejectedSection, setShowRejectedSection] = useState(true);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -97,6 +98,7 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
   const [loadingPdf, setLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [disapproveConfirmUserId, setDisapproveConfirmUserId] = useState<string | null>(null);
+  const [declineReasonDraft, setDeclineReasonDraft] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordValue, setPasswordValue] = useState<string | null>(null);
   const [loadingPassword, setLoadingPassword] = useState(false);
@@ -109,16 +111,26 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
   const filteredUsers = users.filter(user => {
     const matchesSearch =
       user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.trade_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.business_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user as any).mobile_number?.includes(searchTerm) ||
-      user.business_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      (user as any).mobile_number?.includes(searchTerm);
 
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    const matchesKyc = kycFilter === 'all' || user.kyc_status === kycFilter;
-    const matchesApproval = approvalFilter === 'all' || (user as any).approval_status === approvalFilter;
 
-    return matchesSearch && matchesRole && matchesKyc && matchesApproval;
+    return matchesSearch && matchesRole;
   });
+
+  const roleStats = [
+    { key: 'farmer', label: 'Farmers', value: users.filter((u) => u.role === 'farmer').length, cardClass: 'bg-green-50 border-green-200', labelClass: 'text-green-700', valueClass: 'text-green-800' },
+    { key: 'trader', label: 'Traders', value: users.filter((u) => u.role === 'trader').length, cardClass: 'bg-teal-50 border-teal-200', labelClass: 'text-teal-700', valueClass: 'text-teal-800' },
+    { key: 'corporate', label: 'Corporate', value: users.filter((u) => u.role === 'corporate').length, cardClass: 'bg-indigo-50 border-indigo-200', labelClass: 'text-indigo-700', valueClass: 'text-indigo-800' },
+    { key: 'fpo', label: 'FPO', value: users.filter((u) => u.role === 'fpo').length, cardClass: 'bg-emerald-50 border-emerald-200', labelClass: 'text-emerald-700', valueClass: 'text-emerald-800' },
+    { key: 'miller', label: 'Miller', value: users.filter((u) => u.role === 'miller').length, cardClass: 'bg-cyan-50 border-cyan-200', labelClass: 'text-cyan-700', valueClass: 'text-cyan-800' },
+    { key: 'financer', label: 'Financer', value: users.filter((u) => u.role === 'financer').length, cardClass: 'bg-sky-50 border-sky-200', labelClass: 'text-sky-700', valueClass: 'text-sky-800' },
+    { key: 'admin', label: 'Admin', value: users.filter((u) => u.role === 'admin').length, cardClass: 'bg-rose-50 border-rose-200', labelClass: 'text-rose-700', valueClass: 'text-rose-800' },
+    { key: 'super_admin', label: 'Super Admin', value: users.filter((u) => u.role === 'super_admin').length, cardClass: 'bg-violet-50 border-violet-200', labelClass: 'text-violet-700', valueClass: 'text-violet-800' },
+  ];
 
   // Load PDF via backend proxy (uses signed view_access token so no auth header needed)
   useEffect(() => {
@@ -222,7 +234,7 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
     setLoading(false);
   };
 
-  const handleDisapprove = async (userId: string) => {
+  const handleDisapprove = async (userId: string, reasonInput: string) => {
     if (!canApproveUsers) {
       setError('Only Super Admin can decline user registration');
       return;
@@ -232,18 +244,13 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
       setDisapproveConfirmUserId(null);
       return;
     }
-    const declineReasonInput = window.prompt('Enter decline reason:', '');
-    if (declineReasonInput === null) {
-      setDisapproveConfirmUserId(null);
-      return;
-    }
-    const declineReason = declineReasonInput.trim();
+    const declineReason = String(reasonInput || '').trim();
     if (!declineReason) {
       setError('Decline reason is required');
-      setDisapproveConfirmUserId(null);
       return;
     }
     setDisapproveConfirmUserId(null);
+    setDeclineReasonDraft('');
     setLoading(true);
     setError('');
     const patch = { approval_status: 'rejected' as const, declined_reason: declineReason };
@@ -267,7 +274,7 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
           ? { ...prev, approval_status: previousStatus ?? 'pending', declined_reason: previousDeclinedReason }
           : null);
       }
-      setError(e.message || 'Failed to disapprove');
+      setError(e.message || 'Failed to decline');
     }
     setLoading(false);
   };
@@ -309,6 +316,29 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
     } finally {
       setGeneratingReentryLinkFor(null);
     }
+  };
+
+  const handleExportApprovedUsers = () => {
+    const approved = users.filter((u: any) => (u?.approval_status || 'pending') === 'approved');
+    if (!approved.length) {
+      window.alert('No approved users to export.');
+      return;
+    }
+    const rows = approved.map((u) => ({
+      Name: u.name || '',
+      'Trade Name': u.trade_name || u.business_name || '',
+      Role: u.role || '',
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Approved Users');
+    const blob = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const url = URL.createObjectURL(new Blob([blob], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `approved-users-${new Date().toISOString().slice(0,10)}.xlsx`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
   };
 
   // Fetch user verification document when user is selected
@@ -422,82 +452,17 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex flex-col lg:flex-row gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or business name..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-
-          <div className="flex gap-2 items-center">
-            <Filter className="text-gray-400 w-5 h-5" />
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Roles</option>
-              <option value="farmer">Farmer</option>
-              <option value="trader">Trader</option>
-              <option value="admin">Admin</option>
-            </select>
-
-            <select
-              value={kycFilter}
-              onChange={(e) => setKycFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All KYC Status</option>
-              <option value="verified">Verified</option>
-              <option value="pending">Pending</option>
-              <option value="not_started">Not Started</option>
-              <option value="rejected">Rejected</option>
-            </select>
-
-            <select
-              value={approvalFilter}
-              onChange={(e) => setApprovalFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">All Approval</option>
-              <option value="pending">Pending Approval</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-700 font-medium mb-1">Total Users</p>
             <p className="text-3xl font-bold text-blue-800">{users.length}</p>
           </div>
-
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <p className="text-sm text-green-700 font-medium mb-1">Verified</p>
-            <p className="text-3xl font-bold text-green-800">
-              {users.filter(u => u.kyc_status === 'verified').length}
-            </p>
-          </div>
-
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-700 font-medium mb-1">Pending KYC</p>
-            <p className="text-3xl font-bold text-yellow-800">
-              {users.filter(u => u.kyc_status === 'pending' || u.kyc_status === 'not_started').length}
-            </p>
-          </div>
-
-          <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
-            <p className="text-sm text-teal-700 font-medium mb-1">Traders</p>
-            <p className="text-3xl font-bold text-teal-800">
-              {users.filter(u => u.role === 'trader').length}
-            </p>
-          </div>
+          {roleStats.map((stat) => (
+            <div key={stat.key} className={`rounded-lg p-4 border ${stat.cardClass}`}>
+              <p className={`text-sm font-medium mb-1 ${stat.labelClass}`}>{stat.label}</p>
+              <p className={`text-3xl font-bold ${stat.valueClass}`}>{stat.value}</p>
+            </div>
+          ))}
         </div>
 
         {error && (
@@ -509,7 +474,11 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
         {/* New Users / Pending Approval – dedicated section */}
         {pendingUsers.length > 0 && (
           <div className="mb-6 rounded-xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-amber-200 flex items-center justify-between flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setShowPendingSection((prev) => !prev)}
+              className="w-full px-5 py-4 border-b border-amber-200 flex items-center justify-between flex-wrap gap-3 text-left hover:bg-amber-100/40 transition-colors"
+            >
               <div className="flex items-center gap-2">
                 <UserPlus className="w-6 h-6 text-amber-700" />
                 <h3 className="text-lg font-semibold text-amber-900">New Users</h3>
@@ -517,69 +486,83 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
                   {pendingUsers.length} pending
                 </span>
               </div>
-              <p className="text-sm text-amber-800">Approve or disapprove access. Approved users can log in.</p>
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pendingUsers.slice(0, 12).map((user, idx) => (
-                  <div
-                    key={getUserId(user) || user.name || `user-${idx}`}
-                    className="bg-white rounded-lg border border-amber-100 p-4 shadow-sm hover:shadow-md transition-shadow"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{user.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{user.email || (user as any).mobile_number}</p>
-                        <p className="text-xs text-gray-500 capitalize">{user.role}</p>
-                      </div>
-                      <button
-                        onClick={() => setSelectedUser(user)}
-                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                        title="View details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      {canApproveUsers ? (
-                        <>
-                          <button
-                            onClick={() => handleApprove(getUserId(user) || '')}
-                            disabled={loading}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg disabled:opacity-50"
-                          >
-                            <ThumbsUp className="w-4 h-4" />
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => { const id = getUserId(user); if (id) setDisapproveConfirmUserId(id); }}
-                            disabled={loading}
-                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-50"
-                            title="Decline"
-                          >
-                            <ThumbsDown className="w-4 h-4" />
-                            Decline
-                          </button>
-                        </>
-                      ) : (
-                        <p className="text-xs text-amber-800 bg-amber-100 px-2 py-2 rounded-lg w-full text-center">
-                          Pending for Super Admin approval
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center gap-3 text-sm text-amber-800">
+                <span>Approve or disapprove access. Approved users can log in.</span>
+                <span className="text-amber-900 font-semibold">{showPendingSection ? 'Collapse' : 'Expand'}</span>
               </div>
-              {pendingUsers.length > 12 && (
-                <p className="text-sm text-amber-800 mt-3">+ {pendingUsers.length - 12} more in table below</p>
-              )}
-            </div>
+            </button>
+            {showPendingSection && (
+              <div className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {pendingUsers.slice(0, 12).map((user, idx) => (
+                    <div
+                      key={getUserId(user) || user.name || `user-${idx}`}
+                      className="bg-white rounded-lg border border-amber-100 p-4 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{user.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{user.email || (user as any).mobile_number}</p>
+                          <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                        </div>
+                        <button
+                          onClick={() => setSelectedUser(user)}
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
+                          title="View details"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        {canApproveUsers ? (
+                          <>
+                            <button
+                              onClick={() => handleApprove(getUserId(user) || '')}
+                              disabled={loading}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg disabled:opacity-50"
+                            >
+                              <ThumbsUp className="w-4 h-4" />
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => {
+                                const id = getUserId(user);
+                                if (!id) return;
+                                setDeclineReasonDraft('');
+                                setDisapproveConfirmUserId(id);
+                              }}
+                              disabled={loading}
+                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg disabled:opacity-50"
+                              title="Decline"
+                            >
+                              <ThumbsDown className="w-4 h-4" />
+                              Decline
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-xs text-amber-800 bg-amber-100 px-2 py-2 rounded-lg w-full text-center">
+                            Pending for Super Admin approval
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {pendingUsers.length > 12 && (
+                  <p className="text-sm text-amber-800 mt-3">+ {pendingUsers.length - 12} more in table below</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {rejectedUsers.length > 0 && (
           <div className="mb-2 rounded-xl border-2 border-red-200 bg-gradient-to-br from-red-50 to-rose-50 overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-red-200 flex items-center justify-between flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setShowRejectedSection((prev) => !prev)}
+              className="w-full px-5 py-4 border-b border-red-200 flex items-center justify-between flex-wrap gap-3 text-left hover:bg-red-100/40 transition-colors"
+            >
               <div className="flex items-center gap-2">
                 <Link2 className="w-6 h-6 text-red-700" />
                 <h3 className="text-lg font-semibold text-red-900">Rejected Registrations</h3>
@@ -587,82 +570,123 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
                   {rejectedUsers.length} rejected
                 </span>
               </div>
-              <p className="text-sm text-red-800">Generate re-entry links and share with users for correction.</p>
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {rejectedUsers.slice(0, 9).map((user, idx) => {
-                  const id = getUserId(user) || `rejected-${idx}`;
-                  const link = reentryLinks[id];
-                  return (
-                    <div key={id} className="bg-white rounded-lg border border-red-100 p-4 shadow-sm">
-                      <div className="mb-3">
-                        <p className="font-medium text-gray-900 truncate">{user.name}</p>
-                        <p className="text-xs text-gray-500 truncate">{user.email || (user as any).mobile_number}</p>
-                        {(user as any).declined_reason && (
-                          <p className="text-xs text-red-700 mt-1 line-clamp-2" title={(user as any).declined_reason}>
-                            {(user as any).declined_reason}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex gap-2">
-                        {canGenerateReentryLink ? (
+              <div className="flex items-center gap-3 text-sm text-red-800">
+                <span>Generate re-entry links and share with users for correction.</span>
+                <span className="text-red-900 font-semibold">{showRejectedSection ? 'Collapse' : 'Expand'}</span>
+              </div>
+            </button>
+            {showRejectedSection && (
+              <div className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {rejectedUsers.slice(0, 9).map((user, idx) => {
+                    const id = getUserId(user) || `rejected-${idx}`;
+                    const link = reentryLinks[id];
+                    return (
+                      <div key={id} className="bg-white rounded-lg border border-red-100 p-4 shadow-sm">
+                        <div className="mb-3">
+                          <p className="font-medium text-gray-900 truncate">{user.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{user.email || (user as any).mobile_number}</p>
+                          {(user as any).declined_reason && (
+                            <p className="text-xs text-red-700 mt-1 line-clamp-2" title={(user as any).declined_reason}>
+                              {(user as any).declined_reason}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          {canGenerateReentryLink ? (
+                            <button
+                              type="button"
+                              onClick={() => handleGenerateReentryLink(id)}
+                              disabled={generatingReentryLinkFor === id}
+                              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+                            >
+                              <Link2 className="w-4 h-4" />
+                              {generatingReentryLinkFor === id ? 'Generating...' : 'Generate Link'}
+                            </button>
+                          ) : (
+                            <p className="flex-1 text-xs text-red-700 bg-red-100 px-2 py-2 rounded-lg text-center">
+                              Admin access needed
+                            </p>
+                          )}
                           <button
                             type="button"
-                            onClick={() => handleGenerateReentryLink(id)}
-                            disabled={generatingReentryLinkFor === id}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg disabled:opacity-50"
+                            onClick={() => setSelectedUser(user)}
+                            className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg"
+                            title="View details"
                           >
-                            <Link2 className="w-4 h-4" />
-                            {generatingReentryLinkFor === id ? 'Generating...' : 'Generate Link'}
+                            <Eye className="w-4 h-4" />
                           </button>
-                        ) : (
-                          <p className="flex-1 text-xs text-red-700 bg-red-100 px-2 py-2 rounded-lg text-center">
-                            Admin access needed
-                          </p>
+                        </div>
+                        {link && (
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(link)}
+                            className="mt-2 text-xs text-blue-700 hover:text-blue-800 underline break-all text-left"
+                            title={link}
+                          >
+                            Copy latest link
+                          </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setSelectedUser(user)}
-                          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg"
-                          title="View details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
                       </div>
-                      {link && (
-                        <button
-                          type="button"
-                          onClick={() => copyToClipboard(link)}
-                          className="mt-2 text-xs text-blue-700 hover:text-blue-800 underline break-all text-left"
-                          title={link}
-                        >
-                          Copy latest link
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                {rejectedUsers.length > 9 && (
+                  <p className="text-sm text-red-800 mt-3">+ {rejectedUsers.length - 9} more in table below</p>
+                )}
               </div>
-              {rejectedUsers.length > 9 && (
-                <p className="text-sm text-red-800 mt-3">+ {rejectedUsers.length - 9} more in table below</p>
-              )}
-            </div>
+            )}
           </div>
         )}
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-4 pt-4 pb-2 flex flex-col lg:flex-row gap-3 lg:items-center">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="Search by name or trade name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div className="flex gap-2 items-center">
+            <Filter className="text-gray-400 w-5 h-5" />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="all">All Roles</option>
+              <option value="farmer">Farmer</option>
+              <option value="trader">Trader</option>
+              <option value="fpo">FPO</option>
+              <option value="corporate">Corporate</option>
+              <option value="miller">Miller</option>
+              <option value="financer">Financer</option>
+              <option value="admin">Admin</option>
+              <option value="super_admin">Super Admin</option>
+            </select>
+            <button
+              type="button"
+              onClick={handleExportApprovedUsers}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export Approved
+            </button>
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trade Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">KYC Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Approval</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Joined</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
@@ -672,34 +696,22 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
                   <td className="px-6 py-4">
                     <div>
                       <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                      {user.entity_type === 'company' && user.business_name && (
-                        <p className="text-xs text-gray-600 flex items-center gap-1 mt-1">
-                          <Building className="w-3 h-3" />
-                          {user.business_name}
-                        </p>
-                      )}
                       <p className="text-xs text-gray-500 mt-1">{user.email}</p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center gap-1">
-                      {user.entity_type === 'company' ? (
+                    <div className="flex items-start gap-2">
+                      {user.trade_name || user.business_name ? (
                         <>
-                          <Building className="w-4 h-4 text-blue-600" />
-                          <span className="text-sm text-gray-900">Company</span>
+                          <Building className="w-4 h-4 text-blue-600 mt-0.5" />
+                          <span className="text-sm text-gray-900 break-words">
+                            {user.trade_name || user.business_name}
+                          </span>
                         </>
                       ) : (
-                        <>
-                          <User className="w-4 h-4 text-green-600" />
-                          <span className="text-sm text-gray-900">Individual</span>
-                        </>
+                        <span className="text-sm text-gray-500">—</span>
                       )}
                     </div>
-                    {user.business_type && (
-                      <p className="text-xs text-gray-500 mt-1 capitalize">
-                        {user.business_type.replace('_', ' ')}
-                      </p>
-                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-3 py-1 text-xs font-medium rounded-full ${
@@ -710,32 +722,6 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
                     }`}>
                       {user.role === 'super_admin' ? 'Super Admin' : user.role}
                     </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                      user.kyc_status === 'verified' ? 'bg-green-100 text-green-800' :
-                      user.kyc_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      user.kyc_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {user.kyc_status === 'not_started' ? 'Not Started' : user.kyc_status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                      (user as any).approval_status === 'approved' ? 'bg-green-100 text-green-800' :
-                      (user as any).approval_status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'
-                    }`}>
-                      {(user as any).approval_status === 'approved' ? 'Approved' : (user as any).approval_status === 'rejected' ? 'Rejected' : 'Pending'}
-                    </span>
-                    {(user as any).approval_status === 'rejected' && (user as any).declined_reason && (
-                      <p className="mt-1 text-xs text-red-700 max-w-xs truncate" title={(user as any).declined_reason}>
-                        {(user as any).declined_reason}
-                      </p>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {new Date((user as any).createdAt || user.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4">
                     <button
@@ -1111,7 +1097,12 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
                             Approve (sends email if they have one)
                           </button>
                           <button
-                            onClick={() => { const id = getUserId(selectedUser); if (id) setDisapproveConfirmUserId(id); }}
+                            onClick={() => {
+                              const id = getUserId(selectedUser);
+                              if (!id) return;
+                              setDeclineReasonDraft('');
+                              setDisapproveConfirmUserId(id);
+                            }}
                             disabled={loading}
                             className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-800 font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                           >
@@ -1268,25 +1259,47 @@ export default function UserManagement({ users, onRefresh, onUserUpdated, curren
 
       {/* Disapprove confirmation modal */}
       {disapproveConfirmUserId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setDisapproveConfirmUserId(null)}>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50"
+          onClick={() => {
+            setDisapproveConfirmUserId(null);
+            setDeclineReasonDraft('');
+          }}
+        >
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full mx-4 p-6" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Decline user?</h3>
-            <p className="text-gray-600 mb-6">A reason popup will open next. After decline, decision will be locked until Admin re-submits.</p>
+            <p className="text-gray-600 mb-4">Add decline reason. After decline, decision will be locked until Admin re-submits.</p>
+            <textarea
+              value={declineReasonDraft}
+              onChange={(e) => setDeclineReasonDraft(e.target.value)}
+              placeholder="Enter decline reason..."
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent text-sm mb-4"
+            />
             <div className="flex gap-3 justify-end">
               <button
                 type="button"
-                onClick={() => setDisapproveConfirmUserId(null)}
+                onClick={() => {
+                  setDisapproveConfirmUserId(null);
+                  setDeclineReasonDraft('');
+                }}
                 className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (disapproveConfirmUserId) handleDisapprove(disapproveConfirmUserId); }}
-                disabled={loading || !disapproveConfirmUserId}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (disapproveConfirmUserId) {
+                    handleDisapprove(disapproveConfirmUserId, declineReasonDraft);
+                  }
+                }}
+                disabled={loading || !disapproveConfirmUserId || !declineReasonDraft.trim()}
                 className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium disabled:opacity-50"
               >
-                Confirm
+                {loading ? 'Submitting...' : 'Submit Rejection'}
               </button>
             </div>
           </div>

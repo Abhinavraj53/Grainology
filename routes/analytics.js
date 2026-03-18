@@ -66,6 +66,74 @@ const effectiveDateStage = {
   }
 };
 const dateMatchStage = (startDate, endDate) => ({ $match: { _effectiveDate: { $gte: startDate, $lte: endDate } } });
+const activeOrderMatchStage = { $match: { trash: { $ne: true } } };
+
+const paginateRows = (rows, page, limit) => {
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.max(parseInt(limit, 10) || 50, 1);
+  const total = rows.length;
+  const startIndex = (pageNum - 1) * limitNum;
+
+  return {
+    rows: rows.slice(startIndex, startIndex + limitNum),
+    total,
+    page: pageNum,
+    limit: limitNum,
+    totalPages: Math.ceil(total / limitNum)
+  };
+};
+
+const nonEmptyStringExpr = (expr) => ({
+  $let: {
+    vars: {
+      value: {
+        $trim: {
+          input: { $ifNull: [expr, ''] }
+        }
+      }
+    },
+    in: {
+      $cond: [{ $eq: ['$$value', ''] }, null, '$$value']
+    }
+  }
+});
+
+const addCustomerNameStages = (type = 'sales') => [
+  {
+    $lookup: {
+      from: 'users',
+      localField: 'customer_id',
+      foreignField: '_id',
+      as: 'customer_info',
+      pipeline: [
+        { $project: { trade_name: 1, name: 1, email: 1 } }
+      ]
+    }
+  },
+  {
+    $addFields: {
+      _customerName: {
+        $ifNull: [
+          nonEmptyStringExpr({ $arrayElemAt: ['$customer_info.trade_name', 0] }),
+          {
+            $ifNull: [
+              nonEmptyStringExpr(type === 'purchase' ? '$supplier_name' : '$seller_name'),
+              {
+                $ifNull: [
+                  nonEmptyStringExpr({ $arrayElemAt: ['$customer_info.name', 0] }),
+                  'Unknown'
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      _customerEmail: {
+        $ifNull: [{ $arrayElemAt: ['$customer_info.email', 0] }, '' ]
+      }
+    }
+  }
+];
 
 // Get time-based analytics (Daily/Weekly/Monthly trends)
 router.get('/time-based', async (req, res) => {
@@ -75,6 +143,7 @@ router.get('/time-based', async (req, res) => {
 
     // Aggregation for sales orders (by booking date from sheet)
     const salesAggregation = await ConfirmedSalesOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -96,6 +165,7 @@ router.get('/time-based', async (req, res) => {
 
     // Aggregation for purchase orders (by booking date from sheet)
     const purchaseAggregation = await ConfirmedPurchaseOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -140,6 +210,7 @@ router.get('/time-based', async (req, res) => {
 
     // Monthly heatmap data (by booking date)
     const heatmapData = await ConfirmedSalesOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -175,11 +246,12 @@ router.get('/commodity', async (req, res) => {
 
     // Commodity distribution for sales (by booking date)
     const salesByCommodity = await ConfirmedSalesOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
         $group: {
-          _id: '$commodity',
+          _id: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
           totalOrders: { $sum: 1 },
           totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
           totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
@@ -193,11 +265,12 @@ router.get('/commodity', async (req, res) => {
 
     // Commodity distribution for purchases (by booking date)
     const purchaseByCommodity = await ConfirmedPurchaseOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
         $group: {
-          _id: '$commodity',
+          _id: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
           totalOrders: { $sum: 1 },
           totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
           totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
@@ -210,39 +283,95 @@ router.get('/commodity', async (req, res) => {
     ]);
 
     // Variety breakdown (by booking date)
-    const varietyBreakdown = await ConfirmedSalesOrder.aggregate([
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: { commodity: '$commodity', variety: '$variety' },
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-        }
-      },
-      { $sort: { totalAmount: -1 } }
+    const [salesVarietyBreakdown, purchaseVarietyBreakdown, salesPriceTrends, purchasePriceTrends] = await Promise.all([
+      ConfirmedSalesOrder.aggregate([
+        activeOrderMatchStage,
+        effectiveDateStage,
+        dateMatchStage(startDate, endDate),
+        {
+          $group: {
+            _id: {
+              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+              variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+            },
+            totalOrders: { $sum: 1 },
+            totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+            totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+          }
+        },
+        { $sort: { totalAmount: -1 } }
+      ]),
+      ConfirmedPurchaseOrder.aggregate([
+        activeOrderMatchStage,
+        effectiveDateStage,
+        dateMatchStage(startDate, endDate),
+        {
+          $group: {
+            _id: {
+              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+              variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+            },
+            totalOrders: { $sum: 1 },
+            totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+            totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+          }
+        },
+        { $sort: { totalAmount: -1 } }
+      ]),
+      ConfirmedSalesOrder.aggregate([
+        activeOrderMatchStage,
+        effectiveDateStage,
+        dateMatchStage(startDate, endDate),
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
+              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] }
+            },
+            avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
+          }
+        },
+        { $sort: { '_id.date': 1 } }
+      ]),
+      ConfirmedPurchaseOrder.aggregate([
+        activeOrderMatchStage,
+        effectiveDateStage,
+        dateMatchStage(startDate, endDate),
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
+              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] }
+            },
+            avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
+          }
+        },
+        { $sort: { '_id.date': 1 } }
+      ])
     ]);
 
-    // Commodity price trends over time (by booking date)
-    const priceTrends = await ConfirmedSalesOrder.aggregate([
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: {
-            date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
-            commodity: '$commodity'
-          },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      },
-      { $sort: { '_id.date': 1 } }
-    ]);
+    const varietyMap = new Map();
+    [...salesVarietyBreakdown, ...purchaseVarietyBreakdown].forEach((item) => {
+      const key = `${item._id.commodity}__${item._id.variety}`;
+      const existing = varietyMap.get(key) || {
+        commodity: item._id.commodity,
+        variety: item._id.variety,
+        orders: 0,
+        amount: 0,
+        weight: 0
+      };
+
+      existing.orders += item.totalOrders || 0;
+      existing.amount += item.totalAmount || 0;
+      existing.weight += item.totalWeight || 0;
+      varietyMap.set(key, existing);
+    });
+
+    const varietyBreakdown = Array.from(varietyMap.values()).sort((a, b) => b.amount - a.amount);
 
     // Transform price trends for charting
     const commodityPriceTrends = {};
-    priceTrends.forEach(item => {
+    [...salesPriceTrends, ...purchasePriceTrends].forEach(item => {
       const commodity = item._id.commodity || 'Unknown';
       if (!commodityPriceTrends[commodity]) {
         commodityPriceTrends[commodity] = [];
@@ -274,11 +403,11 @@ router.get('/commodity', async (req, res) => {
         maxRate: Math.round(c.maxRate * 100) / 100
       })),
       varietyBreakdown: varietyBreakdown.map(v => ({
-        commodity: v._id.commodity || 'Unknown',
-        variety: v._id.variety || 'N/A',
-        orders: v.totalOrders,
-        amount: Math.round(v.totalAmount * 100) / 100,
-        weight: Math.round(v.totalWeight * 1000) / 1000
+        commodity: v.commodity || 'Unknown',
+        variety: v.variety || 'N/A',
+        orders: v.orders,
+        amount: Math.round(v.amount * 100) / 100,
+        weight: Math.round(v.weight * 1000) / 1000
       })),
       priceTrends: commodityPriceTrends
     });
@@ -295,15 +424,17 @@ router.get('/customer', async (req, res) => {
     const { startDate, endDate } = getDateRange(period);
 
     const Model = type === 'purchase' ? ConfirmedPurchaseOrder : ConfirmedSalesOrder;
-    const customerNameField = type === 'purchase' ? 'supplier_name' : 'seller_name';
 
     // Top customers (Seller/Supplier from sheet - no account required)
     const topCustomers = await Model.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
+      ...addCustomerNameStages(type),
       {
         $group: {
-          _id: `$${customerNameField}`,
+          _id: '$_customerName',
+          customerEmail: { $first: '$_customerEmail' },
           totalOrders: { $sum: 1 },
           totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
           totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
@@ -318,11 +449,13 @@ router.get('/customer', async (req, res) => {
 
     // Customer order frequency distribution
     const orderFrequency = await Model.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
+      ...addCustomerNameStages(type),
       {
         $group: {
-          _id: `$${customerNameField}`,
+          _id: '$_customerName',
           orderCount: { $sum: 1 }
         }
       },
@@ -347,11 +480,13 @@ router.get('/customer', async (req, res) => {
 
     // Customer-wise revenue (Seller/Supplier from sheet)
     const customerRevenue = await Model.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
+      ...addCustomerNameStages(type),
       {
         $group: {
-          _id: `$${customerNameField}`,
+          _id: '$_customerName',
           totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }
         }
       },
@@ -364,8 +499,10 @@ router.get('/customer', async (req, res) => {
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     const allCustomersWithOrders = await Model.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
-      { $group: { _id: `$${customerNameField}`, firstOrder: { $min: '$_effectiveDate' }, totalOrders: { $sum: 1 } } }
+      ...addCustomerNameStages(type),
+      { $group: { _id: '$_customerName', firstOrder: { $min: '$_effectiveDate' }, totalOrders: { $sum: 1 } } }
     ]);
 
     const newCustomers = allCustomersWithOrders.filter(c => c.firstOrder >= thirtyDaysAgo).length;
@@ -377,7 +514,7 @@ router.get('/customer', async (req, res) => {
       topCustomers: topCustomers.map(c => ({
         customerId: c._id,
         customerName: c._id || 'Unknown',
-        customerEmail: '',
+        customerEmail: c.customerEmail || '',
         totalOrders: c.totalOrders,
         totalAmount: Math.round(c.totalAmount * 100) / 100,
         totalWeight: Math.round(c.totalWeight * 1000) / 1000,
@@ -414,6 +551,7 @@ router.get('/comparison', async (req, res) => {
 
     // Sales summary (by booking date)
     const salesSummary = await ConfirmedSalesOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -430,6 +568,7 @@ router.get('/comparison', async (req, res) => {
 
     // Purchase summary (by booking date)
     const purchaseSummary = await ConfirmedPurchaseOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -446,6 +585,7 @@ router.get('/comparison', async (req, res) => {
 
     // Warehouse comparison (by booking date)
     const salesByWarehouse = await ConfirmedSalesOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -460,6 +600,7 @@ router.get('/comparison', async (req, res) => {
     ]);
 
     const purchaseByWarehouse = await ConfirmedPurchaseOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -475,6 +616,7 @@ router.get('/comparison', async (req, res) => {
 
     // State-wise comparison (by booking date)
     const salesByState = await ConfirmedSalesOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -489,6 +631,7 @@ router.get('/comparison', async (req, res) => {
     ]);
 
     const purchaseByState = await ConfirmedPurchaseOrder.aggregate([
+      activeOrderMatchStage,
       effectiveDateStage,
       dateMatchStage(startDate, endDate),
       {
@@ -551,39 +694,60 @@ router.get('/reports/:reportType', async (req, res) => {
     const { reportType } = req.params;
     const { period = 'month', page = 1, limit = 50 } = req.query;
     const { startDate, endDate } = getDateRange(period);
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
     let data = [];
     let total = 0;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.max(parseInt(limit, 10) || 50, 1);
 
     switch (reportType) {
       case 'order-summary':
         // Order Summary Table (by booking date; Customer = Seller/Supplier from sheet)
         const [salesOrdersAgg, purchaseOrdersAgg] = await Promise.all([
           ConfirmedSalesOrder.aggregate([
+            activeOrderMatchStage,
             effectiveDateStage,
             dateMatchStage(startDate, endDate),
-            { $sort: { _effectiveDate: -1 } },
-            { $skip: skip },
-            { $limit: parseInt(limit) },
-            { $project: { transaction_date: 1, invoice_number: 1, seller_name: 1, commodity: 1, variety: 1, net_weight_mt: 1, net_amount: 1, _effectiveDate: 1 } }
+            ...addCustomerNameStages('sales'),
+            { 
+              $project: { 
+                transaction_date: 1, 
+                invoice_number: 1, 
+                customer_name: { $ifNull: ['$_customerName', { $ifNull: ['$seller_name', 'Unknown'] }] }, 
+                commodity: 1, 
+                variety: 1, 
+                net_weight_mt: 1, 
+                net_amount: 1, 
+                _effectiveDate: 1 
+              } 
+            }
           ]),
           ConfirmedPurchaseOrder.aggregate([
+            activeOrderMatchStage,
             effectiveDateStage,
             dateMatchStage(startDate, endDate),
-            { $sort: { _effectiveDate: -1 } },
-            { $skip: skip },
-            { $limit: parseInt(limit) },
-            { $project: { transaction_date: 1, invoice_number: 1, supplier_name: 1, commodity: 1, variety: 1, net_weight_mt: 1, net_amount: 1, _effectiveDate: 1 } }
+            ...addCustomerNameStages('purchase'),
+            { 
+              $project: { 
+                transaction_date: 1, 
+                invoice_number: 1, 
+                customer_name: { $ifNull: ['$_customerName', { $ifNull: ['$supplier_name', 'Unknown'] }] }, 
+                commodity: 1, 
+                variety: 1, 
+                net_weight_mt: 1, 
+                net_amount: 1, 
+                _effectiveDate: 1 
+              } 
+            }
           ])
         ]);
 
-        data = [
+        {
+          const combinedRows = [
           ...salesOrdersAgg.map(o => ({
             type: 'Sales',
             date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
             invoice: o.invoice_number,
-            customer: o.seller_name || 'N/A',
+            customer: o.customer_name || 'N/A',
             commodity: o.commodity,
             variety: o.variety || 'N/A',
             netWeight: o.net_weight_mt,
@@ -593,24 +757,24 @@ router.get('/reports/:reportType', async (req, res) => {
             type: 'Purchase',
             date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
             invoice: o.invoice_number,
-            customer: o.supplier_name || 'N/A',
+            customer: o.customer_name || 'N/A',
             commodity: o.commodity,
             variety: o.variety || 'N/A',
             netWeight: o.net_weight_mt,
             netAmount: o.net_amount
           }))
         ].sort((a, b) => new Date(b.date) - new Date(a.date));
+          const paginated = paginateRows(combinedRows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
 
-        const [salesCount, purchaseCount] = await Promise.all([
-          ConfirmedSalesOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]),
-          ConfirmedPurchaseOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }])
-        ]);
-        total = (salesCount[0]?.total || 0) + (purchaseCount[0]?.total || 0);
         break;
 
       case 'daily-transaction':
         // Daily Transaction Report (by booking date from sheet)
         const dailySales = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -624,6 +788,7 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const dailyPurchase = await ConfirmedPurchaseOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -637,7 +802,8 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const allDates = new Set([...dailySales.map(d => d._id), ...dailyPurchase.map(d => d._id)]);
-        data = Array.from(allDates).sort().reverse().map(date => {
+        {
+          const rows = Array.from(allDates).sort().reverse().map(date => {
           const sales = dailySales.find(d => d._id === date) || { salesOrders: 0, salesAmount: 0, salesWeight: 0 };
           const purchase = dailyPurchase.find(d => d._id === date) || { purchaseOrders: 0, purchaseAmount: 0, purchaseWeight: 0 };
           return {
@@ -651,21 +817,28 @@ router.get('/reports/:reportType', async (req, res) => {
             totalWeight: sales.salesWeight + purchase.purchaseWeight
           };
         });
-        total = data.length;
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'customer-ledger':
         // Customer Ledger (Customer = Seller from sales + Supplier from purchase; by booking date)
         const salesBySeller = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
-          { $group: { _id: '$seller_name', totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
+          ...addCustomerNameStages('sales'),
+          { $group: { _id: { $ifNull: ['$_customerName', { $ifNull: [nonEmptyStringExpr('$seller_name'), 'Unknown'] }] }, totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
           { $sort: { totalAmount: -1 } }
         ]);
         const purchaseBySupplier = await ConfirmedPurchaseOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
-          { $group: { _id: '$supplier_name', totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
+          ...addCustomerNameStages('purchase'),
+          { $group: { _id: { $ifNull: ['$_customerName', { $ifNull: [nonEmptyStringExpr('$supplier_name'), 'Unknown'] }] }, totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
           { $sort: { totalAmount: -1 } }
         ]);
         const customerKeys = new Map();
@@ -680,7 +853,8 @@ router.get('/reports/:reportType', async (req, res) => {
             prev.type = 'Sales & Purchase';
           } else customerKeys.set(key, { customer: key, totalOrders: c.totalOrders, totalAmount: c.totalAmount, totalWeight: c.totalWeight, type: 'Purchase' });
         });
-        data = Array.from(customerKeys.values()).map(c => ({
+        {
+          const rows = Array.from(customerKeys.values()).map(c => ({
           customer: c.customer,
           email: 'N/A',
           totalOrders: c.totalOrders,
@@ -689,47 +863,104 @@ router.get('/reports/:reportType', async (req, res) => {
           pending: 0,
           paid: Math.round(c.totalAmount * 100) / 100
         })).sort((a, b) => b.totalAmount - a.totalAmount);
-        total = data.length;
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'commodity-price':
         // Commodity Price List (by booking date)
-        const commodityPrices = await ConfirmedSalesOrder.aggregate([
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: { commodity: '$commodity', variety: '$variety' },
-              avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
-              minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
-              maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } },
-              totalOrders: { $sum: 1 },
-              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+        const [salesCommodityPrices, purchaseCommodityPrices] = await Promise.all([
+          ConfirmedSalesOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: {
+                  commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+                  variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+                },
+                avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
+                minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
+                maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } },
+                totalOrders: { $sum: 1 },
+                totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
             }
-          },
-          { $sort: { '_id.commodity': 1, '_id.variety': 1 } }
+          ]),
+          ConfirmedPurchaseOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: {
+                  commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+                  variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+                },
+                avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
+                minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
+                maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } },
+                totalOrders: { $sum: 1 },
+                totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
+            }
+          ])
         ]);
 
-        data = commodityPrices.map(c => ({
-          commodity: c._id.commodity || 'Unknown',
-          variety: c._id.variety || 'N/A',
-          avgRate: Math.round(c.avgRate * 100) / 100,
-          minRate: Math.round(c.minRate * 100) / 100,
-          maxRate: Math.round(c.maxRate * 100) / 100,
-          totalOrders: c.totalOrders,
-          totalWeight: Math.round(c.totalWeight * 1000) / 1000
-        }));
-        total = data.length;
+        {
+          const commodityPriceMap = new Map();
+          [...salesCommodityPrices, ...purchaseCommodityPrices].forEach((item) => {
+            const key = `${item._id.commodity}__${item._id.variety}`;
+            const existing = commodityPriceMap.get(key) || {
+              commodity: item._id.commodity || 'Unknown',
+              variety: item._id.variety || 'N/A',
+              totalAmountForAvg: 0,
+              avgSources: 0,
+              minRate: Number.POSITIVE_INFINITY,
+              maxRate: 0,
+              totalOrders: 0,
+              totalWeight: 0
+            };
+
+            existing.totalAmountForAvg += item.avgRate || 0;
+            existing.avgSources += 1;
+            existing.minRate = Math.min(existing.minRate, item.minRate || 0);
+            existing.maxRate = Math.max(existing.maxRate, item.maxRate || 0);
+            existing.totalOrders += item.totalOrders || 0;
+            existing.totalWeight += item.totalWeight || 0;
+            commodityPriceMap.set(key, existing);
+          });
+
+          const rows = Array.from(commodityPriceMap.values())
+            .map((c) => ({
+              commodity: c.commodity,
+              variety: c.variety,
+              avgRate: Math.round(((c.totalAmountForAvg / Math.max(c.avgSources, 1)) || 0) * 100) / 100,
+              minRate: Math.round((Number.isFinite(c.minRate) ? c.minRate : 0) * 100) / 100,
+              maxRate: Math.round((c.maxRate || 0) * 100) / 100,
+              totalOrders: c.totalOrders,
+              totalWeight: Math.round(c.totalWeight * 1000) / 1000
+            }))
+            .sort((a, b) => a.commodity.localeCompare(b.commodity) || a.variety.localeCompare(b.variety));
+
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'deduction':
         // Deduction Report (by booking date from sheet)
         const deductionOrders = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           { $sort: { _effectiveDate: -1 } },
-          { $skip: skip },
-          { $limit: parseInt(limit) },
+          { $skip: (pageNum - 1) * limitNum },
+          { $limit: limitNum },
           { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, deduction_amount_hlw: 1, deduction_amount_moi_bdoi: 1, other_deductions: 1, total_deduction: 1, gross_amount: 1, net_amount: 1 } }
         ]);
 
@@ -744,13 +975,14 @@ router.get('/reports/:reportType', async (req, res) => {
           grossAmount: o.gross_amount || 0,
           netAmount: o.net_amount || 0
         }));
-        const deductionCount = await ConfirmedSalesOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
+        const deductionCount = await ConfirmedSalesOrder.aggregate([activeOrderMatchStage, effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
         total = deductionCount[0]?.total || 0;
         break;
 
       case 'warehouse-stock':
         // Warehouse Stock Report (by booking date)
         const warehouseIn = await ConfirmedPurchaseOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -763,6 +995,7 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const warehouseOut = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -779,7 +1012,8 @@ router.get('/reports/:reportType', async (req, res) => {
           ...warehouseOut.map(w => `${w._id.warehouse}|${w._id.commodity}`)
         ]);
 
-        data = Array.from(warehouseKeys).map(key => {
+        {
+          const rows = Array.from(warehouseKeys).map(key => {
           const [warehouse, commodity] = key.split('|');
           const inData = warehouseIn.find(w => w._id.warehouse === warehouse && w._id.commodity === commodity) || { quantityIn: 0, ordersIn: 0 };
           const outData = warehouseOut.find(w => w._id.warehouse === warehouse && w._id.commodity === commodity) || { quantityOut: 0, ordersOut: 0 };
@@ -793,12 +1027,16 @@ router.get('/reports/:reportType', async (req, res) => {
             ordersOut: outData.ordersOut
           };
         }).filter(d => d.warehouse !== 'Unknown');
-        total = data.length;
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'vehicle':
         // Vehicle-wise Report (by booking date)
         const vehicleData = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -813,24 +1051,29 @@ router.get('/reports/:reportType', async (req, res) => {
           { $sort: { totalAmount: -1 } }
         ]);
 
-        data = vehicleData.filter(v => v._id && v._id !== 'N/A').map(v => ({
+        {
+          const rows = vehicleData.filter(v => v._id && v._id !== 'N/A').map(v => ({
           vehicleNo: v._id,
           trips: v.trips,
           totalWeight: Math.round(v.totalWeight * 1000) / 1000,
           totalAmount: Math.round(v.totalAmount * 100) / 100,
           commodities: v.commodities.join(', ')
         }));
-        total = data.length;
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'quality':
         // Quality Report (by booking date from sheet)
         const qualityOrders = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           { $sort: { _effectiveDate: -1 } },
-          { $skip: skip },
-          { $limit: parseInt(limit) },
+          { $skip: (pageNum - 1) * limitNum },
+          { $limit: limitNum },
           { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, variety: 1, hlw_wheat: 1, moisture_moi: 1, bdoi: 1, moi_bdoi: 1, total_deduction: 1 } }
         ]);
 
@@ -856,13 +1099,14 @@ router.get('/reports/:reportType', async (req, res) => {
             qualityGrade: grade
           };
         });
-        const qualityCount = await ConfirmedSalesOrder.aggregate([effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
+        const qualityCount = await ConfirmedSalesOrder.aggregate([activeOrderMatchStage, effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
         total = qualityCount[0]?.total || 0;
         break;
 
       case 'state-summary':
         // State-wise Summary (by booking date)
         const stateSales = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -876,6 +1120,7 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const statePurchase = await ConfirmedPurchaseOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -889,7 +1134,8 @@ router.get('/reports/:reportType', async (req, res) => {
         ]);
 
         const allStates = new Set([...stateSales.map(s => s._id), ...statePurchase.map(s => s._id)]);
-        data = Array.from(allStates).filter(s => s && s !== 'N/A').map(state => {
+        {
+          const rows = Array.from(allStates).filter(s => s && s !== 'N/A').map(state => {
           const sales = stateSales.find(s => s._id === state) || { salesOrders: 0, salesAmount: 0, salesWeight: 0 };
           const purchase = statePurchase.find(s => s._id === state) || { purchaseOrders: 0, purchaseAmount: 0, purchaseWeight: 0 };
           return {
@@ -903,12 +1149,16 @@ router.get('/reports/:reportType', async (req, res) => {
             totalWeight: Math.round((sales.salesWeight + purchase.purchaseWeight) * 1000) / 1000
           };
         }).sort((a, b) => b.totalAmount - a.totalAmount);
-        total = data.length;
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'monthly-pl':
         // Monthly P&L Statement (by booking date from sheet)
         const monthlyData = await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
           effectiveDateStage,
           dateMatchStage(startDate, endDate),
           {
@@ -924,9 +1174,12 @@ router.get('/reports/:reportType', async (req, res) => {
           { $sort: { _id: -1 } }
         ]);
 
-        data = monthlyData.map((m, index, arr) => {
+        {
+          const rows = monthlyData.map((m, index, arr) => {
           const prevMonth = arr[index + 1];
-          const growth = prevMonth ? ((m.netAmount - prevMonth.netAmount) / prevMonth.netAmount * 100) : 0;
+          const growth = prevMonth?.netAmount
+            ? ((m.netAmount - prevMonth.netAmount) / prevMonth.netAmount * 100)
+            : 0;
           return {
             month: m._id,
             grossAmount: Math.round(m.grossAmount * 100) / 100,
@@ -937,7 +1190,10 @@ router.get('/reports/:reportType', async (req, res) => {
             growthPercent: Math.round(growth * 100) / 100
           };
         });
-        total = data.length;
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       default:
@@ -949,10 +1205,10 @@ router.get('/reports/:reportType', async (req, res) => {
       reportType,
       data,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: pageNum,
+        limit: limitNum,
         total,
-        totalPages: Math.ceil(total / parseInt(limit))
+        totalPages: Math.ceil(total / limitNum)
       }
     });
   } catch (error) {

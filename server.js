@@ -32,6 +32,8 @@ import supplyTransactionRoutes from './routes/supplyTransactions.js';
 import registrationRoutes from './routes/registration.js';
 import analyticsRoutes from './routes/analytics.js';
 import documentViewRoutes from './routes/documentView.js';
+import siteSettingsRoutes from './routes/siteSettings.js';
+import contactInquiryRoutes from './routes/contactInquiries.js';
 
 dotenv.config();
 
@@ -203,6 +205,8 @@ app.use('/api/supply-transactions', supplyTransactionRoutes);
 app.use('/api/registration', registrationRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/documents', documentViewRoutes);
+app.use('/api/site-settings', siteSettingsRoutes);
+app.use('/api/contact-inquiries', contactInquiryRoutes);
 
 // -----------------------------
 // ERROR HANDLER

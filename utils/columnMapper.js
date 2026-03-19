@@ -10,10 +10,32 @@
  * @param {*} defaultValue - Default value if not found
  * @returns {*} The mapped value
  */
+const normalizeColumnName = (value) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[._-]+/g, ' ')
+    .replace(/[()]/g, '')
+    .trim();
+
+const findMatchingKey = (record, targetColumn) => {
+  if (!record || !targetColumn) return null;
+
+  if (Object.prototype.hasOwnProperty.call(record, targetColumn)) {
+    return targetColumn;
+  }
+
+  const normalizedTarget = normalizeColumnName(targetColumn);
+  if (!normalizedTarget) return null;
+
+  return Object.keys(record).find((key) => normalizeColumnName(key) === normalizedTarget) || null;
+};
+
 export const getMappedValue = (record, columnMapping, fallbackNames = [], defaultValue = '') => {
   // First try the mapped column name
   if (columnMapping) {
-    const mappedColumn = columnMapping;
+    const mappedColumn = findMatchingKey(record, columnMapping);
     if (mappedColumn && record[mappedColumn] !== undefined && record[mappedColumn] !== null && record[mappedColumn] !== '') {
       return record[mappedColumn];
     }
@@ -21,8 +43,9 @@ export const getMappedValue = (record, columnMapping, fallbackNames = [], defaul
   
   // Then try fallback names
   for (const name of fallbackNames) {
-    if (record[name] !== undefined && record[name] !== null && record[name] !== '') {
-      return record[name];
+    const matchedName = findMatchingKey(record, name);
+    if (matchedName && record[matchedName] !== undefined && record[matchedName] !== null && record[matchedName] !== '') {
+      return record[matchedName];
     }
   }
   

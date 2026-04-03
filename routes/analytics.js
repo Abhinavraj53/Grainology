@@ -54,6 +54,160 @@ const getDateRange = (period) => {
   return { startDate, endDate };
 };
 
+const normalizeOrderType = (value) => {
+  const normalized = String(value || 'purchase').toLowerCase();
+  return ['all', 'sales', 'purchase'].includes(normalized) ? normalized : 'all';
+};
+
+const normalizeFilterMode = (value) => {
+  const normalized = String(value || 'year').toLowerCase();
+  return ['year', 'month', 'week', 'date-range'].includes(normalized) ? normalized : 'year';
+};
+
+const parseValidYear = (value) => {
+  const parsedYear = Number(value);
+  return Number.isInteger(parsedYear) && parsedYear >= 2000 && parsedYear <= 2100 ? parsedYear : null;
+};
+
+const parseValidMonth = (value) => {
+  const parsedMonth = Number(value);
+  return Number.isInteger(parsedMonth) && parsedMonth >= 1 && parsedMonth <= 12 ? parsedMonth : null;
+};
+
+const parseValidWeek = (value) => {
+  const parsedWeek = Number(value);
+  return Number.isInteger(parsedWeek) && parsedWeek >= 1 && parsedWeek <= 53 ? parsedWeek : null;
+};
+
+const parseDateInput = (value) => {
+  if (!value) return null;
+  const parsedDate = new Date(`${String(value).trim()}T00:00:00.000Z`);
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+const getISOWeekStart = (year, week) => {
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const dayOfWeek = januaryFourth.getUTCDay() || 7;
+  const weekOneStart = new Date(januaryFourth);
+  weekOneStart.setUTCDate(januaryFourth.getUTCDate() - dayOfWeek + 1);
+  const weekStart = new Date(weekOneStart);
+  weekStart.setUTCDate(weekOneStart.getUTCDate() + (week - 1) * 7);
+  return weekStart;
+};
+
+const shiftRangeToYear = (startDate, endDate, targetYear) => {
+  const durationMs = endDate.getTime() - startDate.getTime();
+  const shiftedStart = new Date(Date.UTC(
+    targetYear,
+    startDate.getUTCMonth(),
+    startDate.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  const shiftedEnd = new Date(shiftedStart.getTime() + durationMs);
+  shiftedEnd.setUTCHours(23, 59, 59, 999);
+  return {
+    startDate: shiftedStart,
+    endDate: shiftedEnd
+  };
+};
+
+const getDateRangeForFilters = (filters = {}, overrideYear = null) => {
+  const filterMode = normalizeFilterMode(filters.filterMode);
+  const overrideParsedYear = parseValidYear(overrideYear);
+  const parsedYear = parseValidYear(filters.year);
+  const effectiveYear = overrideParsedYear || parsedYear;
+  const parsedMonth = parseValidMonth(filters.month);
+  const parsedWeek = parseValidWeek(filters.week);
+  const parsedStartDate = parseDateInput(filters.startDate);
+  const parsedEndDate = parseDateInput(filters.endDate);
+
+  if (filterMode === 'date-range' && parsedStartDate && parsedEndDate) {
+    if (overrideParsedYear) {
+      return shiftRangeToYear(startOfDay(parsedStartDate), endOfDay(parsedEndDate), overrideParsedYear);
+    }
+
+    return {
+      startDate: startOfDay(parsedStartDate),
+      endDate: endOfDay(parsedEndDate)
+    };
+  }
+
+  if (filterMode === 'month' && effectiveYear && parsedMonth) {
+    return {
+      startDate: new Date(Date.UTC(effectiveYear, parsedMonth - 1, 1, 0, 0, 0, 0)),
+      endDate: new Date(Date.UTC(effectiveYear, parsedMonth, 0, 23, 59, 59, 999))
+    };
+  }
+
+  if (filterMode === 'week' && effectiveYear && parsedWeek) {
+    const weekStart = getISOWeekStart(effectiveYear, parsedWeek);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    weekEnd.setUTCHours(23, 59, 59, 999);
+    return {
+      startDate: weekStart,
+      endDate: weekEnd
+    };
+  }
+
+  if (effectiveYear) {
+    return {
+      startDate: new Date(Date.UTC(effectiveYear, 0, 1, 0, 0, 0, 0)),
+      endDate: new Date(Date.UTC(effectiveYear, 11, 31, 23, 59, 59, 999))
+    };
+  }
+
+  return getDateRange(filters.period);
+};
+
+const getOrderTypeFlags = (orderType) => {
+  const normalizedOrderType = normalizeOrderType(orderType);
+  return {
+    orderType: normalizedOrderType,
+    includeSales: normalizedOrderType === 'all' || normalizedOrderType === 'sales',
+    includePurchase: normalizedOrderType === 'all' || normalizedOrderType === 'purchase'
+  };
+};
+
+const EMPTY_SUMMARY = {
+  totalOrders: 0,
+  totalAmount: 0,
+  totalWeight: 0,
+  totalDeductions: 0,
+  avgRate: 0
+};
+
+const roundAmount = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const roundWeight = (value) => Math.round((Number(value) || 0) * 1000) / 1000;
+
+const aggregateSummary = async (Model, startDate, endDate) => {
+  const [summary] = await Model.aggregate([
+    activeOrderMatchStage,
+    effectiveDateStage,
+    dateMatchStage(startDate, endDate),
+    {
+      $group: {
+        _id: null,
+        totalOrders: { $sum: 1 },
+        totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+        totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+        totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
+        avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
+      }
+    }
+  ]);
+
+  if (!summary) return { ...EMPTY_SUMMARY };
+
+  return {
+    totalOrders: summary.totalOrders || 0,
+    totalAmount: roundAmount(summary.totalAmount),
+    totalWeight: roundWeight(summary.totalWeight),
+    totalDeductions: roundAmount(summary.totalDeductions),
+    avgRate: roundAmount(summary.avgRate)
+  };
+};
+
 // Use booking date (transaction_date from excel) for analytics; fallback to createdAt
 const effectiveDateStage = {
   $addFields: {
@@ -138,52 +292,57 @@ const addCustomerNameStages = (type = 'sales') => [
 // Get time-based analytics (Daily/Weekly/Monthly trends)
 router.get('/time-based', async (req, res) => {
   try {
-    const { period = 'month', groupBy = 'day' } = req.query;
-    const { startDate, endDate } = getDateRange(period);
+    const { period = 'all', groupBy = 'month', orderType = 'purchase', year } = req.query;
+    const { startDate, endDate } = getDateRangeForFilters(req.query);
+    const { orderType: normalizedOrderType, includeSales, includePurchase } = getOrderTypeFlags(orderType);
 
     // Aggregation for sales orders (by booking date from sheet)
-    const salesAggregation = await ConfirmedSalesOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-W%V' : '%Y-%m-%d',
-              date: '$_effectiveDate'
+    const salesAggregation = includeSales
+      ? await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-W%V' : '%Y-%m-%d',
+                  date: '$_effectiveDate'
+                }
+              },
+              totalOrders: { $sum: 1 },
+              totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+              avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
             }
           },
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
+          { $sort: { _id: 1 } }
+        ])
+      : [];
 
     // Aggregation for purchase orders (by booking date from sheet)
-    const purchaseAggregation = await ConfirmedPurchaseOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: {
-            $dateToString: {
-              format: groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-W%V' : '%Y-%m-%d',
-              date: '$_effectiveDate'
+    const purchaseAggregation = includePurchase
+      ? await ConfirmedPurchaseOrder.aggregate([
+          activeOrderMatchStage,
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: groupBy === 'month' ? '%Y-%m' : groupBy === 'week' ? '%Y-W%V' : '%Y-%m-%d',
+                  date: '$_effectiveDate'
+                }
+              },
+              totalOrders: { $sum: 1 },
+              totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+              avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
             }
           },
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
+          { $sort: { _id: 1 } }
+        ])
+      : [];
 
     // Combine data for trends
     const allDates = new Set([
@@ -230,7 +389,9 @@ router.get('/time-based', async (req, res) => {
       trends,
       heatmapData,
       period,
-      groupBy
+      groupBy,
+      year: year ? Number(year) : null,
+      orderType: normalizedOrderType
     });
   } catch (error) {
     console.error('Time-based analytics error:', error);
@@ -241,113 +402,126 @@ router.get('/time-based', async (req, res) => {
 // Get commodity analytics
 router.get('/commodity', async (req, res) => {
   try {
-    const { period = 'all' } = req.query;
-    const { startDate, endDate } = getDateRange(period);
+    const { period = 'all', orderType = 'purchase', year } = req.query;
+    const { startDate, endDate } = getDateRangeForFilters(req.query);
+    const { orderType: normalizedOrderType, includeSales, includePurchase } = getOrderTypeFlags(orderType);
 
     // Commodity distribution for sales (by booking date)
-    const salesByCommodity = await ConfirmedSalesOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
-          minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
-          maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      },
-      { $sort: { totalAmount: -1 } }
-    ]);
+    const salesByCommodity = includeSales
+      ? await ConfirmedSalesOrder.aggregate([
+          activeOrderMatchStage,
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          {
+            $group: {
+              _id: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+              totalOrders: { $sum: 1 },
+              totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+              avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
+              minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
+              maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } }
+            }
+          },
+          { $sort: { totalAmount: -1 } }
+        ])
+      : [];
 
     // Commodity distribution for purchases (by booking date)
-    const purchaseByCommodity = await ConfirmedPurchaseOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
-          minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
-          maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      },
-      { $sort: { totalAmount: -1 } }
-    ]);
+    const purchaseByCommodity = includePurchase
+      ? await ConfirmedPurchaseOrder.aggregate([
+          activeOrderMatchStage,
+          effectiveDateStage,
+          dateMatchStage(startDate, endDate),
+          {
+            $group: {
+              _id: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+              totalOrders: { $sum: 1 },
+              totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+              avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } },
+              minRate: { $min: { $ifNull: ['$rate_per_mt', 0] } },
+              maxRate: { $max: { $ifNull: ['$rate_per_mt', 0] } }
+            }
+          },
+          { $sort: { totalAmount: -1 } }
+        ])
+      : [];
 
     // Variety breakdown (by booking date)
     const [salesVarietyBreakdown, purchaseVarietyBreakdown, salesPriceTrends, purchasePriceTrends] = await Promise.all([
-      ConfirmedSalesOrder.aggregate([
-        activeOrderMatchStage,
-        effectiveDateStage,
-        dateMatchStage(startDate, endDate),
-        {
-          $group: {
-            _id: {
-              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
-              variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+      includeSales
+        ? ConfirmedSalesOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: {
+                  commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+                  variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+                },
+                totalOrders: { $sum: 1 },
+                totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
             },
-            totalOrders: { $sum: 1 },
-            totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-            totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-          }
-        },
-        { $sort: { totalAmount: -1 } }
-      ]),
-      ConfirmedPurchaseOrder.aggregate([
-        activeOrderMatchStage,
-        effectiveDateStage,
-        dateMatchStage(startDate, endDate),
-        {
-          $group: {
-            _id: {
-              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
-              variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+            { $sort: { totalAmount: -1 } }
+          ])
+        : Promise.resolve([]),
+      includePurchase
+        ? ConfirmedPurchaseOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: {
+                  commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] },
+                  variety: { $ifNull: [nonEmptyStringExpr('$variety'), 'N/A'] }
+                },
+                totalOrders: { $sum: 1 },
+                totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
             },
-            totalOrders: { $sum: 1 },
-            totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-            totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-          }
-        },
-        { $sort: { totalAmount: -1 } }
-      ]),
-      ConfirmedSalesOrder.aggregate([
-        activeOrderMatchStage,
-        effectiveDateStage,
-        dateMatchStage(startDate, endDate),
-        {
-          $group: {
-            _id: {
-              date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
-              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] }
+            { $sort: { totalAmount: -1 } }
+          ])
+        : Promise.resolve([]),
+      includeSales
+        ? ConfirmedSalesOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: {
+                  date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
+                  commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] }
+                },
+                avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
+              }
             },
-            avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-          }
-        },
-        { $sort: { '_id.date': 1 } }
-      ]),
-      ConfirmedPurchaseOrder.aggregate([
-        activeOrderMatchStage,
-        effectiveDateStage,
-        dateMatchStage(startDate, endDate),
-        {
-          $group: {
-            _id: {
-              date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
-              commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] }
+            { $sort: { '_id.date': 1 } }
+          ])
+        : Promise.resolve([]),
+      includePurchase
+        ? ConfirmedPurchaseOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: {
+                  date: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
+                  commodity: { $ifNull: [nonEmptyStringExpr('$commodity'), 'Unknown'] }
+                },
+                avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
+              }
             },
-            avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-          }
-        },
-        { $sort: { '_id.date': 1 } }
-      ])
+            { $sort: { '_id.date': 1 } }
+          ])
+        : Promise.resolve([])
     ]);
 
     const varietyMap = new Map();
@@ -384,6 +558,8 @@ router.get('/commodity', async (req, res) => {
 
     res.json({
       success: true,
+      orderType: normalizedOrderType,
+      year: year ? Number(year) : null,
       salesByCommodity: salesByCommodity.map(c => ({
         commodity: c._id || 'Unknown',
         orders: c.totalOrders,
@@ -420,8 +596,8 @@ router.get('/commodity', async (req, res) => {
 // Get customer/seller analytics
 router.get('/customer', async (req, res) => {
   try {
-    const { period = 'all', type = 'sales' } = req.query;
-    const { startDate, endDate } = getDateRange(period);
+    const { period = 'all', type = 'purchase', year } = req.query;
+    const { startDate, endDate } = getDateRangeForFilters(req.query);
 
     const Model = type === 'purchase' ? ConfirmedPurchaseOrder : ConfirmedSalesOrder;
 
@@ -546,103 +722,90 @@ router.get('/customer', async (req, res) => {
 // Get comparative analytics (Purchase vs Sales)
 router.get('/comparison', async (req, res) => {
   try {
-    const { period = 'month' } = req.query;
-    const { startDate, endDate } = getDateRange(period);
+    const { period = 'all', orderType = 'purchase', year, compareYear } = req.query;
+    const { startDate, endDate } = getDateRangeForFilters(req.query);
+    const { orderType: normalizedOrderType, includeSales, includePurchase } = getOrderTypeFlags(orderType);
 
     // Sales summary (by booking date)
-    const salesSummary = await ConfirmedSalesOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: null,
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-          totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      }
-    ]);
+    const salesSummary = includeSales
+      ? await aggregateSummary(ConfirmedSalesOrder, startDate, endDate)
+      : { ...EMPTY_SUMMARY };
 
     // Purchase summary (by booking date)
-    const purchaseSummary = await ConfirmedPurchaseOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: null,
-          totalOrders: { $sum: 1 },
-          totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-          totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
-          avgRate: { $avg: { $ifNull: ['$rate_per_mt', 0] } }
-        }
-      }
-    ]);
+    const purchaseSummary = includePurchase
+      ? await aggregateSummary(ConfirmedPurchaseOrder, startDate, endDate)
+      : { ...EMPTY_SUMMARY };
 
     // Warehouse comparison (by booking date)
-    const salesByWarehouse = await ConfirmedSalesOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: '$warehouse_name',
-          orders: { $sum: 1 },
-          amount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-        }
-      },
-      { $sort: { amount: -1 } }
-    ]);
-
-    const purchaseByWarehouse = await ConfirmedPurchaseOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: '$warehouse_name',
-          orders: { $sum: 1 },
-          amount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-        }
-      },
-      { $sort: { amount: -1 } }
+    const [salesByWarehouse, purchaseByWarehouse] = await Promise.all([
+      includeSales
+        ? ConfirmedSalesOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: '$warehouse_name',
+                orders: { $sum: 1 },
+                amount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
+            },
+            { $sort: { amount: -1 } }
+          ])
+        : Promise.resolve([]),
+      includePurchase
+        ? ConfirmedPurchaseOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: '$warehouse_name',
+                orders: { $sum: 1 },
+                amount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
+            },
+            { $sort: { amount: -1 } }
+          ])
+        : Promise.resolve([])
     ]);
 
     // State-wise comparison (by booking date)
-    const salesByState = await ConfirmedSalesOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: '$state',
-          orders: { $sum: 1 },
-          amount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-        }
-      },
-      { $sort: { amount: -1 } }
-    ]);
-
-    const purchaseByState = await ConfirmedPurchaseOrder.aggregate([
-      activeOrderMatchStage,
-      effectiveDateStage,
-      dateMatchStage(startDate, endDate),
-      {
-        $group: {
-          _id: '$state',
-          orders: { $sum: 1 },
-          amount: { $sum: { $ifNull: ['$net_amount', 0] } },
-          weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-        }
-      },
-      { $sort: { amount: -1 } }
+    const [salesByState, purchaseByState] = await Promise.all([
+      includeSales
+        ? ConfirmedSalesOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: '$state',
+                orders: { $sum: 1 },
+                amount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
+            },
+            { $sort: { amount: -1 } }
+          ])
+        : Promise.resolve([]),
+      includePurchase
+        ? ConfirmedPurchaseOrder.aggregate([
+            activeOrderMatchStage,
+            effectiveDateStage,
+            dateMatchStage(startDate, endDate),
+            {
+              $group: {
+                _id: '$state',
+                orders: { $sum: 1 },
+                amount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                weight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+              }
+            },
+            { $sort: { amount: -1 } }
+          ])
+        : Promise.resolve([])
     ]);
 
     // Combine warehouse data for radar chart
@@ -658,28 +821,63 @@ router.get('/comparison', async (req, res) => {
       return {
         warehouse: warehouse || 'Unknown',
         salesOrders: sales.orders,
-        salesAmount: Math.round(sales.amount * 100) / 100,
+        salesAmount: roundAmount(sales.amount),
         purchaseOrders: purchase.orders,
-        purchaseAmount: Math.round(purchase.amount * 100) / 100
+        purchaseAmount: roundAmount(purchase.amount)
       };
     }).slice(0, 10);
 
+    const requestedYears = [year, compareYear]
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value >= 2000 && value <= 2100);
+
+    const uniqueYears = Array.from(new Set(requestedYears));
+
+    const yearComparison = await Promise.all(
+      uniqueYears.map(async (selectedYear) => {
+        const yearRange = getDateRangeForFilters(req.query, selectedYear);
+        const [sales, purchase] = await Promise.all([
+          includeSales
+            ? aggregateSummary(ConfirmedSalesOrder, yearRange.startDate, yearRange.endDate)
+            : Promise.resolve({ ...EMPTY_SUMMARY }),
+          includePurchase
+            ? aggregateSummary(ConfirmedPurchaseOrder, yearRange.startDate, yearRange.endDate)
+            : Promise.resolve({ ...EMPTY_SUMMARY })
+        ]);
+
+        return {
+          year: selectedYear,
+          sales,
+          purchase,
+          total: {
+            totalOrders: sales.totalOrders + purchase.totalOrders,
+            totalAmount: roundAmount(sales.totalAmount + purchase.totalAmount),
+            totalWeight: roundWeight(sales.totalWeight + purchase.totalWeight)
+          }
+        };
+      })
+    );
+
     res.json({
       success: true,
-      sales: salesSummary[0] || { totalOrders: 0, totalAmount: 0, totalWeight: 0, totalDeductions: 0, avgRate: 0 },
-      purchase: purchaseSummary[0] || { totalOrders: 0, totalAmount: 0, totalWeight: 0, totalDeductions: 0, avgRate: 0 },
+      orderType: normalizedOrderType,
+      activeYear: year ? Number(year) : null,
+      compareYear: compareYear ? Number(compareYear) : null,
+      sales: salesSummary,
+      purchase: purchaseSummary,
       warehouseComparison,
+      yearComparison,
       salesByState: salesByState.filter(s => s._id).map(s => ({
         state: s._id || 'Unknown',
         orders: s.orders,
-        amount: Math.round(s.amount * 100) / 100,
-        weight: Math.round(s.weight * 1000) / 1000
+        amount: roundAmount(s.amount),
+        weight: roundWeight(s.weight)
       })),
       purchaseByState: purchaseByState.filter(s => s._id).map(s => ({
         state: s._id || 'Unknown',
         orders: s.orders,
-        amount: Math.round(s.amount * 100) / 100,
-        weight: Math.round(s.weight * 1000) / 1000
+        amount: roundAmount(s.amount),
+        weight: roundWeight(s.weight)
       }))
     });
   } catch (error) {
@@ -692,8 +890,9 @@ router.get('/comparison', async (req, res) => {
 router.get('/reports/:reportType', async (req, res) => {
   try {
     const { reportType } = req.params;
-    const { period = 'month', page = 1, limit = 50 } = req.query;
-    const { startDate, endDate } = getDateRange(period);
+    const { period = 'all', page = 1, limit = 50, orderType = 'purchase', year } = req.query;
+    const { startDate, endDate } = getDateRangeForFilters(req.query);
+    const { orderType: normalizedOrderType, includeSales, includePurchase } = getOrderTypeFlags(orderType);
     let data = [];
     let total = 0;
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
@@ -703,42 +902,46 @@ router.get('/reports/:reportType', async (req, res) => {
       case 'order-summary':
         // Order Summary Table (by booking date; Customer = Seller/Supplier from sheet)
         const [salesOrdersAgg, purchaseOrdersAgg] = await Promise.all([
-          ConfirmedSalesOrder.aggregate([
-            activeOrderMatchStage,
-            effectiveDateStage,
-            dateMatchStage(startDate, endDate),
-            ...addCustomerNameStages('sales'),
-            { 
-              $project: { 
-                transaction_date: 1, 
-                invoice_number: 1, 
-                customer_name: { $ifNull: ['$_customerName', { $ifNull: ['$seller_name', 'Unknown'] }] }, 
-                commodity: 1, 
-                variety: 1, 
-                net_weight_mt: 1, 
-                net_amount: 1, 
-                _effectiveDate: 1 
-              } 
-            }
-          ]),
-          ConfirmedPurchaseOrder.aggregate([
-            activeOrderMatchStage,
-            effectiveDateStage,
-            dateMatchStage(startDate, endDate),
-            ...addCustomerNameStages('purchase'),
-            { 
-              $project: { 
-                transaction_date: 1, 
-                invoice_number: 1, 
-                customer_name: { $ifNull: ['$_customerName', { $ifNull: ['$supplier_name', 'Unknown'] }] }, 
-                commodity: 1, 
-                variety: 1, 
-                net_weight_mt: 1, 
-                net_amount: 1, 
-                _effectiveDate: 1 
-              } 
-            }
-          ])
+          includeSales
+            ? ConfirmedSalesOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                ...addCustomerNameStages('sales'),
+                {
+                  $project: {
+                    transaction_date: 1,
+                    invoice_number: 1,
+                    customer_name: { $ifNull: ['$_customerName', { $ifNull: ['$seller_name', 'Unknown'] }] },
+                    commodity: 1,
+                    variety: 1,
+                    net_weight_mt: 1,
+                    net_amount: 1,
+                    _effectiveDate: 1
+                  }
+                }
+              ])
+            : Promise.resolve([]),
+          includePurchase
+            ? ConfirmedPurchaseOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                ...addCustomerNameStages('purchase'),
+                {
+                  $project: {
+                    transaction_date: 1,
+                    invoice_number: 1,
+                    customer_name: { $ifNull: ['$_customerName', { $ifNull: ['$supplier_name', 'Unknown'] }] },
+                    commodity: 1,
+                    variety: 1,
+                    net_weight_mt: 1,
+                    net_amount: 1,
+                    _effectiveDate: 1
+                  }
+                }
+              ])
+            : Promise.resolve([])
         ]);
 
         {
@@ -773,32 +976,37 @@ router.get('/reports/:reportType', async (req, res) => {
 
       case 'daily-transaction':
         // Daily Transaction Report (by booking date from sheet)
-        const dailySales = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
-              salesOrders: { $sum: 1 },
-              salesAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              salesWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-            }
-          }
-        ]);
-
-        const dailyPurchase = await ConfirmedPurchaseOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
-              purchaseOrders: { $sum: 1 },
-              purchaseAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              purchaseWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-            }
-          }
+        const [dailySales, dailyPurchase] = await Promise.all([
+          includeSales
+            ? ConfirmedSalesOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                {
+                  $group: {
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
+                    salesOrders: { $sum: 1 },
+                    salesAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                    salesWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+                  }
+                }
+              ])
+            : Promise.resolve([]),
+          includePurchase
+            ? ConfirmedPurchaseOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                {
+                  $group: {
+                    _id: { $dateToString: { format: '%Y-%m-%d', date: '$_effectiveDate' } },
+                    purchaseOrders: { $sum: 1 },
+                    purchaseAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                    purchaseWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+                  }
+                }
+              ])
+            : Promise.resolve([])
         ]);
 
         const allDates = new Set([...dailySales.map(d => d._id), ...dailyPurchase.map(d => d._id)]);
@@ -825,21 +1033,27 @@ router.get('/reports/:reportType', async (req, res) => {
 
       case 'customer-ledger':
         // Customer Ledger (Customer = Seller from sales + Supplier from purchase; by booking date)
-        const salesBySeller = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          ...addCustomerNameStages('sales'),
-          { $group: { _id: { $ifNull: ['$_customerName', { $ifNull: [nonEmptyStringExpr('$seller_name'), 'Unknown'] }] }, totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
-          { $sort: { totalAmount: -1 } }
-        ]);
-        const purchaseBySupplier = await ConfirmedPurchaseOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          ...addCustomerNameStages('purchase'),
-          { $group: { _id: { $ifNull: ['$_customerName', { $ifNull: [nonEmptyStringExpr('$supplier_name'), 'Unknown'] }] }, totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
-          { $sort: { totalAmount: -1 } }
+        const [salesBySeller, purchaseBySupplier] = await Promise.all([
+          includeSales
+            ? ConfirmedSalesOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                ...addCustomerNameStages('sales'),
+                { $group: { _id: { $ifNull: ['$_customerName', { $ifNull: [nonEmptyStringExpr('$seller_name'), 'Unknown'] }] }, totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
+                { $sort: { totalAmount: -1 } }
+              ])
+            : Promise.resolve([]),
+          includePurchase
+            ? ConfirmedPurchaseOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                ...addCustomerNameStages('purchase'),
+                { $group: { _id: { $ifNull: ['$_customerName', { $ifNull: [nonEmptyStringExpr('$supplier_name'), 'Unknown'] }] }, totalOrders: { $sum: 1 }, totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } }, totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } } } },
+                { $sort: { totalAmount: -1 } }
+              ])
+            : Promise.resolve([])
         ]);
         const customerKeys = new Map();
         salesBySeller.forEach(c => { customerKeys.set(c._id || 'Unknown', { customer: c._id || 'Unknown', totalOrders: c.totalOrders, totalAmount: c.totalAmount, totalWeight: c.totalWeight, type: 'Sales' }); });
@@ -872,7 +1086,7 @@ router.get('/reports/:reportType', async (req, res) => {
       case 'commodity-price':
         // Commodity Price List (by booking date)
         const [salesCommodityPrices, purchaseCommodityPrices] = await Promise.all([
-          ConfirmedSalesOrder.aggregate([
+          includeSales ? ConfirmedSalesOrder.aggregate([
             activeOrderMatchStage,
             effectiveDateStage,
             dateMatchStage(startDate, endDate),
@@ -889,8 +1103,8 @@ router.get('/reports/:reportType', async (req, res) => {
                 totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
               }
             }
-          ]),
-          ConfirmedPurchaseOrder.aggregate([
+          ]) : Promise.resolve([]),
+          includePurchase ? ConfirmedPurchaseOrder.aggregate([
             activeOrderMatchStage,
             effectiveDateStage,
             dateMatchStage(startDate, endDate),
@@ -907,7 +1121,7 @@ router.get('/reports/:reportType', async (req, res) => {
                 totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
               }
             }
-          ])
+          ]) : Promise.resolve([])
         ]);
 
         {
@@ -954,29 +1168,57 @@ router.get('/reports/:reportType', async (req, res) => {
 
       case 'deduction':
         // Deduction Report (by booking date from sheet)
-        const deductionOrders = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          { $sort: { _effectiveDate: -1 } },
-          { $skip: (pageNum - 1) * limitNum },
-          { $limit: limitNum },
-          { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, deduction_amount_hlw: 1, deduction_amount_moi_bdoi: 1, other_deductions: 1, total_deduction: 1, gross_amount: 1, net_amount: 1 } }
-        ]);
+        {
+          const [salesDeductionOrders, purchaseDeductionOrders] = await Promise.all([
+            includeSales
+              ? ConfirmedSalesOrder.aggregate([
+                  activeOrderMatchStage,
+                  effectiveDateStage,
+                  dateMatchStage(startDate, endDate),
+                  { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, deduction_amount_hlw: 1, deduction_amount_moi_bdoi: 1, other_deductions: 1, total_deduction: 1, gross_amount: 1, net_amount: 1, _effectiveDate: 1 } }
+                ])
+              : Promise.resolve([]),
+            includePurchase
+              ? ConfirmedPurchaseOrder.aggregate([
+                  activeOrderMatchStage,
+                  effectiveDateStage,
+                  dateMatchStage(startDate, endDate),
+                  { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, deduction_amount_hlw: 1, deduction_amount_moi_bddi: 1, other_deductions: 1, total_deduction: 1, gross_amount: 1, net_amount: 1, _effectiveDate: 1 } }
+                ])
+              : Promise.resolve([])
+          ]);
 
-        data = deductionOrders.map(o => ({
-          invoice: o.invoice_number,
-          date: o.transaction_date,
-          commodity: o.commodity,
-          hlwDeduction: o.deduction_amount_hlw || 0,
-          moiBdoiDeduction: o.deduction_amount_moi_bdoi || 0,
-          otherDeductions: (o.other_deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0),
-          totalDeduction: o.total_deduction || 0,
-          grossAmount: o.gross_amount || 0,
-          netAmount: o.net_amount || 0
-        }));
-        const deductionCount = await ConfirmedSalesOrder.aggregate([activeOrderMatchStage, effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
-        total = deductionCount[0]?.total || 0;
+          const rows = [
+            ...salesDeductionOrders.map(o => ({
+              type: 'Sales',
+              invoice: o.invoice_number,
+              date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
+              commodity: o.commodity,
+              hlwDeduction: o.deduction_amount_hlw || 0,
+              moiBdoiDeduction: o.deduction_amount_moi_bdoi || 0,
+              otherDeductions: (o.other_deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0),
+              totalDeduction: o.total_deduction || 0,
+              grossAmount: o.gross_amount || 0,
+              netAmount: o.net_amount || 0
+            })),
+            ...purchaseDeductionOrders.map(o => ({
+              type: 'Purchase',
+              invoice: o.invoice_number,
+              date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
+              commodity: o.commodity,
+              hlwDeduction: o.deduction_amount_hlw || 0,
+              moiBdoiDeduction: o.deduction_amount_moi_bddi || 0,
+              otherDeductions: (o.other_deductions || []).reduce((sum, d) => sum + (d.amount || 0), 0),
+              totalDeduction: o.total_deduction || 0,
+              grossAmount: o.gross_amount || 0,
+              netAmount: o.net_amount || 0
+            }))
+          ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'warehouse-stock':
@@ -1035,30 +1277,54 @@ router.get('/reports/:reportType', async (req, res) => {
 
       case 'vehicle':
         // Vehicle-wise Report (by booking date)
-        const vehicleData = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: '$vehicle_no',
-              trips: { $sum: 1 },
-              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
-              totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              commodities: { $addToSet: '$commodity' }
-            }
-          },
-          { $sort: { totalAmount: -1 } }
-        ]);
-
         {
-          const rows = vehicleData.filter(v => v._id && v._id !== 'N/A').map(v => ({
-          vehicleNo: v._id,
-          trips: v.trips,
-          totalWeight: Math.round(v.totalWeight * 1000) / 1000,
-          totalAmount: Math.round(v.totalAmount * 100) / 100,
-          commodities: v.commodities.join(', ')
-        }));
+          const [salesVehicleData, purchaseVehicleData] = await Promise.all([
+            includeSales
+              ? ConfirmedSalesOrder.aggregate([
+                  activeOrderMatchStage,
+                  effectiveDateStage,
+                  dateMatchStage(startDate, endDate),
+                  {
+                    $group: {
+                      _id: '$vehicle_no',
+                      trips: { $sum: 1 },
+                      totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+                      totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                      commodities: { $addToSet: '$commodity' }
+                    }
+                  },
+                  { $sort: { totalAmount: -1 } }
+                ])
+              : Promise.resolve([]),
+            includePurchase
+              ? ConfirmedPurchaseOrder.aggregate([
+                  activeOrderMatchStage,
+                  effectiveDateStage,
+                  dateMatchStage(startDate, endDate),
+                  {
+                    $group: {
+                      _id: '$vehicle_no',
+                      trips: { $sum: 1 },
+                      totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } },
+                      totalAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                      commodities: { $addToSet: '$commodity' }
+                    }
+                  },
+                  { $sort: { totalAmount: -1 } }
+                ])
+              : Promise.resolve([])
+          ]);
+
+          const rows = [...salesVehicleData, ...purchaseVehicleData]
+            .filter(v => v._id && v._id !== 'N/A')
+            .map(v => ({
+              type: salesVehicleData.includes(v) ? 'Sales' : 'Purchase',
+              vehicleNo: v._id,
+              trips: v.trips,
+              totalWeight: roundWeight(v.totalWeight),
+              totalAmount: roundAmount(v.totalAmount),
+              commodities: v.commodities.join(', ')
+            }));
           const paginated = paginateRows(rows, pageNum, limitNum);
           data = paginated.rows;
           total = paginated.total;
@@ -1067,70 +1333,90 @@ router.get('/reports/:reportType', async (req, res) => {
 
       case 'quality':
         // Quality Report (by booking date from sheet)
-        const qualityOrders = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          { $sort: { _effectiveDate: -1 } },
-          { $skip: (pageNum - 1) * limitNum },
-          { $limit: limitNum },
-          { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, variety: 1, hlw_wheat: 1, moisture_moi: 1, bdoi: 1, moi_bdoi: 1, total_deduction: 1 } }
-        ]);
+        {
+          const [salesQualityOrders, purchaseQualityOrders] = await Promise.all([
+            includeSales
+              ? ConfirmedSalesOrder.aggregate([
+                  activeOrderMatchStage,
+                  effectiveDateStage,
+                  dateMatchStage(startDate, endDate),
+                  { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, variety: 1, hlw_wheat: 1, moisture_moi: 1, bdoi: 1, moi_bdoi: 1, total_deduction: 1, _effectiveDate: 1 } }
+                ])
+              : Promise.resolve([]),
+            includePurchase
+              ? ConfirmedPurchaseOrder.aggregate([
+                  activeOrderMatchStage,
+                  effectiveDateStage,
+                  dateMatchStage(startDate, endDate),
+                  { $project: { invoice_number: 1, transaction_date: 1, commodity: 1, variety: 1, hlw_wheat: 1, moisture_moi: 1, bddi: 1, moi_bddi: 1, total_deduction: 1, _effectiveDate: 1 } }
+                ])
+              : Promise.resolve([])
+          ]);
 
-        data = qualityOrders.map(o => {
-          // Calculate quality grade based on parameters
-          let grade = 'A';
-          const moisture = o.moisture_moi || 0;
-          const bdoi = o.bdoi || 0;
-          if (moisture > 14 || bdoi > 5) grade = 'B';
-          if (moisture > 16 || bdoi > 8) grade = 'C';
-          if (moisture > 18 || bdoi > 10) grade = 'D';
+          const rows = [...salesQualityOrders.map((o) => ({ ...o, type: 'Sales' })), ...purchaseQualityOrders.map((o) => ({ ...o, type: 'Purchase' }))]
+            .map((o) => {
+              let grade = 'A';
+              const moisture = o.moisture_moi || 0;
+              const bdoiValue = o.bdoi || o.bddi || 0;
+              if (moisture > 14 || bdoiValue > 5) grade = 'B';
+              if (moisture > 16 || bdoiValue > 8) grade = 'C';
+              if (moisture > 18 || bdoiValue > 10) grade = 'D';
 
-          return {
-            invoice: o.invoice_number,
-            date: o.transaction_date,
-            commodity: o.commodity,
-            variety: o.variety || 'N/A',
-            hlw: o.hlw_wheat || 'N/A',
-            moisture: moisture,
-            bdoi: bdoi,
-            moiBdoi: o.moi_bdoi || 0,
-            totalDeduction: o.total_deduction || 0,
-            qualityGrade: grade
-          };
-        });
-        const qualityCount = await ConfirmedSalesOrder.aggregate([activeOrderMatchStage, effectiveDateStage, dateMatchStage(startDate, endDate), { $count: 'total' }]);
-        total = qualityCount[0]?.total || 0;
+              return {
+                type: o.type,
+                invoice: o.invoice_number,
+                date: o.transaction_date || (o._effectiveDate && new Date(o._effectiveDate).toISOString().slice(0, 10)) || 'N/A',
+                commodity: o.commodity,
+                variety: o.variety || 'N/A',
+                hlw: o.hlw_wheat || 'N/A',
+                moisture: moisture,
+                bdoi: bdoiValue,
+                moiBdoi: o.moi_bdoi || o.moi_bddi || 0,
+                totalDeduction: o.total_deduction || 0,
+                qualityGrade: grade
+              };
+            })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          const paginated = paginateRows(rows, pageNum, limitNum);
+          data = paginated.rows;
+          total = paginated.total;
+        }
         break;
 
       case 'state-summary':
         // State-wise Summary (by booking date)
-        const stateSales = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: '$state',
-              salesOrders: { $sum: 1 },
-              salesAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              salesWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-            }
-          }
-        ]);
-
-        const statePurchase = await ConfirmedPurchaseOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: '$state',
-              purchaseOrders: { $sum: 1 },
-              purchaseAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              purchaseWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-            }
-          }
+        const [stateSales, statePurchase] = await Promise.all([
+          includeSales
+            ? ConfirmedSalesOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                {
+                  $group: {
+                    _id: '$state',
+                    salesOrders: { $sum: 1 },
+                    salesAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                    salesWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+                  }
+                }
+              ])
+            : Promise.resolve([]),
+          includePurchase
+            ? ConfirmedPurchaseOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                {
+                  $group: {
+                    _id: '$state',
+                    purchaseOrders: { $sum: 1 },
+                    purchaseAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                    purchaseWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+                  }
+                }
+              ])
+            : Promise.resolve([])
         ]);
 
         const allStates = new Set([...stateSales.map(s => s._id), ...statePurchase.map(s => s._id)]);
@@ -1157,25 +1443,64 @@ router.get('/reports/:reportType', async (req, res) => {
 
       case 'monthly-pl':
         // Monthly P&L Statement (by booking date from sheet)
-        const monthlyData = await ConfirmedSalesOrder.aggregate([
-          activeOrderMatchStage,
-          effectiveDateStage,
-          dateMatchStage(startDate, endDate),
-          {
-            $group: {
-              _id: { $dateToString: { format: '%Y-%m', date: '$_effectiveDate' } },
-              grossAmount: { $sum: { $ifNull: ['$gross_amount', 0] } },
-              totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
-              netAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
-              totalOrders: { $sum: 1 },
-              totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
-            }
-          },
-          { $sort: { _id: -1 } }
+        const [monthlySales, monthlyPurchase] = await Promise.all([
+          includeSales
+            ? ConfirmedSalesOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                {
+                  $group: {
+                    _id: { $dateToString: { format: '%Y-%m', date: '$_effectiveDate' } },
+                    grossAmount: { $sum: { $ifNull: ['$gross_amount', 0] } },
+                    totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
+                    netAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                    totalOrders: { $sum: 1 },
+                    totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+                  }
+                }
+              ])
+            : Promise.resolve([]),
+          includePurchase
+            ? ConfirmedPurchaseOrder.aggregate([
+                activeOrderMatchStage,
+                effectiveDateStage,
+                dateMatchStage(startDate, endDate),
+                {
+                  $group: {
+                    _id: { $dateToString: { format: '%Y-%m', date: '$_effectiveDate' } },
+                    grossAmount: { $sum: { $ifNull: ['$gross_amount', 0] } },
+                    totalDeductions: { $sum: { $ifNull: ['$total_deduction', 0] } },
+                    netAmount: { $sum: { $ifNull: ['$net_amount', 0] } },
+                    totalOrders: { $sum: 1 },
+                    totalWeight: { $sum: { $ifNull: ['$net_weight_mt', 0] } }
+                  }
+                }
+              ])
+            : Promise.resolve([])
         ]);
 
         {
-          const rows = monthlyData.map((m, index, arr) => {
+          const monthMap = new Map();
+          [...monthlySales, ...monthlyPurchase].forEach((item) => {
+            const existing = monthMap.get(item._id) || {
+              _id: item._id,
+              grossAmount: 0,
+              totalDeductions: 0,
+              netAmount: 0,
+              totalOrders: 0,
+              totalWeight: 0
+            };
+            existing.grossAmount += item.grossAmount || 0;
+            existing.totalDeductions += item.totalDeductions || 0;
+            existing.netAmount += item.netAmount || 0;
+            existing.totalOrders += item.totalOrders || 0;
+            existing.totalWeight += item.totalWeight || 0;
+            monthMap.set(item._id, existing);
+          });
+
+          const mergedMonthly = Array.from(monthMap.values()).sort((a, b) => b._id.localeCompare(a._id));
+          const rows = mergedMonthly.map((m, index, arr) => {
           const prevMonth = arr[index + 1];
           const growth = prevMonth?.netAmount
             ? ((m.netAmount - prevMonth.netAmount) / prevMonth.netAmount * 100)
@@ -1203,6 +1528,8 @@ router.get('/reports/:reportType', async (req, res) => {
     res.json({
       success: true,
       reportType,
+      orderType: normalizedOrderType,
+      activeYear: year ? Number(year) : null,
       data,
       pagination: {
         page: pageNum,

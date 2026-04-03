@@ -71,8 +71,8 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const user = await User.findById(req.userId);
-    // Only seller or admin can update
-    if (order.seller_id.toString() !== req.userId && user.role !== 'admin') {
+    // Only seller or admin/super_admin can update
+    if (order.seller_id.toString() !== req.userId && !isAdminRole(user)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -90,4 +90,3 @@ router.put('/:id', authenticate, async (req, res) => {
 });
 
 export default router;
-

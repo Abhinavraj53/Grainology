@@ -21,6 +21,26 @@ const logisticsProviderSchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  district: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  state: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  country: {
+    type: String,
+    default: 'India',
+    trim: true
+  },
+  pincode: {
+    type: String,
+    default: '',
+    trim: true
+  },
   is_active: {
     type: Boolean,
     default: true
@@ -52,4 +72,3 @@ const logisticsProviderSchema = new mongoose.Schema({
 const LogisticsProvider = mongoose.model('LogisticsProvider', logisticsProviderSchema);
 
 export default LogisticsProvider;
-

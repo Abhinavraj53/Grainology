@@ -50,6 +50,7 @@ let dbRetryTimer = null;
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5173',
+  'http://localhost:5174',
   'https://grainologyagri.com',
   'https://www.grainologyagri.com',
   'https://grainology-rmg1.onrender.com', // backend itself (e.g. server-side fetches)

@@ -119,9 +119,11 @@ const corsOptions = {
   optionsSuccessStatus: 204
 };
 
+// Apply CORS headers to all responses
 app.use((req, res, next) => {
   applyCorsHeaders(req, res);
 
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.sendStatus(204);
   }
@@ -129,7 +131,18 @@ app.use((req, res, next) => {
   next();
 });
 
+// Additional CORS middleware as fallback
 app.use(cors(corsOptions));
+
+// Ensure CORS headers are on all responses including errors
+app.use((req, res, next) => {
+  const originalJson = res.json;
+  res.json = function(data) {
+    applyCorsHeaders(req, res);
+    return originalJson.call(this, data);
+  };
+  next();
+});
 
 // trust render proxy for cookies
 app.set('trust proxy', 1);
@@ -260,18 +273,37 @@ app.use('/api/contact-inquiries', contactInquiryRoutes);
 // -----------------------------
 app.use((err, req, res, next) => {
   console.error('SERVER ERROR:', err.message);
+  console.error('Stack:', err.stack);
+  
   applyCorsHeaders(req, res);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  
+  // Default to 500 if no status code is set
+  const status = res.statusCode === 200 ? 500 : res.statusCode;
+  
+  res.status(status).json({ 
+    error: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
 });
 
 // -----------------------------
 // 404
 // -----------------------------
-app.use((req, res) => res.status(404).json({ error: 'Route not found' }));
+app.use((req, res) => {
+  applyCorsHeaders(req, res);
+  res.status(404).json({ error: 'Route not found' });
+});
 
 // -----------------------------
 // START SERVER
-// -----------------------------
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`API running on ${PORT}`);
+// ----
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ API running on http://0.0.0.0:${PORT}`);
+  console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  console.error('❌ Server error:', err);
+  process.exit(1);
 });

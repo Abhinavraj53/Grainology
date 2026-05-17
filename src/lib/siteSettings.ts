@@ -75,6 +75,19 @@ const SITE_SETTINGS_CACHE_KEY = 'cache_site_settings_public';
 const SITE_SETTINGS_TTL_MS = 5 * 60 * 1000;
 const SITE_SETTINGS_VERSION_KEY = 'site_settings_version';
 const SITE_SETTINGS_UPDATED_EVENT = 'site-settings-updated';
+let pendingSiteSettingsRequest: Promise<SiteSettings> | null = null;
+
+function getStaleSiteSettings(): SiteSettings | null {
+  try {
+    const raw = sessionStorage.getItem(SITE_SETTINGS_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    return parsed?.data ? normalizeSiteSettings(parsed.data) : null;
+  } catch {
+    return null;
+  }
+}
 
 function normalizeSiteSettings(input: any): SiteSettings {
   const normalizeStatValue = (stat: any) => {
@@ -116,10 +129,24 @@ export async function fetchSiteSettings(force = false): Promise<SiteSettings> {
     }
   }
 
-  const data = await api.request('/site-settings');
-  const normalized = normalizeSiteSettings(data);
-  setCachedData(SITE_SETTINGS_CACHE_KEY, normalized);
-  return normalized;
+  if (pendingSiteSettingsRequest) {
+    return pendingSiteSettingsRequest;
+  }
+
+  pendingSiteSettingsRequest = (async () => {
+    try {
+      const data = await api.request('/site-settings');
+      const normalized = normalizeSiteSettings(data);
+      setCachedData(SITE_SETTINGS_CACHE_KEY, normalized);
+      return normalized;
+    } catch {
+      return getStaleSiteSettings() || defaultSiteSettings;
+    } finally {
+      pendingSiteSettingsRequest = null;
+    }
+  })();
+
+  return pendingSiteSettingsRequest;
 }
 
 export async function updateSiteSettings(settings: SiteSettings): Promise<SiteSettings> {
@@ -154,8 +181,6 @@ export function useSiteSettings() {
         if (active) {
           setSettings(nextSettings);
         }
-      } catch (error) {
-        console.error('Failed to load site settings:', error);
       } finally {
         if (active) {
           setLoading(false);

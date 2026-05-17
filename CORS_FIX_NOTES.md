@@ -4,13 +4,13 @@
 The Grainology application was experiencing:
 1. **CORS Errors**: "No 'Access-Control-Allow-Origin' header is present on the requested resource"
 2. **502 Bad Gateway Errors**: Backend returning 502 errors from Render deployment
-3. **Frontend unable to communicate** with backend API at `https://grainology-rmg1.onrender.com`
+3. **Frontend unable to communicate** with backend API at `https://grainology-xcg8.onrender.com`
 
 ## Root Cause Analysis
 
 ### 1. CORS Policy Blocking
 - Frontend origin: `https://grainologyagri.com`
-- Backend origin: `https://grainology-rmg1.onrender.com`
+- Backend origin: `https://grainology-xcg8.onrender.com`
 - CORS headers were not being sent on all responses, especially error responses
 
 ### 2. Server Crash/Unresponsiveness  
@@ -94,7 +94,7 @@ DB_RETRY_INTERVAL_MS=10000
 curl -H "Origin: https://grainologyagri.com" \
      -H "Access-Control-Request-Method: GET" \
      -X OPTIONS \
-     https://grainology-rmg1.onrender.com/api/health -v
+     https://grainology-xcg8.onrender.com/api/health -v
 ```
 
 Should return:
@@ -104,7 +104,7 @@ Should return:
 
 ### 2. Test Health Endpoint
 ```bash
-curl https://grainology-rmg1.onrender.com/health
+curl https://grainology-xcg8.onrender.com/health
 ```
 
 Should return: `{"status":"ok"}`
@@ -112,7 +112,7 @@ Should return: `{"status":"ok"}`
 ### 3. Test Authenticated Endpoint
 ```bash
 curl -H "Cookie: auth_token=YOUR_TOKEN" \
-     https://grainology-rmg1.onrender.com/api/auth/session
+     https://grainology-xcg8.onrender.com/api/auth/session
 ```
 
 ## Deployment Steps

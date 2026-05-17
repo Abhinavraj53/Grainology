@@ -1,15 +1,20 @@
 // JWT-based API client for backend auth and data
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://grainology-rmg1.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://grainology-xcg8.onrender.com/api';
 const AUTH_SYNC_STORAGE_KEY = 'grainology_auth_sync';
 const AUTH_SYNC_EVENT = 'grainology-auth-changed';
 const SESSION_RETRY_COOLDOWN_MS = 60000;
+const TRANSIENT_RETRY_DELAY_MS = 1500;
+const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
 const isDev = import.meta.env.DEV;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class ApiClient {
   constructor() {
     this.token = localStorage.getItem('auth_token') || null;
     this.sessionRequestVersion = 0;
     this.sessionRetryAfter = 0;
+    this.pendingSessionRequest = null;
   }
 
   broadcastAuthState(token) {
@@ -47,9 +52,11 @@ class ApiClient {
   }
 
   async request(endpoint, options = {}) {
-    const { authToken, ...fetchOptions } = options;
+    const { authToken, _retryCount = 0, ...fetchOptions } = options;
     const url = `${API_BASE_URL}${endpoint}`;
     const isSessionCheck = endpoint === '/auth/session';
+    const method = String(fetchOptions.method || 'GET').toUpperCase();
+    const isRetriableRequest = method === 'GET';
 
     if (isSessionCheck && this.sessionRetryAfter > Date.now()) {
       return { user: null, session: null };
@@ -98,6 +105,11 @@ class ApiClient {
         return { user: null, session: null };
       }
 
+      if (RETRYABLE_STATUS_CODES.has(response.status) && isRetriableRequest && _retryCount < 1) {
+        await wait(TRANSIENT_RETRY_DELAY_MS);
+        return this.request(endpoint, { ...options, _retryCount: _retryCount + 1 });
+      }
+
       // For 401 on other endpoints, clear token and throw
       if (response.status === 401) {
         if (token && activeToken === token) {
@@ -123,6 +135,19 @@ class ApiClient {
       return await response.json();
     } catch (error) {
       clearTimeout(timeoutId);
+
+      const shouldRetry =
+        isRetriableRequest &&
+        _retryCount < 1 &&
+        (error.name === 'AbortError' ||
+          error.name === 'TimeoutError' ||
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('NetworkError'));
+
+      if (shouldRetry) {
+        await wait(TRANSIENT_RETRY_DELAY_MS);
+        return this.request(endpoint, { ...options, _retryCount: _retryCount + 1 });
+      }
 
       // Session checks run in the background. Treat network/preflight failures
       // as a signed-out session and briefly pause polling to avoid request storms
@@ -158,25 +183,16 @@ class ApiClient {
   // Auth methods (JWT from backend)
   auth = {
     getSession: async () => {
-      try {
-        // Pin this lookup to the token that existed when the request started.
-        // If logout/login changes the token mid-flight, ignore the stale response.
-        const requestToken = localStorage.getItem('auth_token');
-        if (!requestToken) {
-          this.token = null;
-          return {
-            data: { session: null, user: null },
-            error: null
-          };
-        }
+      if (this.pendingSessionRequest) {
+        return this.pendingSessionRequest;
+      }
 
-        this.token = requestToken;
-        const requestVersion = this.sessionRequestVersion;
-        const data = await this.request('/auth/session', { authToken: requestToken });
-
-        const currentToken = localStorage.getItem('auth_token');
-        if (requestVersion !== this.sessionRequestVersion || currentToken !== requestToken) {
-          if (!currentToken) {
+      const runSessionLookup = async () => {
+        try {
+          // Pin this lookup to the token that existed when the request started.
+          // If logout/login changes the token mid-flight, ignore the stale response.
+          const requestToken = localStorage.getItem('auth_token');
+          if (!requestToken) {
             this.token = null;
             return {
               data: { session: null, user: null },
@@ -184,31 +200,52 @@ class ApiClient {
             };
           }
 
-          return this.auth.getSession();
-        }
-
-        // Persist access token if the session includes one (supports existing logins)
-        if (data?.session?.access_token) {
-          this.setToken(data.session.access_token);
-        } else if (data?.session && !data.session.access_token) {
-          // If session exists but no token in response, use stored token
-          // This handles cases where backend doesn't return token in session response
           this.token = requestToken;
-        }
+          const requestVersion = this.sessionRequestVersion;
+          const data = await this.request('/auth/session', { authToken: requestToken });
 
-        return {
-          data: {
-            session: data.session,
-            user: data.user
-          },
-          error: null
-        };
-      } catch (error) {
-        return {
-          data: { session: null, user: null },
-          error
-        };
-      }
+          const currentToken = localStorage.getItem('auth_token');
+          if (requestVersion !== this.sessionRequestVersion || currentToken !== requestToken) {
+            if (!currentToken) {
+              this.token = null;
+              return {
+                data: { session: null, user: null },
+                error: null
+              };
+            }
+
+            return runSessionLookup();
+          }
+
+          // Persist access token if the session includes one (supports existing logins)
+          if (data?.session?.access_token) {
+            this.setToken(data.session.access_token);
+          } else if (data?.session && !data.session.access_token) {
+            // If session exists but no token in response, use stored token
+            // This handles cases where backend doesn't return token in session response
+            this.token = requestToken;
+          }
+
+          return {
+            data: {
+              session: data.session,
+              user: data.user
+            },
+            error: null
+          };
+        } catch (error) {
+          return {
+            data: { session: null, user: null },
+            error
+          };
+        }
+      };
+
+      this.pendingSessionRequest = runSessionLookup().finally(() => {
+        this.pendingSessionRequest = null;
+      });
+
+      return this.pendingSessionRequest;
     },
 
     signUp: async (signUpData) => {

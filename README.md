@@ -57,7 +57,7 @@ FRONTEND_URL=http://localhost:5173
 Create `.env` in root (for frontend):
 ```env
 # Production (Render backend)
-VITE_API_URL=https://grainology-rmg1.onrender.com/api
+VITE_API_URL=https://grainology-xcg8.onrender.com/api
 
 # Local development
 # VITE_API_URL=http://localhost:3001/api
@@ -128,4 +128,3 @@ See `.env.example` and `backend/.env.example` for required variables.
 ## License
 
 Private project
-

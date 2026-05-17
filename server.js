@@ -46,12 +46,25 @@ let dbRetryTimer = null;
 // CORS CONFIG
 // -----------------------------
 
-const normalizeOrigin = (origin) => String(origin || '').trim().replace(/\/$/, '');
+const normalizeOrigin = (origin) => {
+  const rawOrigin = String(origin || '').trim();
+  if (!rawOrigin) return '';
+
+  try {
+    const parsed = new URL(rawOrigin);
+    return `${parsed.protocol}//${parsed.host}`.replace(/\/$/, '').toLowerCase();
+  } catch {
+    return rawOrigin.replace(/\/$/, '').toLowerCase();
+  }
+};
 
 const parseOrigins = (value) => String(value || '')
   .split(',')
   .map(normalizeOrigin)
   .filter(Boolean);
+
+const isTrustedRenderOrigin = (origin) => /^https:\/\/grainology(?:-[a-z0-9-]+)?\.onrender\.com$/i.test(origin);
+const backendRenderOrigin = normalizeOrigin(process.env.RENDER_EXTERNAL_URL || 'https://grainology-xcg8.onrender.com');
 
 const allowedOrigins = [
   'http://localhost:3000',
@@ -59,7 +72,7 @@ const allowedOrigins = [
   'http://localhost:5174',
   'https://grainologyagri.com',
   'https://www.grainologyagri.com',
-  'https://grainology-rmg1.onrender.com', // backend itself (e.g. server-side fetches)
+  backendRenderOrigin,
   process.env.FRONTEND_URL,
   ...parseOrigins(process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS)
 ]
@@ -73,7 +86,12 @@ console.log("CORS allowed origins:", allowedOrigins);
 const getAllowedOrigin = (origin) => {
   if (!origin) return null;
   const normalized = normalizeOrigin(origin);
-  return allowedOriginSet.has(normalized) ? normalized : null;
+
+  if (allowedOriginSet.has(normalized) || isTrustedRenderOrigin(normalized)) {
+    return normalized;
+  }
+
+  return null;
 };
 
 const corsMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];

@@ -3,6 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://grainology-rmg1.on
 const AUTH_SYNC_STORAGE_KEY = 'grainology_auth_sync';
 const AUTH_SYNC_EVENT = 'grainology-auth-changed';
 const SESSION_RETRY_COOLDOWN_MS = 60000;
+const isDev = import.meta.env.DEV;
 
 class ApiClient {
   constructor() {
@@ -212,9 +213,11 @@ class ApiClient {
 
     signUp: async (signUpData) => {
       try {
-        console.log('📤 Signup request payload:', { ...signUpData, password: '***' });
-        console.log('🌐 API Base URL:', API_BASE_URL);
-        console.log('🔗 Full URL:', `${API_BASE_URL}/auth/signup`);
+        if (isDev) {
+          console.log('Signup request payload:', { ...signUpData, password: '***' });
+          console.log('API Base URL:', API_BASE_URL);
+          console.log('Full URL:', `${API_BASE_URL}/auth/signup`);
+        }
         
         const startTime = Date.now();
         const data = await this.request('/auth/signup', {
@@ -223,11 +226,13 @@ class ApiClient {
         });
         const elapsedTime = Date.now() - startTime;
         
-        console.log(`✅ Signup API response received in ${elapsedTime}ms:`, { 
-          hasUser: !!data.user, 
-          hasSession: !!data.session,
-          userId: data.user?.id 
-        });
+        if (isDev) {
+          console.log(`Signup API response received in ${elapsedTime}ms:`, {
+            hasUser: !!data.user,
+            hasSession: !!data.session,
+            userId: data.user?.id
+          });
+        }
         
         if (data.session?.access_token) {
           this.setToken(data.session.access_token);
@@ -266,23 +271,27 @@ class ApiClient {
         const payload = { password };
         if (email) payload.email = email;
         if (mobile_number) payload.mobile_number = mobile_number;
-        console.log('🔐 Sign in request:', {
-          hasEmail: !!email,
-          hasMobile: !!mobile_number,
-          passwordLength: password?.length,
-          apiUrl: `${API_BASE_URL}/auth/signin`
-        });
+        if (isDev) {
+          console.log('Sign in request:', {
+            hasEmail: !!email,
+            hasMobile: !!mobile_number,
+            passwordLength: password?.length,
+            apiUrl: `${API_BASE_URL}/auth/signin`
+          });
+        }
 
         const data = await this.request('/auth/signin', {
           method: 'POST',
           body: JSON.stringify(payload),
         });
 
-        console.log('📥 Sign in response data:', { 
-          hasUser: !!data.user, 
-          hasSession: !!data.session,
-          error: data.error 
-        });
+        if (isDev) {
+          console.log('Sign in response data:', {
+            hasUser: !!data.user,
+            hasSession: !!data.session,
+            error: data.error
+          });
+        }
 
         if (data.error) {
           console.error('❌ Sign in failed:', data);

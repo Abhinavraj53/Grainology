@@ -129,6 +129,8 @@ const DEFAULT_COLUMN_FILTERS: ColumnFilterState = {
   approval: '',
 };
 
+const ORDERS_FETCH_TIMEOUT_MS = 30000;
+
 interface AllConfirmedOrdersProps {
   currentUserRole?: string;
   dataVersion?: number;
@@ -165,6 +167,36 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   const [bulkDeclineReason, setBulkDeclineReason] = useState('');
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
+  const fetchJsonWithTimeout = async (url: string, token: string) => {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), ORDERS_FETCH_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error || data?.message || `Request failed (${response.status})`);
+      }
+
+      return Array.isArray(data) ? data : [];
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        throw new Error('Request timed out while loading confirmed orders');
+      }
+      throw err;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  };
+
   const fetchOrders = async ({ silent } = { silent: false }) => {
     try {
       if (!silent) setLoading(true);
@@ -177,32 +209,32 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
         return;
       }
 
-      const [salesRes, purchaseRes] = await Promise.all([
-        fetch(`${apiUrl}/confirmed-sales-orders`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }),
-        fetch(`${apiUrl}/confirmed-purchase-orders`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }),
+      const [salesResult, purchaseResult] = await Promise.allSettled([
+        fetchJsonWithTimeout(`${apiUrl}/confirmed-sales-orders`, token),
+        fetchJsonWithTimeout(`${apiUrl}/confirmed-purchase-orders`, token),
       ]);
 
-      if (!salesRes.ok || !purchaseRes.ok) {
-        throw new Error('Failed to fetch confirmed orders');
+      const failures: string[] = [];
+
+      if (salesResult.status === 'fulfilled') {
+        setSalesOrders(salesResult.value);
+      } else {
+        setSalesOrders([]);
+        failures.push(`Sales orders: ${salesResult.reason?.message || 'Failed to fetch'}`);
       }
 
-      const salesData = await salesRes.json();
-      const purchaseData = await purchaseRes.json();
+      if (purchaseResult.status === 'fulfilled') {
+        setPurchaseOrders(purchaseResult.value);
+      } else {
+        setPurchaseOrders([]);
+        failures.push(`Purchase orders: ${purchaseResult.reason?.message || 'Failed to fetch'}`);
+      }
 
-      setSalesOrders(salesData);
-      setPurchaseOrders(purchaseData);
+      if (failures.length > 0) {
+        setError(failures.join(' | '));
+      }
     } catch (err: any) {
-      setError(err.message);
+      setError(err?.message || 'Failed to fetch confirmed orders');
     } finally {
       if (!silent) setLoading(false);
     }

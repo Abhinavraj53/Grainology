@@ -23,6 +23,12 @@ router.use(authenticate);
 // Get all confirmed sales orders (admin only) - exclude trashed
 router.get('/', requireAdmin, async (req, res) => {
   try {
+    // Debug logging: who is requesting confirmed sales orders
+    try {
+      console.log(`ConfirmedSalesOrders: GET / by user=${req.userId} role=${req.user?.role}`);
+    } catch (e) {
+      console.log('ConfirmedSalesOrders: GET / - logging failed', e && e.message);
+    }
     const orders = await ConfirmedSalesOrder.find({ trash: { $ne: true } })
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email')
@@ -37,6 +43,12 @@ router.get('/', requireAdmin, async (req, res) => {
 // Get confirmed sales orders for a specific customer
 router.get('/customer/:customerId', async (req, res) => {
   try {
+    // Debug logging: who is requesting customer confirmed sales orders
+    try {
+      console.log(`ConfirmedSalesOrders: GET /customer/${req.params.customerId} by user=${req.userId} role=${req.user?.role}`);
+    } catch (e) {
+      console.log('ConfirmedSalesOrders: GET /customer/:customerId - logging failed', e && e.message);
+    }
     const user = await User.findById(req.userId);
     const { customerId } = req.params;
     const isAdminUser = isAdminRole(user);
@@ -68,6 +80,12 @@ router.get('/customer/:customerId', async (req, res) => {
 // Get confirmed sales order by ID (exclude trashed)
 router.get('/:id', async (req, res) => {
   try {
+    // Debug logging: who is requesting a specific confirmed sales order
+    try {
+      console.log(`ConfirmedSalesOrders: GET /${req.params.id} by user=${req.userId} role=${req.user?.role}`);
+    } catch (e) {
+      console.log('ConfirmedSalesOrders: GET /:id - logging failed', e && e.message);
+    }
     const order = await ConfirmedSalesOrder.findOne({
       _id: req.params.id,
       trash: { $ne: true }

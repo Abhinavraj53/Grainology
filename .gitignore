@@ -31,6 +31,9 @@ UPDATE_MONGODB_URL.md
 .env.local
 .env.production
 .env.staging
+.env.bak*
+.env.backup.*
+.env.didit.example
 
 # Node modules
 node_modules/
@@ -51,6 +54,7 @@ build/
 # OS files
 .DS_Store
 Thumbs.db
+supabase/.DS_Store
 
 # Logs
 logs/

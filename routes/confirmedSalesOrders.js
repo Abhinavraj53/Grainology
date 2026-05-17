@@ -13,6 +13,31 @@ import { getMappedValue, parseDate, parseNumeric, toNA, getAvailableColumns } fr
 const router = express.Router();
 const LIST_ORDER_SELECT = '-quality_report';
 
+function normalizeOrder(order) {
+  if (!order) return order;
+
+  const normalized = { ...order, id: String(order._id || order.id || '') };
+  delete normalized._id;
+
+  if (normalized.customer_id && typeof normalized.customer_id === 'object') {
+    normalized.customer_id = {
+      ...normalized.customer_id,
+      id: String(normalized.customer_id._id || normalized.customer_id.id || '')
+    };
+    delete normalized.customer_id._id;
+  }
+
+  if (normalized.created_by && typeof normalized.created_by === 'object') {
+    normalized.created_by = {
+      ...normalized.created_by,
+      id: String(normalized.created_by._id || normalized.created_by.id || '')
+    };
+    delete normalized.created_by._id;
+  }
+
+  return normalized;
+}
+
 // Test route to verify the router is working
 router.get('/test', (req, res) => {
   res.json({ message: 'Confirmed sales orders route is working' });
@@ -34,8 +59,9 @@ router.get('/', requireAdmin, async (req, res) => {
       .select(LIST_ORDER_SELECT)
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email')
-      .sort({ createdAt: -1 });
-    res.json(orders);
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(orders.map(normalizeOrder));
   } catch (error) {
     console.error('Get confirmed sales orders error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch confirmed sales orders' });
@@ -72,8 +98,9 @@ router.get('/customer/:customerId', async (req, res) => {
       .select(LIST_ORDER_SELECT)
       .populate('customer_id', 'name email mobile_number')
       .populate('created_by', 'name email')
-      .sort({ createdAt: -1 });
-    res.json(orders);
+      .sort({ createdAt: -1 })
+      .lean();
+    res.json(orders.map(normalizeOrder));
   } catch (error) {
     console.error('Get customer confirmed sales orders error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch confirmed sales orders' });

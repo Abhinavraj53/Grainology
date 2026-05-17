@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Eye, Filter, X, Download, Edit, Trash2, FileDown } from 'lucide-react';
 import { generateOrderPDF } from '../../utils/pdfGenerator';
 
@@ -168,6 +168,9 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   const [bulkDecisionOpen, setBulkDecisionOpen] = useState(false);
   const [bulkDeclineReason, setBulkDeclineReason] = useState('');
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const fetchInFlightRef = useRef<Promise<void> | null>(null);
+  const hasLoadedInitiallyRef = useRef(false);
+  const lastHandledDataVersionRef = useRef<number | null>(null);
 
   const fetchJsonWithTimeout = async (url: string, token: string, retryCount = 0): Promise<any[]> => {
     const controller = new AbortController();
@@ -213,51 +216,64 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   };
 
   const fetchOrders = async ({ silent } = { silent: false }) => {
-    try {
-      if (!silent) setLoading(true);
-      setError('');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-      const token = localStorage.getItem('auth_token');
-
-      if (!token) {
-        setError('Authentication required');
-        return;
-      }
-
-      const [salesResult, purchaseResult] = await Promise.allSettled([
-        fetchJsonWithTimeout(`${apiUrl}/confirmed-sales-orders`, token),
-        fetchJsonWithTimeout(`${apiUrl}/confirmed-purchase-orders`, token),
-      ]);
-
-      const failures: string[] = [];
-
-      if (salesResult.status === 'fulfilled') {
-        setSalesOrders(salesResult.value);
-      } else {
-        setSalesOrders([]);
-        failures.push(`Sales orders: ${salesResult.reason?.message || 'Failed to fetch'}`);
-      }
-
-      if (purchaseResult.status === 'fulfilled') {
-        setPurchaseOrders(purchaseResult.value);
-      } else {
-        setPurchaseOrders([]);
-        failures.push(`Purchase orders: ${purchaseResult.reason?.message || 'Failed to fetch'}`);
-      }
-
-      if (failures.length > 0) {
-        setError(failures.join(' | '));
-      }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to fetch confirmed orders');
-    } finally {
-      if (!silent) setLoading(false);
+    if (fetchInFlightRef.current) {
+      return fetchInFlightRef.current;
     }
+
+    const run = (async () => {
+      try {
+        if (!silent) setLoading(true);
+        setError('');
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        const token = localStorage.getItem('auth_token');
+
+        if (!token) {
+          setError('Authentication required');
+          return;
+        }
+
+        const [salesResult, purchaseResult] = await Promise.allSettled([
+          fetchJsonWithTimeout(`${apiUrl}/confirmed-sales-orders`, token),
+          fetchJsonWithTimeout(`${apiUrl}/confirmed-purchase-orders`, token),
+        ]);
+
+        const failures: string[] = [];
+
+        if (salesResult.status === 'fulfilled') {
+          setSalesOrders(salesResult.value);
+        } else {
+          setSalesOrders([]);
+          failures.push(`Sales orders: ${salesResult.reason?.message || 'Failed to fetch'}`);
+        }
+
+        if (purchaseResult.status === 'fulfilled') {
+          setPurchaseOrders(purchaseResult.value);
+        } else {
+          setPurchaseOrders([]);
+          failures.push(`Purchase orders: ${purchaseResult.reason?.message || 'Failed to fetch'}`);
+        }
+
+        if (failures.length > 0) {
+          setError(failures.join(' | '));
+        }
+      } catch (err: any) {
+        setError(err?.message || 'Failed to fetch confirmed orders');
+      } finally {
+        if (!silent) setLoading(false);
+        fetchInFlightRef.current = null;
+      }
+    })();
+
+    fetchInFlightRef.current = run;
+    return run;
   };
 
   // Refresh only when dataVersion changes (from AdminPanel’s version polling)
   useEffect(() => {
-    if (dataVersion === undefined || dataVersion === null) return;
+    if (dataVersion === undefined || dataVersion === null || dataVersion <= 0) return;
+    if (!hasLoadedInitiallyRef.current) return;
+    if (lastHandledDataVersionRef.current === dataVersion) return;
+    lastHandledDataVersionRef.current = dataVersion;
     void fetchOrders({ silent: true });
   }, [dataVersion]);
 
@@ -677,7 +693,12 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
 
   // Initial load with spinner
   useEffect(() => {
-    void fetchOrders();
+    void fetchOrders().finally(() => {
+      hasLoadedInitiallyRef.current = true;
+      if (dataVersion && dataVersion > 0) {
+        lastHandledDataVersionRef.current = dataVersion;
+      }
+    });
   }, []);
 
   useEffect(() => {

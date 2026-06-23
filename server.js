@@ -34,6 +34,8 @@ import analyticsRoutes from './routes/analytics.js';
 import documentViewRoutes from './routes/documentView.js';
 import siteSettingsRoutes from './routes/siteSettings.js';
 import contactInquiryRoutes from './routes/contactInquiries.js';
+import agmarknetRoutes from './routes/agmarknet.js';
+import { startAgmarknetCron } from './jobs/agmarknetCron.js';
 
 dotenv.config();
 
@@ -88,6 +90,11 @@ const getAllowedOrigin = (origin) => {
   const normalized = normalizeOrigin(origin);
 
   if (allowedOriginSet.has(normalized) || isTrustedRenderOrigin(normalized)) {
+    return normalized;
+  }
+
+  // Allow local network IPs for development testing
+  if (normalized.startsWith('http://192.168.') || normalized.startsWith('http://10.')) {
     return normalized;
   }
 
@@ -285,6 +292,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/documents', documentViewRoutes);
 app.use('/api/site-settings', siteSettingsRoutes);
 app.use('/api/contact-inquiries', contactInquiryRoutes);
+app.use('/api/agmarknet', agmarknetRoutes);
 
 // -----------------------------
 // ERROR HANDLER
@@ -316,6 +324,7 @@ app.use((req, res) => {
 // START SERVER
 // ----
 const server = app.listen(PORT, '0.0.0.0', () => {
+  startAgmarknetCron();
   console.log(`✅ API running on http://0.0.0.0:${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

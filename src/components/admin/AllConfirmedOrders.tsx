@@ -4,6 +4,7 @@ import { generateOrderPDF } from '../../utils/pdfGenerator';
 
 interface ConfirmedSalesOrder {
   id: string;
+  _id?: string;
   invoice_number: string;
   transaction_date: string;
   customer_id: {
@@ -56,6 +57,7 @@ interface ConfirmedSalesOrder {
 
 interface ConfirmedPurchaseOrder {
   id: string;
+  _id?: string;
   invoice_number: string;
   transaction_date: string;
   customer_id: {
@@ -132,10 +134,35 @@ const DEFAULT_COLUMN_FILTERS: ColumnFilterState = {
 const ORDERS_FETCH_TIMEOUT_MS = 90000;
 const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
 const RETRY_DELAY_MS = 1500;
+const ORDERS_PAGE_SIZE = 25;
 
 interface AllConfirmedOrdersProps {
   currentUserRole?: string;
   dataVersion?: number;
+}
+
+interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  counts?: {
+    pending: number;
+    approved: number;
+    declined: number;
+  };
+}
+
+interface PaginatedOrdersResponse<T> {
+  data: T[];
+  pagination: PaginationMeta;
+}
+
+interface FetchOrdersOptions {
+  silent?: boolean;
+  page?: number;
 }
 
 const getApprovalBadgeClass = (status?: string) => {
@@ -150,9 +177,21 @@ const getApprovalLabel = (status?: string) => {
   return 'PENDING';
 };
 
+const normalizeFetchedOrder = <T extends { id?: string; _id?: string }>(order: T): T & { id: string } => ({
+  ...order,
+  id: String(order.id || order._id || '')
+});
+
 export default function AllConfirmedOrders({ currentUserRole, dataVersion }: AllConfirmedOrdersProps) {
   const [salesOrders, setSalesOrders] = useState<ConfirmedSalesOrder[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<ConfirmedPurchaseOrder[]>([]);
+  const [pendingSalesOrders, setPendingSalesOrders] = useState<ConfirmedSalesOrder[]>([]);
+  const [pendingPurchaseOrders, setPendingPurchaseOrders] = useState<ConfirmedPurchaseOrder[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [salesPagination, setSalesPagination] = useState<PaginationMeta | null>(null);
+  const [purchasePagination, setPurchasePagination] = useState<PaginationMeta | null>(null);
+  const [pendingSalesPagination, setPendingSalesPagination] = useState<PaginationMeta | null>(null);
+  const [pendingPurchasePagination, setPendingPurchasePagination] = useState<PaginationMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<ConfirmedOrder | null>(null);
@@ -168,11 +207,25 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   const [bulkDecisionOpen, setBulkDecisionOpen] = useState(false);
   const [bulkDeclineReason, setBulkDeclineReason] = useState('');
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [pendingQueueCollapsed, setPendingQueueCollapsed] = useState(false);
   const fetchInFlightRef = useRef<Promise<void> | null>(null);
   const hasLoadedInitiallyRef = useRef(false);
   const lastHandledDataVersionRef = useRef<number | null>(null);
 
-  const fetchJsonWithTimeout = async (url: string, token: string, retryCount = 0): Promise<any[]> => {
+  const serverFilterQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    if (columnFilters.date.trim()) params.set('date', columnFilters.date.trim());
+    if (columnFilters.party.trim()) params.set('party', columnFilters.party.trim());
+    if (columnFilters.commodity.trim()) params.set('commodity', columnFilters.commodity.trim());
+    if (columnFilters.vehicle.trim()) params.set('vehicle', columnFilters.vehicle.trim());
+    if (columnFilters.netWeight.trim()) params.set('netWeight', columnFilters.netWeight.trim());
+    if (columnFilters.netAmount.trim()) params.set('netAmount', columnFilters.netAmount.trim());
+    return params.toString();
+  }, [columnFilters]);
+
+  const reviewedApprovalFilter = columnFilters.approval.trim() || 'reviewed';
+
+  const fetchJsonWithTimeout = async <T,>(url: string, token: string, retryCount = 0): Promise<PaginatedOrdersResponse<T>> => {
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), ORDERS_FETCH_TIMEOUT_MS);
 
@@ -196,7 +249,21 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
         throw new Error(data?.error || data?.message || `Request failed (${response.status})`);
       }
 
-      return Array.isArray(data) ? data : [];
+      if (data && Array.isArray(data.data) && data.pagination) {
+        return data;
+      }
+
+      return {
+        data: Array.isArray(data) ? data : [],
+        pagination: {
+          page: 1,
+          limit: Array.isArray(data) ? data.length : 0,
+          total: Array.isArray(data) ? data.length : 0,
+          totalPages: 1,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        }
+      };
     } catch (err: any) {
       if (err?.name === 'AbortError') {
         if (retryCount < 1) {
@@ -215,11 +282,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     }
   };
 
-  const fetchOrders = async ({ silent } = { silent: false }) => {
-    if (fetchInFlightRef.current) {
-      return fetchInFlightRef.current;
-    }
-
+  const fetchOrders = async ({ silent = false, page = currentPage }: FetchOrdersOptions = {}) => {
     const run = (async () => {
       try {
         if (!silent) setLoading(true);
@@ -232,25 +295,51 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
           return;
         }
 
-        const [salesResult, purchaseResult] = await Promise.allSettled([
-          fetchJsonWithTimeout(`${apiUrl}/confirmed-sales-orders`, token),
-          fetchJsonWithTimeout(`${apiUrl}/confirmed-purchase-orders`, token),
+        const reviewedSearchParams = `page=${page}&limit=${ORDERS_PAGE_SIZE}${serverFilterQuery ? `&${serverFilterQuery}` : ''}&approval=${encodeURIComponent(reviewedApprovalFilter)}`;
+        const pendingSearchParams = `page=1&limit=${ORDERS_PAGE_SIZE}${serverFilterQuery ? `&${serverFilterQuery}` : ''}&approval=pending`;
+        const [salesResult, purchaseResult, pendingSalesResult, pendingPurchaseResult] = await Promise.allSettled([
+          fetchJsonWithTimeout<ConfirmedSalesOrder>(`${apiUrl}/confirmed-sales-orders?${reviewedSearchParams}`, token),
+          fetchJsonWithTimeout<ConfirmedPurchaseOrder>(`${apiUrl}/confirmed-purchase-orders?${reviewedSearchParams}`, token),
+          fetchJsonWithTimeout<ConfirmedSalesOrder>(`${apiUrl}/confirmed-sales-orders?${pendingSearchParams}`, token),
+          fetchJsonWithTimeout<ConfirmedPurchaseOrder>(`${apiUrl}/confirmed-purchase-orders?${pendingSearchParams}`, token),
         ]);
 
         const failures: string[] = [];
 
         if (salesResult.status === 'fulfilled') {
-          setSalesOrders(salesResult.value);
+          setSalesOrders(salesResult.value.data.map(normalizeFetchedOrder));
+          setSalesPagination(salesResult.value.pagination);
         } else {
           setSalesOrders([]);
+          setSalesPagination(null);
           failures.push(`Sales orders: ${salesResult.reason?.message || 'Failed to fetch'}`);
         }
 
         if (purchaseResult.status === 'fulfilled') {
-          setPurchaseOrders(purchaseResult.value);
+          setPurchaseOrders(purchaseResult.value.data.map(normalizeFetchedOrder));
+          setPurchasePagination(purchaseResult.value.pagination);
         } else {
           setPurchaseOrders([]);
+          setPurchasePagination(null);
           failures.push(`Purchase orders: ${purchaseResult.reason?.message || 'Failed to fetch'}`);
+        }
+
+        if (pendingSalesResult.status === 'fulfilled') {
+          setPendingSalesOrders(pendingSalesResult.value.data.map(normalizeFetchedOrder));
+          setPendingSalesPagination(pendingSalesResult.value.pagination);
+        } else {
+          setPendingSalesOrders([]);
+          setPendingSalesPagination(null);
+          failures.push(`Pending sales orders: ${pendingSalesResult.reason?.message || 'Failed to fetch'}`);
+        }
+
+        if (pendingPurchaseResult.status === 'fulfilled') {
+          setPendingPurchaseOrders(pendingPurchaseResult.value.data.map(normalizeFetchedOrder));
+          setPendingPurchasePagination(pendingPurchaseResult.value.pagination);
+        } else {
+          setPendingPurchaseOrders([]);
+          setPendingPurchasePagination(null);
+          failures.push(`Pending purchase orders: ${pendingPurchaseResult.reason?.message || 'Failed to fetch'}`);
         }
 
         if (failures.length > 0) {
@@ -274,8 +363,8 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     if (!hasLoadedInitiallyRef.current) return;
     if (lastHandledDataVersionRef.current === dataVersion) return;
     lastHandledDataVersionRef.current = dataVersion;
-    void fetchOrders({ silent: true });
-  }, [dataVersion]);
+    void fetchOrders({ silent: true, page: currentPage });
+  }, [dataVersion, currentPage, serverFilterQuery, reviewedApprovalFilter]);
 
   function formatDate(dateString?: string) {
     if (!dateString) return 'N/A';
@@ -602,73 +691,63 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     [salesOrders, purchaseOrders]
   );
 
+  const allPendingOrders: ConfirmedOrder[] = useMemo(
+    () =>
+      [
+        ...pendingSalesOrders.map(order => ({ ...order, orderType: 'sales' as const })),
+        ...pendingPurchaseOrders.map(order => ({ ...order, orderType: 'purchase' as const })),
+      ].sort((a, b) => {
+        const dateA = new Date(a.transaction_date || a.createdAt || 0).getTime();
+        const dateB = new Date(b.transaction_date || b.createdAt || 0).getTime();
+        return dateB - dateA;
+      }),
+    [pendingSalesOrders, pendingPurchaseOrders]
+  );
+
   const typeFilteredOrders = useMemo(
     () => (filterType === 'all' ? allOrders : allOrders.filter(order => order.orderType === filterType)),
     [allOrders, filterType]
   );
 
   const columnFilterOptions = useMemo(() => {
-    const collect = (picker: (order: ConfirmedOrder) => string) =>
-      Array.from(new Set(typeFilteredOrders.map(picker))).filter(Boolean).sort((a, b) => a.localeCompare(b));
-
     return {
-      orderType: collect(getOrderTypeLabel),
-      date: collect((order) => formatDate(order.transaction_date)),
-      party: collect(getPartyLabel),
-      commodity: collect(getCommodityLabel),
-      vehicle: collect(getVehicleLabel),
-      netWeight: collect(getNetWeightLabel),
-      netAmount: collect(getNetAmountLabel),
-      approval: collect((order) => getApprovalLabel(order.approval_status)),
+      orderType: ['Sales Order', 'Purchase Order'],
+      approval: [
+        { value: 'approved', label: 'APPROVED' },
+        { value: 'declined', label: 'REJECTED' },
+      ],
     };
-  }, [
-    typeFilteredOrders,
-    getOrderTypeLabel,
-    formatDate,
-    getPartyLabel,
-    getCommodityLabel,
-    getVehicleLabel,
-    getNetWeightLabel,
-    getNetAmountLabel,
-    getApprovalLabel,
-  ]);
+  }, []);
 
   const filteredOrders = useMemo(
     () =>
       typeFilteredOrders.filter((order) => {
         if (columnFilters.orderType && getOrderTypeLabel(order) !== columnFilters.orderType) return false;
-        if (columnFilters.date && formatDate(order.transaction_date) !== columnFilters.date) return false;
-        if (columnFilters.party && getPartyLabel(order) !== columnFilters.party) return false;
-        if (columnFilters.commodity && getCommodityLabel(order) !== columnFilters.commodity) return false;
-        if (columnFilters.vehicle && getVehicleLabel(order) !== columnFilters.vehicle) return false;
-        if (columnFilters.netWeight && getNetWeightLabel(order) !== columnFilters.netWeight) return false;
-        if (columnFilters.netAmount && getNetAmountLabel(order) !== columnFilters.netAmount) return false;
-        if (columnFilters.approval && getApprovalLabel(order.approval_status) !== columnFilters.approval) return false;
+        if (columnFilters.approval && order.approval_status !== columnFilters.approval) return false;
         return true;
       }),
     [
       typeFilteredOrders,
       columnFilters,
       getOrderTypeLabel,
-      formatDate,
-      getPartyLabel,
-      getCommodityLabel,
-      getVehicleLabel,
-      getNetWeightLabel,
-      getNetAmountLabel,
-      getApprovalLabel,
     ]
   );
 
   const handleColumnFilterChange = (key: ColumnFilterKey, value: string) => {
+    setCurrentPage(1);
     setColumnFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleFilterTypeChange = (value: 'all' | 'sales' | 'purchase') => {
+    setCurrentPage(1);
+    setFilterType(value);
   };
 
   const isSuperAdmin = currentUserRole === 'super_admin';
 
   const pendingQueueOrders = useMemo(
-    () => typeFilteredOrders.filter((order) => order.approval_status === 'pending'),
-    [typeFilteredOrders]
+    () => (filterType === 'all' ? allPendingOrders : allPendingOrders.filter(order => order.orderType === filterType)),
+    [allPendingOrders, filterType]
   );
 
   const pendingQueueOrderKeys = useMemo(
@@ -677,13 +756,63 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   );
 
   const reviewedOrders = useMemo(
-    () => (isSuperAdmin ? filteredOrders.filter((order) => order.approval_status !== 'pending') : filteredOrders),
-    [isSuperAdmin, filteredOrders]
+    () => filteredOrders.filter((order) => order.approval_status !== 'pending'),
+    [filteredOrders]
   );
 
-  const approvedCount = typeFilteredOrders.filter((order) => order.approval_status === 'approved').length;
-  const rejectedCount = typeFilteredOrders.filter((order) => order.approval_status === 'declined').length;
-  const pendingCount = pendingQueueOrders.length;
+  const getTotalForFilter = () => {
+    if (filterType === 'sales') return salesPagination?.total || 0;
+    if (filterType === 'purchase') return purchasePagination?.total || 0;
+    return (salesPagination?.total || 0) + (purchasePagination?.total || 0);
+  };
+
+  const getCountForFilter = (status: 'pending' | 'approved' | 'declined') => {
+    if (filterType === 'sales') return salesPagination?.counts?.[status] || 0;
+    if (filterType === 'purchase') return purchasePagination?.counts?.[status] || 0;
+    return (salesPagination?.counts?.[status] || 0) + (purchasePagination?.counts?.[status] || 0);
+  };
+
+  const getTotalPagesForFilter = () => {
+    if (filterType === 'sales') return salesPagination?.totalPages || 1;
+    if (filterType === 'purchase') return purchasePagination?.totalPages || 1;
+    return Math.max(salesPagination?.totalPages || 1, purchasePagination?.totalPages || 1);
+  };
+
+  const totalCount = getTotalForFilter();
+  const approvedCount = getCountForFilter('approved');
+  const rejectedCount = getCountForFilter('declined');
+  const pendingCount = getCountForFilter('pending');
+  const totalPages = getTotalPagesForFilter();
+
+  const paginationPages = useMemo(() => {
+    const pages: Array<number | 'ellipsis-left' | 'ellipsis-right'> = [];
+    const lastPage = Math.max(totalPages, 1);
+    const start = Math.max(2, currentPage - 2);
+    const end = Math.min(lastPage - 1, currentPage + 2);
+
+    pages.push(1);
+    if (start > 2) pages.push('ellipsis-left');
+    for (let page = start; page <= end; page += 1) {
+      pages.push(page);
+    }
+    if (end < lastPage - 1) pages.push('ellipsis-right');
+    if (lastPage > 1) pages.push(lastPage);
+
+    return pages;
+  }, [currentPage, totalPages]);
+
+  const goToPage = (page: number) => {
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    if (nextPage !== currentPage) {
+      setCurrentPage(nextPage);
+    }
+  };
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const selectedPendingCount = selectedOrderKeys.length;
   const allVisiblePendingSelected =
@@ -693,13 +822,13 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
 
   // Initial load with spinner
   useEffect(() => {
-    void fetchOrders().finally(() => {
+    void fetchOrders({ page: currentPage }).finally(() => {
       hasLoadedInitiallyRef.current = true;
       if (dataVersion && dataVersion > 0) {
         lastHandledDataVersionRef.current = dataVersion;
       }
     });
-  }, []);
+  }, [currentPage, serverFilterQuery, reviewedApprovalFilter]);
 
   useEffect(() => {
     const pendingSet = new Set(pendingQueueOrderKeys);
@@ -1065,16 +1194,16 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
           <button
             onClick={handleExportToCSV}
             className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors font-medium"
-            title="Download all orders as CSV/Excel"
+            title="Download currently loaded page as CSV/Excel"
           >
             <FileDown className="w-5 h-5" />
-            Download {filterType === 'all' ? 'All Orders' : filterType === 'sales' ? 'Sales Orders' : 'Purchase Orders'} (CSV/Excel)
+            Download Current Page (CSV/Excel)
           </button>
           <div className="flex items-center gap-2 bg-white rounded-lg border border-gray-300 p-2">
             <Filter className="w-5 h-5 text-gray-500" />
             <select
               value={filterType}
-              onChange={(e) => setFilterType(e.target.value as 'all' | 'sales' | 'purchase')}
+              onChange={(e) => handleFilterTypeChange(e.target.value as 'all' | 'sales' | 'purchase')}
               className="border-none outline-none text-sm font-medium"
             >
               <option value="all">All Orders</option>
@@ -1088,7 +1217,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
           <p className="text-xs font-semibold text-blue-800 uppercase tracking-wide">Total Orders (View)</p>
-          <p className="text-2xl font-bold text-blue-900 mt-1">{typeFilteredOrders.length}</p>
+          <p className="text-2xl font-bold text-blue-900 mt-1">{totalCount}</p>
         </div>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-semibold text-amber-800 uppercase tracking-wide">Pending</p>
@@ -1115,32 +1244,38 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
             </div>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setPendingQueueCollapsed((prev) => !prev)}
+                className="px-3 py-1.5 rounded-md border border-amber-300 text-amber-900 bg-white hover:bg-amber-100 text-sm font-medium"
+              >
+                {pendingQueueCollapsed ? 'Expand' : 'Collapse'}
+              </button>
+              <button
                 onClick={() => toggleSelectAllPending(true)}
-                disabled={pendingQueueOrders.length === 0 || allVisiblePendingSelected}
+                disabled={pendingQueueCollapsed || pendingQueueOrders.length === 0 || allVisiblePendingSelected}
                 className="px-3 py-1.5 rounded-md border border-amber-300 text-amber-900 bg-white hover:bg-amber-100 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium"
               >
                 Select All Pending
               </button>
               <button
                 onClick={() => toggleSelectAllPending(false)}
-                disabled={selectedPendingCount === 0}
+                disabled={pendingQueueCollapsed || selectedPendingCount === 0}
                 className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium"
               >
                 Clear
               </button>
               <button
                 onClick={openBulkDecisionModal}
-                disabled={pendingQueueOrders.length === 0 || approvalSubmitting}
+                disabled={pendingQueueCollapsed || pendingQueueOrders.length === 0 || approvalSubmitting}
                 className="px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-semibold"
               >
                 Apply Bulk Decision
               </button>
             </div>
           </div>
-          <div className="px-5 py-3 bg-amber-100/50 border-b border-amber-200 text-sm text-amber-900">
+          {!pendingQueueCollapsed && <div className="px-5 py-3 bg-amber-100/50 border-b border-amber-200 text-sm text-amber-900">
             Pending: <span className="font-semibold">{pendingQueueOrders.length}</span> | Selected for approve: <span className="font-semibold">{selectedPendingCount}</span> | Will reject: <span className="font-semibold">{bulkRejectCount}</span>
-          </div>
-          <div className="overflow-x-auto">
+          </div>}
+          {!pendingQueueCollapsed && <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-white border-b border-amber-200">
                 <tr>
@@ -1169,7 +1304,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                   </tr>
                 ) : (
                   pendingQueueOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-amber-50/40 transition-colors">
+                    <tr key={getOrderKey(order)} className="hover:bg-amber-50/40 transition-colors">
                       <td className="px-4 py-3 text-center">
                         <input
                           type="checkbox"
@@ -1226,17 +1361,17 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                 )}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
         <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">
-            {isSuperAdmin ? 'Reviewed Confirmed Orders' : 'All Confirmed Orders'}
+            All Confirmed Orders
           </h2>
           <p className="text-xs text-gray-500">
-            {isSuperAdmin ? 'Approved and Rejected records' : 'All statuses'}
+            All statuses
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -1267,76 +1402,58 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                   </select>
                 </th>
                 <th className="px-4 py-2">
-                  <select
+                  <input
+                    type="text"
                     value={columnFilters.date}
                     onChange={(e) => handleColumnFilterChange('date', e.target.value)}
+                    placeholder="Search date"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  >
-                    <option value="">All</option>
-                    {columnFilterOptions.date.map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </select>
+                  />
                 </th>
                 <th className="px-4 py-2">
-                  <select
+                  <input
+                    type="text"
                     value={columnFilters.party}
                     onChange={(e) => handleColumnFilterChange('party', e.target.value)}
+                    placeholder="Search party"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  >
-                    <option value="">All</option>
-                    {columnFilterOptions.party.map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </select>
+                  />
                 </th>
                 <th className="px-4 py-2">
-                  <select
+                  <input
+                    type="text"
                     value={columnFilters.commodity}
                     onChange={(e) => handleColumnFilterChange('commodity', e.target.value)}
+                    placeholder="Search commodity"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  >
-                    <option value="">All</option>
-                    {columnFilterOptions.commodity.map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </select>
+                  />
                 </th>
                 <th className="px-4 py-2">
-                  <select
+                  <input
+                    type="text"
                     value={columnFilters.vehicle}
                     onChange={(e) => handleColumnFilterChange('vehicle', e.target.value)}
+                    placeholder="Search vehicle"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  >
-                    <option value="">All</option>
-                    {columnFilterOptions.vehicle.map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </select>
+                  />
                 </th>
                 <th className="px-4 py-2">
-                  <select
+                  <input
+                    type="number"
                     value={columnFilters.netWeight}
                     onChange={(e) => handleColumnFilterChange('netWeight', e.target.value)}
+                    placeholder="Exact weight"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  >
-                    <option value="">All</option>
-                    {columnFilterOptions.netWeight.map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </select>
+                  />
                 </th>
                 <th className="px-4 py-2">
-                  <select
+                  <input
+                    type="number"
                     value={columnFilters.netAmount}
                     onChange={(e) => handleColumnFilterChange('netAmount', e.target.value)}
+                    placeholder="Exact amount"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  >
-                    <option value="">All</option>
-                    {columnFilterOptions.netAmount.map((value) => (
-                      <option key={value} value={value}>{value}</option>
-                    ))}
-                  </select>
+                  />
                 </th>
                 <th className="px-4 py-2">
                   <select
@@ -1345,14 +1462,17 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
                   >
                     <option value="">All</option>
-                    {columnFilterOptions.approval.map((value) => (
-                      <option key={value} value={value}>{value}</option>
+                    {columnFilterOptions.approval.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </th>
                 <th className="px-4 py-2 text-right">
                   <button
-                    onClick={() => setColumnFilters({ ...DEFAULT_COLUMN_FILTERS })}
+                    onClick={() => {
+                      setCurrentPage(1);
+                      setColumnFilters({ ...DEFAULT_COLUMN_FILTERS });
+                    }}
                     className="text-xs font-medium text-green-700 hover:text-green-900"
                     title="Clear all column filters"
                   >
@@ -1365,12 +1485,12 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
               {reviewedOrders.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
-                    {isSuperAdmin ? 'No reviewed orders found in this filter.' : 'No confirmed orders found'}
+                    No approved or rejected confirmed orders found
                   </td>
                 </tr>
               ) : (
                 reviewedOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={getOrderKey(order)} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         order.orderType === 'sales'
@@ -1458,6 +1578,47 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
               )}
             </tbody>
           </table>
+        </div>
+        <div className="px-5 py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-50">
+          <p className="text-sm text-gray-600">
+            Page <span className="font-semibold text-gray-900">{currentPage}</span> of{' '}
+            <span className="font-semibold text-gray-900">{totalPages}</span>
+            {' '}({reviewedOrders.length} rows shown)
+          </p>
+          <div className="flex items-center gap-1 flex-wrap justify-center">
+            <button
+              onClick={() => goToPage(currentPage - 1)}
+              disabled={currentPage <= 1 || loading}
+              className="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            {paginationPages.map((page) => (
+              typeof page === 'number' ? (
+                <button
+                  key={page}
+                  onClick={() => goToPage(page)}
+                  disabled={loading}
+                  className={`px-3 py-1.5 rounded-md border text-sm font-medium ${
+                    page === currentPage
+                      ? 'border-green-600 bg-green-600 text-white'
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {page}
+                </button>
+              ) : (
+                <span key={page} className="px-2 py-1 text-gray-500 text-sm">...</span>
+              )
+            ))}
+            <button
+              onClick={() => goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages || loading}
+              className="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 

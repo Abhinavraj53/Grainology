@@ -39,6 +39,30 @@ function addNumberFilter(query, field, value) {
   }
 }
 
+function addDatePartsFilter(query, monthValue, yearValue) {
+  const month = String(monthValue || '').trim();
+  const year = String(yearValue || '').trim();
+  const filters = [];
+
+  if (year && month) {
+    const numericMonth = String(Number(month));
+    filters.push({ transaction_date: { $regex: `^${escapeRegex(year)}-${escapeRegex(month)}`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(month)}/${escapeRegex(year)}`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(numericMonth)}/${escapeRegex(year)}`, $options: 'i' } });
+  } else if (year) {
+    filters.push({ transaction_date: { $regex: escapeRegex(year), $options: 'i' } });
+  } else if (month) {
+    const numericMonth = String(Number(month));
+    filters.push({ transaction_date: { $regex: `-${escapeRegex(month)}-`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(month)}/`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(numericMonth)}/`, $options: 'i' } });
+  }
+
+  if (filters.length > 0) {
+    query.$and = [...(query.$and || []), { $or: filters }];
+  }
+}
+
 function buildListQuery(params) {
   const query = { trash: { $ne: true } };
   const approval = String(params.approval || '').trim().toLowerCase();
@@ -48,6 +72,7 @@ function buildListQuery(params) {
   } else if (['pending', 'approved', 'declined'].includes(approval)) {
     query.approval_status = approval;
   }
+  addDatePartsFilter(query, params.month, params.year);
   addTextFilter(query, 'transaction_date', params.date);
   addTextFilter(query, 'supplier_name', params.party);
   addTextFilter(query, 'commodity', params.commodity);

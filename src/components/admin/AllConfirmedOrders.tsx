@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, type KeyboardEvent } from 'react';
 import { Eye, Filter, X, Download, Edit, Trash2, FileDown } from 'lucide-react';
 import { generateOrderPDF } from '../../utils/pdfGenerator';
 
@@ -111,23 +111,21 @@ interface ConfirmedPurchaseOrder {
 type ConfirmedOrder = (ConfirmedSalesOrder & { orderType: 'sales' }) | (ConfirmedPurchaseOrder & { orderType: 'purchase' });
 type ColumnFilterKey =
   | 'orderType'
-  | 'date'
+  | 'month'
+  | 'year'
   | 'party'
   | 'commodity'
   | 'vehicle'
-  | 'netWeight'
-  | 'netAmount'
   | 'approval';
 type ColumnFilterState = Record<ColumnFilterKey, string>;
 
 const DEFAULT_COLUMN_FILTERS: ColumnFilterState = {
   orderType: '',
-  date: '',
+  month: '',
+  year: '',
   party: '',
   commodity: '',
   vehicle: '',
-  netWeight: '',
-  netAmount: '',
   approval: '',
 };
 
@@ -135,6 +133,22 @@ const ORDERS_FETCH_TIMEOUT_MS = 90000;
 const RETRYABLE_STATUS_CODES = new Set([502, 503, 504]);
 const RETRY_DELAY_MS = 1500;
 const ORDERS_PAGE_SIZE = 25;
+const MONTH_OPTIONS = [
+  { value: '', label: 'All Months' },
+  { value: '01', label: 'Jan' },
+  { value: '02', label: 'Feb' },
+  { value: '03', label: 'Mar' },
+  { value: '04', label: 'Apr' },
+  { value: '05', label: 'May' },
+  { value: '06', label: 'Jun' },
+  { value: '07', label: 'Jul' },
+  { value: '08', label: 'Aug' },
+  { value: '09', label: 'Sep' },
+  { value: '10', label: 'Oct' },
+  { value: '11', label: 'Nov' },
+  { value: '12', label: 'Dec' },
+];
+const YEAR_OPTIONS = ['', '2024', '2025', '2026'];
 
 interface AllConfirmedOrdersProps {
   currentUserRole?: string;
@@ -197,6 +211,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   const [selectedOrder, setSelectedOrder] = useState<ConfirmedOrder | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'sales' | 'purchase'>('all');
   const [columnFilters, setColumnFilters] = useState<ColumnFilterState>({ ...DEFAULT_COLUMN_FILTERS });
+  const [draftColumnFilters, setDraftColumnFilters] = useState<ColumnFilterState>({ ...DEFAULT_COLUMN_FILTERS });
   const [editingOrder, setEditingOrder] = useState<ConfirmedOrder | null>(null);
   const [editFormData, setEditFormData] = useState<Partial<ConfirmedOrder>>({});
   const [editSaving, setEditSaving] = useState(false);
@@ -214,12 +229,11 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
 
   const serverFilterQuery = useMemo(() => {
     const params = new URLSearchParams();
-    if (columnFilters.date.trim()) params.set('date', columnFilters.date.trim());
+    if (columnFilters.month.trim()) params.set('month', columnFilters.month.trim());
+    if (columnFilters.year.trim()) params.set('year', columnFilters.year.trim());
     if (columnFilters.party.trim()) params.set('party', columnFilters.party.trim());
     if (columnFilters.commodity.trim()) params.set('commodity', columnFilters.commodity.trim());
     if (columnFilters.vehicle.trim()) params.set('vehicle', columnFilters.vehicle.trim());
-    if (columnFilters.netWeight.trim()) params.set('netWeight', columnFilters.netWeight.trim());
-    if (columnFilters.netAmount.trim()) params.set('netAmount', columnFilters.netAmount.trim());
     return params.toString();
   }, [columnFilters]);
 
@@ -719,6 +733,27 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     };
   }, []);
 
+  const partyOptions = useMemo(
+    () => Array.from(new Set([...allOrders, ...allPendingOrders].map(getPartyLabel)))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b)),
+    [allOrders, allPendingOrders]
+  );
+
+  const commodityOptions = useMemo(
+    () => Array.from(new Set([...allOrders, ...allPendingOrders].map((order) => toUpperText(order.commodity))))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b)),
+    [allOrders, allPendingOrders]
+  );
+
+  const vehicleOptions = useMemo(
+    () => Array.from(new Set([...allOrders, ...allPendingOrders].map(getVehicleLabel)))
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b)),
+    [allOrders, allPendingOrders]
+  );
+
   const filteredOrders = useMemo(
     () =>
       typeFilteredOrders.filter((order) => {
@@ -733,9 +768,25 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     ]
   );
 
-  const handleColumnFilterChange = (key: ColumnFilterKey, value: string) => {
+  const handleDraftColumnFilterChange = (key: ColumnFilterKey, value: string) => {
+    setDraftColumnFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const applyColumnFilters = () => {
     setCurrentPage(1);
-    setColumnFilters(prev => ({ ...prev, [key]: value }));
+    setColumnFilters({ ...draftColumnFilters });
+  };
+
+  const clearColumnFilters = () => {
+    setCurrentPage(1);
+    setDraftColumnFilters({ ...DEFAULT_COLUMN_FILTERS });
+    setColumnFilters({ ...DEFAULT_COLUMN_FILTERS });
+  };
+
+  const handleFilterInputKeyDown = (event: KeyboardEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (event.key === 'Enter') {
+      applyColumnFilters();
+    }
   };
 
   const handleFilterTypeChange = (value: 'all' | 'sales' | 'purchase') => {
@@ -767,6 +818,11 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   };
 
   const getCountForFilter = (status: 'pending' | 'approved' | 'declined') => {
+    if (status === 'pending') {
+      if (filterType === 'sales') return pendingSalesPagination?.total || 0;
+      if (filterType === 'purchase') return pendingPurchasePagination?.total || 0;
+      return (pendingSalesPagination?.total || 0) + (pendingPurchasePagination?.total || 0);
+    }
     if (filterType === 'sales') return salesPagination?.counts?.[status] || 0;
     if (filterType === 'purchase') return purchasePagination?.counts?.[status] || 0;
     return (salesPagination?.counts?.[status] || 0) + (purchasePagination?.counts?.[status] || 0);
@@ -1375,6 +1431,21 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
           </p>
         </div>
         <div className="overflow-x-auto">
+          <datalist id="confirmed-order-party-options">
+            {partyOptions.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+          <datalist id="confirmed-order-commodity-options">
+            {commodityOptions.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
+          <datalist id="confirmed-order-vehicle-options">
+            {vehicleOptions.map((value) => (
+              <option key={value} value={value} />
+            ))}
+          </datalist>
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
@@ -1391,8 +1462,9 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
               <tr className="bg-gray-100 border-t border-gray-200">
                 <th className="px-4 py-2">
                   <select
-                    value={columnFilters.orderType}
-                    onChange={(e) => handleColumnFilterChange('orderType', e.target.value)}
+                    value={draftColumnFilters.orderType}
+                    onChange={(e) => handleDraftColumnFilterChange('orderType', e.target.value)}
+                    onKeyDown={handleFilterInputKeyDown}
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
                   >
                     <option value="">All</option>
@@ -1402,19 +1474,36 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                   </select>
                 </th>
                 <th className="px-4 py-2">
-                  <input
-                    type="text"
-                    value={columnFilters.date}
-                    onChange={(e) => handleColumnFilterChange('date', e.target.value)}
-                    placeholder="Search date"
-                    className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  />
+                  <div className="flex gap-1">
+                    <select
+                      value={draftColumnFilters.month}
+                      onChange={(e) => handleDraftColumnFilterChange('month', e.target.value)}
+                      onKeyDown={handleFilterInputKeyDown}
+                      className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
+                    >
+                      {MONTH_OPTIONS.map((option) => (
+                        <option key={option.value || 'all-months'} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={draftColumnFilters.year}
+                      onChange={(e) => handleDraftColumnFilterChange('year', e.target.value)}
+                      onKeyDown={handleFilterInputKeyDown}
+                      className="w-1/2 rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
+                    >
+                      {YEAR_OPTIONS.map((year) => (
+                        <option key={year || 'all-years'} value={year}>{year || 'All Years'}</option>
+                      ))}
+                    </select>
+                  </div>
                 </th>
                 <th className="px-4 py-2">
                   <input
                     type="text"
-                    value={columnFilters.party}
-                    onChange={(e) => handleColumnFilterChange('party', e.target.value)}
+                    list="confirmed-order-party-options"
+                    value={draftColumnFilters.party}
+                    onChange={(e) => handleDraftColumnFilterChange('party', e.target.value)}
+                    onKeyDown={handleFilterInputKeyDown}
                     placeholder="Search party"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
                   />
@@ -1422,8 +1511,10 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                 <th className="px-4 py-2">
                   <input
                     type="text"
-                    value={columnFilters.commodity}
-                    onChange={(e) => handleColumnFilterChange('commodity', e.target.value)}
+                    list="confirmed-order-commodity-options"
+                    value={draftColumnFilters.commodity}
+                    onChange={(e) => handleDraftColumnFilterChange('commodity', e.target.value)}
+                    onKeyDown={handleFilterInputKeyDown}
                     placeholder="Search commodity"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
                   />
@@ -1431,53 +1522,46 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
                 <th className="px-4 py-2">
                   <input
                     type="text"
-                    value={columnFilters.vehicle}
-                    onChange={(e) => handleColumnFilterChange('vehicle', e.target.value)}
+                    list="confirmed-order-vehicle-options"
+                    value={draftColumnFilters.vehicle}
+                    onChange={(e) => handleDraftColumnFilterChange('vehicle', e.target.value)}
+                    onKeyDown={handleFilterInputKeyDown}
                     placeholder="Search vehicle"
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
                   />
                 </th>
-                <th className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={columnFilters.netWeight}
-                    onChange={(e) => handleColumnFilterChange('netWeight', e.target.value)}
-                    placeholder="Exact weight"
-                    className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  />
-                </th>
-                <th className="px-4 py-2">
-                  <input
-                    type="number"
-                    value={columnFilters.netAmount}
-                    onChange={(e) => handleColumnFilterChange('netAmount', e.target.value)}
-                    placeholder="Exact amount"
-                    className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
-                  />
-                </th>
+                <th className="px-4 py-2"></th>
+                <th className="px-4 py-2"></th>
                 <th className="px-4 py-2">
                   <select
-                    value={columnFilters.approval}
-                    onChange={(e) => handleColumnFilterChange('approval', e.target.value)}
+                    value={draftColumnFilters.approval}
+                    onChange={(e) => handleDraftColumnFilterChange('approval', e.target.value)}
+                    onKeyDown={handleFilterInputKeyDown}
                     className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700 focus:border-green-500 focus:outline-none"
                   >
-                    <option value="">All</option>
+                    <option value="">All Reviewed</option>
                     {columnFilterOptions.approval.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </th>
-                <th className="px-4 py-2 text-right">
+                <th className="px-4 py-2">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={applyColumnFilters}
+                      className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+                      title="Apply filters"
+                    >
+                      Search
+                    </button>
                   <button
-                    onClick={() => {
-                      setCurrentPage(1);
-                      setColumnFilters({ ...DEFAULT_COLUMN_FILTERS });
-                    }}
-                    className="text-xs font-medium text-green-700 hover:text-green-900"
+                      onClick={clearColumnFilters}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100"
                     title="Clear all column filters"
                   >
-                    Clear Filters
+                    Clear
                   </button>
+                  </div>
                 </th>
               </tr>
             </thead>

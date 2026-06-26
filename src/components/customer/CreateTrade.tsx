@@ -1,32 +1,41 @@
-import { useState, useMemo, useEffect } from 'react';
-import { QualityParameter } from '../../lib/client';
-import { FileText, Info, Package, Calendar, DollarSign, ClipboardCheck, PlusCircle } from 'lucide-react';
-import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
+import { useState, useEffect } from 'react';
+import { Package, Calendar, DollarSign, ClipboardCheck, PlusCircle } from 'lucide-react';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToast } from '../Toast';
+import { api } from '../../lib/client';
+
+interface TradeQualityParameter {
+  id: string;
+  s_no: number;
+  parameter_name: string;
+  unit_of_measurement: string;
+  standard_value: string;
+  actual_value: string;
+  remarks: string;
+  options: string[];
+}
 
 interface CreateTradeProps {
-  qualityParams: QualityParameter[];
+  qualityParams: unknown[];
   onCreateOffer: (offerData: any) => Promise<{ error: any }>;
   userRole: 'farmer' | 'trader';
   userId: string;
 }
 
-export default function CreateTrade({ qualityParams, onCreateOffer, userRole, userId }: CreateTradeProps) {
+export default function CreateTrade({ userId }: CreateTradeProps) {
   const { showSuccess, showError } = useToast();
   const [tradeType, setTradeType] = useState<'sell' | 'buy'>('sell');
   const [commodity, setCommodity] = useState('Paddy');
   const [variety, setVariety] = useState('');
   const [quantityMt, setQuantityMt] = useState<number>(0);
-  const [quantityUnit, setQuantityUnit] = useState<'QTL' | 'MT'>('MT');
   const [pricePerQuintal, setPricePerQuintal] = useState<number>(0);
-  const [priceUnit, setPriceUnit] = useState<'INR' | 'USD'>('INR');
   const [location, setLocation] = useState('');
   const [saudaDate, setSaudaDate] = useState('');
   const [qualityTerms, setQualityTerms] = useState('');
   const [qualityReport, setQualityReport] = useState<Record<string, string>>({});
-  const [qualityParameters, setQualityParameters] = useState<any[]>([]);
+  const [qualityParameters, setQualityParameters] = useState<TradeQualityParameter[]>([]);
+  const [qualityParametersLoading, setQualityParametersLoading] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -57,34 +66,67 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
 
   // Update Quality Parameters based on Commodity selection
   useEffect(() => {
-    if (commodity && QUALITY_STRUCTURE[commodity]) {
-      const params = QUALITY_STRUCTURE[commodity].map((p, index) => ({
-        id: `${commodity}-${index}`,
-        s_no: index + 1,
-        parameter_name: p.name,
-        unit_of_measurement: p.unit,
-        standard_value: p.standard,
-        actual_value: p.options[0], // Default to first option
-        remarks: p.remarks,
-        options: p.options
-      }));
+    let cancelled = false;
+
+    const loadQualityParameters = async () => {
+      if (!commodity) {
+        setQualityParameters([]);
+        setQualityReport({});
+        return;
+      }
+
+      setQualityParametersLoading(true);
+      setQualityParameters([]);
+      setQualityReport({});
+
+      const { data, error } = await api
+        .from('quality_parameters_master')
+        .select('*')
+        .eq('commodity', commodity)
+        .eq('is_active', true)
+        .order('s_no', { ascending: true });
+
+      if (cancelled) return;
+
+      if (error) {
+        showError(error.message || 'Failed to load quality parameters');
+        setQualityParametersLoading(false);
+        return;
+      }
+
+      const params: TradeQualityParameter[] = (data || []).map((param: any, index: number) => {
+        const options = Array.isArray(param.options) && param.options.length > 0
+          ? param.options
+          : [param.standard_value].filter(Boolean);
+
+        return {
+          id: param.id || `${commodity}-${index}`,
+          s_no: param.s_no || index + 1,
+          parameter_name: param.parameter_name,
+          unit_of_measurement: param.unit_of_measurement,
+          standard_value: param.standard_value,
+          actual_value: options[0] || '',
+          remarks: param.remarks || '',
+          options
+        };
+      });
+
       setQualityParameters(params);
-      
-      // Initialize quality report with default values
+
       const initialReport: Record<string, string> = {};
       params.forEach(p => {
         initialReport[p.parameter_name] = p.actual_value;
       });
       setQualityReport(initialReport);
-    } else {
-      setQualityParameters([]);
-      setQualityReport({});
-    }
-  }, [commodity]);
+      setQualityParametersLoading(false);
+    };
 
-  const currentParams = useMemo(() => {
-    return qualityParams.filter(param => param.commodity === commodity);
-  }, [commodity, qualityParams]);
+    loadQualityParameters();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [commodity]);
 
   const handleQualityChange = (paramName: string, value: string) => {
     setQualityReport(prev => ({
@@ -291,7 +333,7 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
                   </label>
                   <select
                     value="MT"
-                    readOnly
+                    disabled
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg font-semibold appearance-none bg-gray-50"
                   >
                     <option value="MT">MT</option>
@@ -360,7 +402,19 @@ export default function CreateTrade({ qualityParams, onCreateOffer, userRole, us
                   </div>
                 )}
 
-                {qualityParameters.length > 0 && (
+                {qualityParametersLoading && (
+                  <div className="bg-white p-4 rounded-lg border border-gray-200 text-sm text-gray-600">
+                    Loading quality parameters...
+                  </div>
+                )}
+
+                {!qualityParametersLoading && commodity && qualityParameters.length === 0 && (
+                  <div className="bg-white p-4 rounded-lg border border-gray-200 text-sm text-gray-600">
+                    No active quality parameters found for {commodity}.
+                  </div>
+                )}
+
+                {!qualityParametersLoading && qualityParameters.length > 0 && (
                   <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
                     {/* Table Header */}
                     <div className="bg-gray-800 text-white">

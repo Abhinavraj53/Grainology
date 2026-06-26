@@ -780,6 +780,7 @@ class ApiClient {
       'offers': '/offers',
       'orders': '/orders',
       'quality_parameters': '/quality',
+      'quality_parameters_master': '/quality',
       'mandi_prices': '/mandi',
       'weather_data': '/weather',
       'logistics_providers': '/logistics',

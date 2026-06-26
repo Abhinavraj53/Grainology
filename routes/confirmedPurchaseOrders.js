@@ -13,6 +13,76 @@ import { getMappedValue, parseDate, parseNumeric, toNA, getAvailableColumns } fr
 const router = express.Router();
 const LIST_ORDER_SELECT = '-quality_report';
 
+function getPaginationParams(query) {
+  const page = Math.max(parseInt(query.page || '1', 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(query.limit || '25', 10) || 25, 1), 100);
+  return { page, limit, skip: (page - 1) * limit };
+}
+
+function escapeRegex(value) {
+  return String(value || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function addTextFilter(query, field, value) {
+  const normalized = escapeRegex(value);
+  if (normalized) {
+    query[field] = { $regex: normalized, $options: 'i' };
+  }
+}
+
+function addNumberFilter(query, field, value) {
+  const raw = String(value || '').trim();
+  if (!raw) return;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric)) {
+    query[field] = numeric;
+  }
+}
+
+function addDatePartsFilter(query, monthValue, yearValue) {
+  const month = String(monthValue || '').trim();
+  const year = String(yearValue || '').trim();
+  const filters = [];
+
+  if (year && month) {
+    const numericMonth = String(Number(month));
+    filters.push({ transaction_date: { $regex: `^${escapeRegex(year)}-${escapeRegex(month)}`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(month)}/${escapeRegex(year)}`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(numericMonth)}/${escapeRegex(year)}`, $options: 'i' } });
+  } else if (year) {
+    filters.push({ transaction_date: { $regex: escapeRegex(year), $options: 'i' } });
+  } else if (month) {
+    const numericMonth = String(Number(month));
+    filters.push({ transaction_date: { $regex: `-${escapeRegex(month)}-`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(month)}/`, $options: 'i' } });
+    filters.push({ transaction_date: { $regex: `/${escapeRegex(numericMonth)}/`, $options: 'i' } });
+  }
+
+  if (filters.length > 0) {
+    query.$and = [...(query.$and || []), { $or: filters }];
+  }
+}
+
+function buildListQuery(params) {
+  const query = { trash: { $ne: true } };
+  const approval = String(params.approval || '').trim().toLowerCase();
+
+  if (approval === 'reviewed') {
+    query.approval_status = { $in: ['approved', 'declined'] };
+  } else if (['pending', 'approved', 'declined'].includes(approval)) {
+    query.approval_status = approval;
+  }
+  addDatePartsFilter(query, params.month, params.year);
+  addTextFilter(query, 'transaction_date', params.date);
+  addTextFilter(query, 'supplier_name', params.party);
+  addTextFilter(query, 'commodity', params.commodity);
+  addTextFilter(query, 'vehicle_no', params.vehicle);
+  addNumberFilter(query, 'net_weight_mt', params.netWeight);
+  addNumberFilter(query, 'net_amount', params.netAmount);
+
+  return query;
+}
+
 function normalizeOrder(order) {
   if (!order) return order;
 
@@ -44,13 +114,48 @@ router.use(authenticate);
 // Get all confirmed purchase orders (admin only) - exclude trashed
 router.get('/', requireAdmin, async (req, res) => {
   try {
-    const orders = await ConfirmedPurchaseOrder.find({ trash: { $ne: true } })
-      .select(LIST_ORDER_SELECT)
-      .populate('customer_id', 'name email mobile_number')
-      .populate('created_by', 'name email')
-      .sort({ createdAt: -1 })
-      .lean();
-    res.json(orders.map(normalizeOrder));
+    const query = buildListQuery(req.query);
+    const wantsPagination = req.query.page !== undefined || req.query.limit !== undefined;
+
+    if (!wantsPagination) {
+      const orders = await ConfirmedPurchaseOrder.find(query)
+        .select(LIST_ORDER_SELECT)
+        .populate('customer_id', 'name email mobile_number')
+        .populate('created_by', 'name email')
+        .sort({ createdAt: -1 })
+        .lean();
+      return res.json(orders.map(normalizeOrder));
+    }
+
+    const { page, limit, skip } = getPaginationParams(req.query);
+    const [orders, total, pending, approved, declined] = await Promise.all([
+      ConfirmedPurchaseOrder.find(query)
+        .select(LIST_ORDER_SELECT)
+        .populate('customer_id', 'name email mobile_number')
+        .populate('created_by', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      ConfirmedPurchaseOrder.countDocuments(query),
+      ConfirmedPurchaseOrder.countDocuments({ ...query, approval_status: 'pending' }),
+      ConfirmedPurchaseOrder.countDocuments({ ...query, approval_status: 'approved' }),
+      ConfirmedPurchaseOrder.countDocuments({ ...query, approval_status: 'declined' }),
+    ]);
+    const totalPages = Math.max(Math.ceil(total / limit), 1);
+
+    res.json({
+      data: orders.map(normalizeOrder),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+        counts: { pending, approved, declined }
+      }
+    });
   } catch (error) {
     console.error('Get confirmed purchase orders error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch confirmed purchase orders' });

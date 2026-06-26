@@ -514,7 +514,7 @@ export default function AdminPanel({ profile, onSignOut, signingOut }: AdminPane
             }`}
           >
             <MapPin className="w-5 h-5" />
-            <span className="font-medium">Location Management</span>
+            <span className="font-medium text-sm">Location Management</span>
           </button>
 
           <button

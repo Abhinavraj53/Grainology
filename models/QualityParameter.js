@@ -17,6 +17,10 @@ const qualityParameterSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  options: {
+    type: [String],
+    default: []
+  },
   remarks: {
     type: String,
     default: ''
@@ -36,4 +40,3 @@ const qualityParameterSchema = new mongoose.Schema({
 const QualityParameter = mongoose.model('QualityParameter', qualityParameterSchema);
 
 export default QualityParameter;
-

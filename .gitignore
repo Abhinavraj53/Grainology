@@ -7,6 +7,11 @@ middleware/
 # Exclude backend lib but keep frontend src/lib
 /lib/
 scripts/
+!scripts/
+scripts/*
+!scripts/qualityParameterDefinitions.js
+!scripts/seedQualityParameters.js
+!scripts/verifyQualityParameters.js
 keys/
 services/
 config/

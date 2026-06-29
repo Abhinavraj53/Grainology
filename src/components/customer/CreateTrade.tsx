@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Package, Calendar, ClipboardCheck, PlusCircle, IndianRupee } from 'lucide-react';
 import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToast } from '../Toast';
-import { api } from '../../lib/client';
 
 interface TradeQualityParameter {
   id: string;
@@ -86,50 +85,73 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
       setQualityReport({});
 
       const qualityCommodity = toTitleCase(commodity);
+      const token = localStorage.getItem('auth_token');
 
-      const { data, error } = await api
-        .from('quality_parameters_master')
-        .select('*')
-        .eq('commodity', qualityCommodity)
-        .eq('is_active', true)
-        .order('s_no', { ascending: true });
-
-      if (cancelled) return;
-
-      if (error) {
-        showError(error.message || 'Failed to load quality parameters');
+      if (!token) {
+        showError('Authentication token not found. Please sign in again.');
         setQualityParametersLoading(false);
         return;
       }
 
-      const params: TradeQualityParameter[] = (data || []).map((param: any, index: number) => {
-        const parameterName = param.parameter_name || param.param_name || '';
-        const unitOfMeasurement = param.unit_of_measurement || param.unit || '';
-        const standardValue = param.standard_value || param.standard || '';
-        const options = Array.isArray(param.options) && param.options.length > 0
-          ? param.options
-          : [standardValue].filter(Boolean);
-
-        return {
-          id: param.id || `${commodity}-${index}`,
-          s_no: param.s_no || index + 1,
-          parameter_name: parameterName,
-          unit_of_measurement: unitOfMeasurement,
-          standard_value: standardValue,
-          actual_value: options[0] || '',
-          remarks: param.remarks || '',
-          options
-        };
+      const queryParams = new URLSearchParams({
+        commodity: qualityCommodity,
+        is_active: 'true',
+        sort: JSON.stringify({ s_no: 1 })
       });
 
-      setQualityParameters(params);
+      try {
+        const response = await fetch(`/api/quality?${queryParams.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/json'
+          }
+        });
 
-      const initialReport: Record<string, string> = {};
-      params.forEach(p => {
-        initialReport[p.parameter_name] = p.actual_value;
-      });
-      setQualityReport(initialReport);
-      setQualityParametersLoading(false);
+        if (cancelled) return;
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          showError(error.error || 'Failed to load quality parameters');
+          setQualityParametersLoading(false);
+          return;
+        }
+
+        const data = await response.json();
+
+        const params: TradeQualityParameter[] = (data || []).map((param: any, index: number) => {
+          const parameterName = param.parameter_name || param.param_name || '';
+          const unitOfMeasurement = param.unit_of_measurement || param.unit || '';
+          const standardValue = param.standard_value || param.standard || '';
+          const options = Array.isArray(param.options) && param.options.length > 0
+            ? param.options
+            : [standardValue].filter(Boolean);
+
+          return {
+            id: param.id || `${commodity}-${index}`,
+            s_no: param.s_no || index + 1,
+            parameter_name: parameterName,
+            unit_of_measurement: unitOfMeasurement,
+            standard_value: standardValue,
+            actual_value: options[0] || '',
+            remarks: param.remarks || '',
+            options
+          };
+        });
+
+        setQualityParameters(params);
+
+        const initialReport: Record<string, string> = {};
+        params.forEach(p => {
+          initialReport[p.parameter_name] = p.actual_value;
+        });
+        setQualityReport(initialReport);
+        setQualityParametersLoading(false);
+      } catch (error: any) {
+        if (!cancelled) {
+          showError(error.message || 'Failed to load quality parameters');
+          setQualityParametersLoading(false);
+        }
+      }
     };
 
     loadQualityParameters();

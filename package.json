@@ -19,7 +19,8 @@
     "seed:users": "node scripts/seedDemoUsers.js",
     "seed:data": "node scripts/seedDemoData.js",
     "seed:all": "npm run seed:users && npm run seed:data",
-    "seed:super-admin": "node scripts/createSuperAdminUser.js"
+    "seed:super-admin": "node scripts/createSuperAdminUser.js",
+    "verify:quality-parameters": "node scripts/verifyQualityParameters.js"
   },
   "keywords": [
     "grainology",

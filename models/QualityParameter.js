@@ -22,6 +22,10 @@ const qualityParameterSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  options: {
+    type: [String],
+    default: []
+  },
   remarks: {
     type: String,
     default: ''

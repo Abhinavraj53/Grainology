@@ -297,7 +297,7 @@ export default function MandiBhaav() {
                 );
               })}
             </LabeledSelect>
-            <LabeledSelect testId="agmarknet-district" label="District" value={draftFilters.district[0] || ''} disabled={draftFilters.state === 100006}
+            <LabeledSelect testId="agmarknet-district" label="District" value={draftFilters.district[0] || ''} disabled={draftFilters.state === 100006} 
               onChange={(value) => setDraftFilters({ ...draftFilters, district: value ? [Number(value)] : [], market: [100009] })}>
               <option value="">All Districts</option>
               {districts.filter((district) => (district.id ?? district.district_id) !== 100007).map((district) => (

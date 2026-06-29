@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, Calendar, DollarSign, ClipboardCheck, PlusCircle } from 'lucide-react';
-import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
+import { Package, Calendar, ClipboardCheck, PlusCircle, IndianRupee } from 'lucide-react';
 import { fetchCommodities, fetchVarieties } from '../../lib/commodityVariety';
 import { useToast } from '../Toast';
 import { api } from '../../lib/client';
@@ -16,6 +15,13 @@ interface TradeQualityParameter {
   options: string[];
 }
 
+const toTitleCase = (value: string) =>
+  value
+    .toLowerCase()
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
 interface CreateTradeProps {
   qualityParams: unknown[];
   onCreateOffer: (offerData: any) => Promise<{ error: any }>;
@@ -26,7 +32,7 @@ interface CreateTradeProps {
 export default function CreateTrade({ userId }: CreateTradeProps) {
   const { showSuccess, showError } = useToast();
   const [tradeType, setTradeType] = useState<'sell' | 'buy'>('sell');
-  const [commodity, setCommodity] = useState('Paddy');
+  const [commodity, setCommodity] = useState('');
   const [variety, setVariety] = useState('');
   const [quantityMt, setQuantityMt] = useState<number>(0);
   const [pricePerQuintal, setPricePerQuintal] = useState<number>(0);
@@ -40,7 +46,7 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
   const [loading, setLoading] = useState(false);
 
   const [deliveryLocation, setDeliveryLocation] = useState('');
-  const [commodities, setCommodities] = useState<string[]>(['Paddy', 'Maize', 'Wheat']);
+  const [commodities, setCommodities] = useState<string[]>([]);
   const [varieties, setVarieties] = useState<string[]>([]);
 
   // Fetch commodities on mount
@@ -56,7 +62,7 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
     if (commodity) {
       fetchVarieties(commodity).then(setVarieties).catch(() => {
         // Fallback to static defaults on error
-        setVarieties(COMMODITY_VARIETIES[commodity] || []);
+        // setVarieties(COMMODITY_VARIETIES[toTitleCase(commodity)] || []);
       });
       setVariety(''); // Reset variety when commodity changes
     } else {
@@ -79,10 +85,12 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
       setQualityParameters([]);
       setQualityReport({});
 
+      const qualityCommodity = toTitleCase(commodity);
+
       const { data, error } = await api
         .from('quality_parameters_master')
         .select('*')
-        .eq('commodity', commodity)
+        .eq('commodity', qualityCommodity)
         .eq('is_active', true)
         .order('s_no', { ascending: true });
 
@@ -95,16 +103,19 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
       }
 
       const params: TradeQualityParameter[] = (data || []).map((param: any, index: number) => {
+        const parameterName = param.parameter_name || param.param_name || '';
+        const unitOfMeasurement = param.unit_of_measurement || param.unit || '';
+        const standardValue = param.standard_value || param.standard || '';
         const options = Array.isArray(param.options) && param.options.length > 0
           ? param.options
-          : [param.standard_value].filter(Boolean);
+          : [standardValue].filter(Boolean);
 
         return {
           id: param.id || `${commodity}-${index}`,
           s_no: param.s_no || index + 1,
-          parameter_name: param.parameter_name,
-          unit_of_measurement: param.unit_of_measurement,
-          standard_value: param.standard_value,
+          parameter_name: parameterName,
+          unit_of_measurement: unitOfMeasurement,
+          standard_value: standardValue,
           actual_value: options[0] || '',
           remarks: param.remarks || '',
           options
@@ -345,7 +356,7 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
                     <span className="text-gray-900">4. Rate per MT (INR)*</span>
                   </label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                       type="number"
                       value={pricePerQuintal || ''}

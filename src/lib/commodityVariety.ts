@@ -1,6 +1,6 @@
 /**
  * Utility functions for fetching commodities and varieties from the database
- * Falls back to static defaults if database is unavailable
+ * Variety helpers fall back to static defaults if database is unavailable
  */
 
 import { COMMODITY_VARIETIES } from '../constants/commodityVarieties';
@@ -29,7 +29,6 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Fetch all active commodities from the database
- * Falls back to static defaults if database is unavailable
  */
 export async function fetchCommodities(): Promise<string[]> {
   try {
@@ -37,8 +36,7 @@ export async function fetchCommodities(): Promise<string[]> {
     const token = localStorage.getItem('auth_token');
     
     if (!token) {
-      // Return static defaults if not authenticated
-      return Object.keys(COMMODITY_VARIETIES);
+      return [];
     }
 
     // Check cache
@@ -61,16 +59,10 @@ export async function fetchCommodities(): Promise<string[]> {
     commoditiesCache = data;
     cacheTimestamp = now;
 
-    // Combine database commodities with static defaults
-    const dbCommodities = data.filter(c => c.is_active).map(c => c.name);
-    const staticCommodities = Object.keys(COMMODITY_VARIETIES);
-    const allCommodities = Array.from(new Set([...staticCommodities, ...dbCommodities]));
-    
-    return allCommodities;
+    return data.filter(c => c.is_active).map(c => c.name);
   } catch (error) {
-    console.warn('Failed to fetch commodities from database, using static defaults:', error);
-    // Return static defaults on error
-    return Object.keys(COMMODITY_VARIETIES);
+    console.warn('Failed to fetch commodities from database:', error);
+    return [];
   }
 }
 
@@ -188,4 +180,3 @@ export function clearCommodityVarietyCache() {
   varietiesCache = null;
   cacheTimestamp = 0;
 }
-

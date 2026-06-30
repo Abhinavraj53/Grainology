@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Store, Package, DollarSign, MapPin, ClipboardCheck, Calendar, Archive } from 'lucide-react';
 import { api } from '../../lib/client';
 import CSVUpload from '../CSVUpload';
-import { QUALITY_STRUCTURE } from '../../constants/qualityParameters';
 import { COMMODITY_VARIETIES } from '../../constants/commodityVarieties';
 
 interface Variety {
@@ -83,23 +82,6 @@ export default function SaleOrder({ userId }: SaleOrderProps) {
   };
 
   const fetchQualityParameters = async (selectedCommodity: string) => {
-    // First try to load from the static quality structure for standard AgMarkNet parameters
-    if (QUALITY_STRUCTURE[selectedCommodity]) {
-      const params = QUALITY_STRUCTURE[selectedCommodity].map((p, index) => ({
-        id: `${selectedCommodity}-${index}`,
-        s_no: index + 1,
-        parameter_name: p.name,
-        unit_of_measurement: p.unit,
-        standard_value: p.standard,
-        actual_value: p.options[0], // Default to first option
-        remarks: p.remarks,
-        options: p.options
-      }));
-      setQualityParameters(params);
-      return;
-    }
-
-    // Fallback to database if not one of our standard commodities
     const { data, error } = await api
       .from('quality_parameters_master')
       .select('*')
@@ -108,10 +90,20 @@ export default function SaleOrder({ userId }: SaleOrderProps) {
       .order('s_no', { ascending: true });
 
     if (data && !error) {
-      setQualityParameters(data.map((param: any) => ({
-        ...param,
-        actual_value: param.standard_value
-      })));
+      setQualityParameters(data.map((param: any, index: number) => {
+        const options = Array.isArray(param.options) && param.options.length > 0
+          ? param.options
+          : [param.standard_value].filter(Boolean);
+
+        return {
+          ...param,
+          id: param.id || `${selectedCommodity}-${index}`,
+          actual_value: options[0] || '',
+          options
+        };
+      }));
+    } else {
+      setQualityParameters([]);
     }
   };
 

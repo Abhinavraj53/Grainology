@@ -5,15 +5,20 @@ const qualityParameterSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  param_name: {
+  s_no: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  parameter_name: {
     type: String,
     required: true
   },
-  unit: {
+  unit_of_measurement: {
     type: String,
     required: true
   },
-  standard: {
+  standard_value: {
     type: String,
     required: true
   },
@@ -24,6 +29,14 @@ const qualityParameterSchema = new mongoose.Schema({
   remarks: {
     type: String,
     default: ''
+  },
+  options: {
+    type: [String],
+    default: []
+  },
+  is_active: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true,
@@ -37,6 +50,9 @@ const qualityParameterSchema = new mongoose.Schema({
   }
 });
 
-const QualityParameter = mongoose.model('QualityParameter', qualityParameterSchema);
+qualityParameterSchema.index({ commodity: 1, s_no: 1 });
+qualityParameterSchema.index({ commodity: 1, parameter_name: 1 });
+
+const QualityParameter = mongoose.model('QualityParameter', qualityParameterSchema, 'quality_parameters_master');
 
 export default QualityParameter;

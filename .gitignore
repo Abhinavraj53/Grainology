@@ -108,3 +108,17 @@ API_*.md
 !data/**
 !lib/
 !lib/cashfree.js
+
+# ML Pipeline Excludes
+services/ml-pipeline/output/*.joblib
+services/ml-pipeline/output/*.csv
+services/ml-pipeline/__pycache__/
+services/ml-pipeline/**/*.pyc
+catboost_info/
+**/*.tsv
+**/*.tfevents
+**/*.tmp
+services/ml-pipeline/*.txt
+*.txt
+*.pyc
+__pycache__/

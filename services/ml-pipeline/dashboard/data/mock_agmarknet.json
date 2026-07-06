@@ -1,0 +1,76 @@
+{
+    "status": "success",
+    "message": "Data fetched successfully.",
+    "pagination": {
+        "total_count": 22,
+        "total_pages": 3,
+        "current_page": 1,
+        "next_page": "https://api.agmarknet.gov.in/v1/dashboard-data/?page=2",
+        "previous_page": null,
+        "items_per_page": 10
+    },
+    "data": {
+        "records": [
+            {
+                "trend": "down",
+                "cmdt_name": "Bajra(Pearl Millet/Cumbu)",
+                "msp_price": "2775.00",
+                "as_on_price": "2202.89"
+            },
+            {
+                "trend": "up",
+                "cmdt_name": "Barley(Jau)",
+                "msp_price": "2150.00",
+                "as_on_price": "2314.41"
+            },
+            {
+                "trend": "up",
+                "cmdt_name": "Jowar(Sorghum)",
+                "msp_price": "3699.00",
+                "as_on_price": "4950.76"
+            },
+            {
+                "trend": "down",
+                "cmdt_name": "Maize",
+                "msp_price": "2400.00",
+                "as_on_price": "1917.85"
+            },
+            {
+                "trend": "up",
+                "cmdt_name": "Paddy(Common)",
+                "msp_price": "2369.00",
+                "as_on_price": "2786.82"
+            },
+            {
+                "trend": "down",
+                "cmdt_name": "Ragi(Finger Millet)",
+                "msp_price": "4886.00",
+                "as_on_price": "3356.02"
+            },
+            {
+                "trend": "down",
+                "cmdt_name": "Wheat",
+                "msp_price": "2585.00",
+                "as_on_price": "2502.07"
+            },
+            {
+                "trend": "up",
+                "cmdt_name": "Cotton",
+                "msp_price": "7710.00",
+                "as_on_price": "8466.32"
+            },
+            {
+                "trend": "up",
+                "cmdt_name": "Copra",
+                "msp_price": "12100.00",
+                "as_on_price": "17230.60"
+            },
+            {
+                "trend": "down",
+                "cmdt_name": "Groundnut",
+                "msp_price": "7263.00",
+                "as_on_price": "7229.01"
+            }
+        ]
+    }
+}

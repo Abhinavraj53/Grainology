@@ -1,0 +1,2890 @@
+{
+  "Wheat": [
+    {
+      "date": "2026-07-05",
+      "price": 2502.69,
+      "lower": 2502.47,
+      "upper": 2502.92,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-06",
+      "price": 2503.37,
+      "lower": 2502.95,
+      "upper": 2503.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-07",
+      "price": 2504.1,
+      "lower": 2503.49,
+      "upper": 2504.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-08",
+      "price": 2504.88,
+      "lower": 2504.1,
+      "upper": 2505.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-09",
+      "price": 2505.73,
+      "lower": 2504.77,
+      "upper": 2506.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-10",
+      "price": 2506.64,
+      "lower": 2505.5,
+      "upper": 2507.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-11",
+      "price": 2507.61,
+      "lower": 2506.29,
+      "upper": 2508.94,
+      "is_anchor": true,
+      "anchor_horizon": 7
+    },
+    {
+      "date": "2026-07-12",
+      "price": 2508.73,
+      "lower": 2507.24,
+      "upper": 2510.22,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-13",
+      "price": 2510.08,
+      "lower": 2508.45,
+      "upper": 2511.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-14",
+      "price": 2511.63,
+      "lower": 2509.88,
+      "upper": 2513.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-15",
+      "price": 2513.35,
+      "lower": 2511.51,
+      "upper": 2515.15,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-16",
+      "price": 2515.22,
+      "lower": 2513.32,
+      "upper": 2517.08,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-17",
+      "price": 2517.22,
+      "lower": 2515.27,
+      "upper": 2519.1,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-18",
+      "price": 2519.3,
+      "lower": 2517.34,
+      "upper": 2521.21,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-19",
+      "price": 2521.46,
+      "lower": 2519.49,
+      "upper": 2523.38,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-20",
+      "price": 2523.67,
+      "lower": 2521.71,
+      "upper": 2525.57,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-21",
+      "price": 2525.9,
+      "lower": 2523.96,
+      "upper": 2527.78,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-22",
+      "price": 2528.12,
+      "lower": 2526.22,
+      "upper": 2529.97,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-23",
+      "price": 2530.31,
+      "lower": 2528.46,
+      "upper": 2532.12,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-24",
+      "price": 2532.44,
+      "lower": 2530.64,
+      "upper": 2534.2,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-25",
+      "price": 2534.5,
+      "lower": 2532.76,
+      "upper": 2536.2,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-26",
+      "price": 2536.44,
+      "lower": 2534.76,
+      "upper": 2538.09,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-27",
+      "price": 2538.25,
+      "lower": 2536.63,
+      "upper": 2539.85,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-28",
+      "price": 2539.9,
+      "lower": 2538.35,
+      "upper": 2541.45,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-29",
+      "price": 2541.37,
+      "lower": 2539.87,
+      "upper": 2542.87,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-30",
+      "price": 2542.63,
+      "lower": 2541.18,
+      "upper": 2544.08,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-31",
+      "price": 2543.66,
+      "lower": 2542.25,
+      "upper": 2545.06,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-01",
+      "price": 2544.42,
+      "lower": 2543.05,
+      "upper": 2545.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-02",
+      "price": 2544.9,
+      "lower": 2543.55,
+      "upper": 2546.25,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-03",
+      "price": 2545.06,
+      "lower": 2543.72,
+      "upper": 2546.41,
+      "is_anchor": true,
+      "anchor_horizon": 30
+    },
+    {
+      "date": "2026-08-04",
+      "price": 2545.03,
+      "lower": 2543.69,
+      "upper": 2546.39,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-05",
+      "price": 2544.95,
+      "lower": 2543.59,
+      "upper": 2546.31,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-06",
+      "price": 2544.81,
+      "lower": 2543.43,
+      "upper": 2546.19,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-07",
+      "price": 2544.6,
+      "lower": 2543.2,
+      "upper": 2546.02,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-08",
+      "price": 2544.34,
+      "lower": 2542.91,
+      "upper": 2545.79,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-09",
+      "price": 2544.02,
+      "lower": 2542.54,
+      "upper": 2545.51,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-10",
+      "price": 2543.64,
+      "lower": 2542.11,
+      "upper": 2545.18,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-11",
+      "price": 2543.2,
+      "lower": 2541.61,
+      "upper": 2544.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-12",
+      "price": 2542.69,
+      "lower": 2541.04,
+      "upper": 2544.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-13",
+      "price": 2542.12,
+      "lower": 2540.39,
+      "upper": 2543.85,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-14",
+      "price": 2541.48,
+      "lower": 2539.68,
+      "upper": 2543.3,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-15",
+      "price": 2540.78,
+      "lower": 2538.89,
+      "upper": 2542.68,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-16",
+      "price": 2540.01,
+      "lower": 2538.03,
+      "upper": 2542.0,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-17",
+      "price": 2539.17,
+      "lower": 2537.09,
+      "upper": 2541.27,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-18",
+      "price": 2538.27,
+      "lower": 2536.08,
+      "upper": 2540.47,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-19",
+      "price": 2537.29,
+      "lower": 2534.99,
+      "upper": 2539.6,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-20",
+      "price": 2536.24,
+      "lower": 2533.82,
+      "upper": 2538.68,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-21",
+      "price": 2535.13,
+      "lower": 2532.58,
+      "upper": 2537.69,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-22",
+      "price": 2533.94,
+      "lower": 2531.25,
+      "upper": 2536.63,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-23",
+      "price": 2532.67,
+      "lower": 2529.85,
+      "upper": 2535.5,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-24",
+      "price": 2531.33,
+      "lower": 2528.37,
+      "upper": 2534.31,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-25",
+      "price": 2529.92,
+      "lower": 2526.8,
+      "upper": 2533.05,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-26",
+      "price": 2528.43,
+      "lower": 2525.16,
+      "upper": 2531.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-27",
+      "price": 2526.86,
+      "lower": 2523.43,
+      "upper": 2530.31,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-28",
+      "price": 2525.22,
+      "lower": 2521.61,
+      "upper": 2528.84,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-29",
+      "price": 2523.5,
+      "lower": 2519.71,
+      "upper": 2527.29,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-30",
+      "price": 2521.69,
+      "lower": 2517.73,
+      "upper": 2525.66,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-31",
+      "price": 2519.81,
+      "lower": 2515.66,
+      "upper": 2523.97,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-01",
+      "price": 2517.84,
+      "lower": 2513.5,
+      "upper": 2522.19,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-02",
+      "price": 2515.79,
+      "lower": 2511.25,
+      "upper": 2520.34,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-03",
+      "price": 2513.66,
+      "lower": 2508.91,
+      "upper": 2518.41,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-04",
+      "price": 2511.44,
+      "lower": 2506.49,
+      "upper": 2516.4,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-05",
+      "price": 2509.14,
+      "lower": 2503.97,
+      "upper": 2514.31,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-06",
+      "price": 2506.75,
+      "lower": 2501.36,
+      "upper": 2512.14,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-07",
+      "price": 2504.27,
+      "lower": 2498.66,
+      "upper": 2509.89,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-08",
+      "price": 2501.71,
+      "lower": 2495.87,
+      "upper": 2507.55,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-09",
+      "price": 2499.05,
+      "lower": 2492.98,
+      "upper": 2505.13,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-10",
+      "price": 2496.31,
+      "lower": 2490.0,
+      "upper": 2502.62,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-11",
+      "price": 2493.47,
+      "lower": 2486.92,
+      "upper": 2500.03,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-12",
+      "price": 2490.54,
+      "lower": 2483.75,
+      "upper": 2497.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-13",
+      "price": 2487.52,
+      "lower": 2480.47,
+      "upper": 2494.58,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-14",
+      "price": 2484.41,
+      "lower": 2477.1,
+      "upper": 2491.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-15",
+      "price": 2481.2,
+      "lower": 2473.63,
+      "upper": 2488.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-16",
+      "price": 2477.89,
+      "lower": 2470.06,
+      "upper": 2485.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-17",
+      "price": 2474.49,
+      "lower": 2466.39,
+      "upper": 2482.59,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-18",
+      "price": 2470.99,
+      "lower": 2462.62,
+      "upper": 2479.37,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-19",
+      "price": 2467.39,
+      "lower": 2458.74,
+      "upper": 2476.05,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-20",
+      "price": 2463.69,
+      "lower": 2454.76,
+      "upper": 2472.63,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-21",
+      "price": 2459.9,
+      "lower": 2450.68,
+      "upper": 2469.11,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-22",
+      "price": 2456.0,
+      "lower": 2446.49,
+      "upper": 2465.5,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-23",
+      "price": 2451.99,
+      "lower": 2442.2,
+      "upper": 2461.79,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-24",
+      "price": 2447.89,
+      "lower": 2437.8,
+      "upper": 2457.98,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-25",
+      "price": 2443.68,
+      "lower": 2433.29,
+      "upper": 2454.07,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-26",
+      "price": 2439.37,
+      "lower": 2428.67,
+      "upper": 2450.06,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-27",
+      "price": 2434.95,
+      "lower": 2423.95,
+      "upper": 2445.94,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-28",
+      "price": 2430.42,
+      "lower": 2419.11,
+      "upper": 2441.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-29",
+      "price": 2425.78,
+      "lower": 2414.17,
+      "upper": 2437.4,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-30",
+      "price": 2421.04,
+      "lower": 2409.11,
+      "upper": 2432.97,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-10-01",
+      "price": 2416.18,
+      "lower": 2403.94,
+      "upper": 2428.43,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-10-02",
+      "price": 2411.22,
+      "lower": 2398.65,
+      "upper": 2423.79,
+      "is_anchor": true,
+      "anchor_horizon": 90
+    }
+  ],
+  "Paddy": [
+    {
+      "date": "2026-07-05",
+      "price": 2813.97,
+      "lower": 2808.26,
+      "upper": 2819.68,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-06",
+      "price": 2841.92,
+      "lower": 2830.13,
+      "upper": 2853.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-07",
+      "price": 2868.87,
+      "lower": 2851.08,
+      "upper": 2886.66,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-08",
+      "price": 2892.98,
+      "lower": 2869.74,
+      "upper": 2916.24,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-09",
+      "price": 2912.46,
+      "lower": 2884.75,
+      "upper": 2940.18,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-10",
+      "price": 2925.48,
+      "lower": 2894.75,
+      "upper": 2956.21,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-11",
+      "price": 2930.22,
+      "lower": 2898.39,
+      "upper": 2962.06,
+      "is_anchor": true,
+      "anchor_horizon": 7
+    },
+    {
+      "date": "2026-07-12",
+      "price": 2929.75,
+      "lower": 2897.79,
+      "upper": 2961.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-13",
+      "price": 2928.38,
+      "lower": 2896.04,
+      "upper": 2960.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-14",
+      "price": 2926.2,
+      "lower": 2893.27,
+      "upper": 2959.14,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-15",
+      "price": 2923.3,
+      "lower": 2889.58,
+      "upper": 2957.04,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-16",
+      "price": 2919.77,
+      "lower": 2885.08,
+      "upper": 2954.47,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-17",
+      "price": 2915.68,
+      "lower": 2879.87,
+      "upper": 2951.5,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-18",
+      "price": 2911.12,
+      "lower": 2874.07,
+      "upper": 2948.19,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-19",
+      "price": 2906.19,
+      "lower": 2867.78,
+      "upper": 2944.6,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-20",
+      "price": 2900.95,
+      "lower": 2861.11,
+      "upper": 2940.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-21",
+      "price": 2895.5,
+      "lower": 2854.17,
+      "upper": 2936.84,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-22",
+      "price": 2889.92,
+      "lower": 2847.07,
+      "upper": 2932.79,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-23",
+      "price": 2884.31,
+      "lower": 2839.91,
+      "upper": 2928.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-24",
+      "price": 2878.73,
+      "lower": 2832.81,
+      "upper": 2924.65,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-25",
+      "price": 2873.28,
+      "lower": 2825.87,
+      "upper": 2920.69,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-26",
+      "price": 2868.04,
+      "lower": 2819.2,
+      "upper": 2916.89,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-27",
+      "price": 2863.11,
+      "lower": 2812.91,
+      "upper": 2913.3,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-28",
+      "price": 2858.55,
+      "lower": 2807.11,
+      "upper": 2909.99,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-29",
+      "price": 2854.46,
+      "lower": 2801.9,
+      "upper": 2907.02,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-30",
+      "price": 2850.93,
+      "lower": 2797.4,
+      "upper": 2904.45,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-31",
+      "price": 2848.03,
+      "lower": 2793.71,
+      "upper": 2902.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-01",
+      "price": 2845.85,
+      "lower": 2790.94,
+      "upper": 2900.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-02",
+      "price": 2844.48,
+      "lower": 2789.19,
+      "upper": 2899.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-03",
+      "price": 2844.01,
+      "lower": 2788.59,
+      "upper": 2899.43,
+      "is_anchor": true,
+      "anchor_horizon": 30
+    },
+    {
+      "date": "2026-08-04",
+      "price": 2844.02,
+      "lower": 2788.59,
+      "upper": 2899.48,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-05",
+      "price": 2844.05,
+      "lower": 2788.59,
+      "upper": 2899.63,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-06",
+      "price": 2844.11,
+      "lower": 2788.6,
+      "upper": 2899.89,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-07",
+      "price": 2844.2,
+      "lower": 2788.61,
+      "upper": 2900.25,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-08",
+      "price": 2844.31,
+      "lower": 2788.63,
+      "upper": 2900.71,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-09",
+      "price": 2844.47,
+      "lower": 2788.66,
+      "upper": 2901.28,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-10",
+      "price": 2844.66,
+      "lower": 2788.71,
+      "upper": 2901.96,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-11",
+      "price": 2844.89,
+      "lower": 2788.77,
+      "upper": 2902.76,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-12",
+      "price": 2845.17,
+      "lower": 2788.84,
+      "upper": 2903.66,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-13",
+      "price": 2845.5,
+      "lower": 2788.93,
+      "upper": 2904.67,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-14",
+      "price": 2845.88,
+      "lower": 2789.05,
+      "upper": 2905.81,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-15",
+      "price": 2846.32,
+      "lower": 2789.18,
+      "upper": 2907.05,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-16",
+      "price": 2846.82,
+      "lower": 2789.34,
+      "upper": 2908.42,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-17",
+      "price": 2847.37,
+      "lower": 2789.53,
+      "upper": 2909.9,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-18",
+      "price": 2848.0,
+      "lower": 2789.75,
+      "upper": 2911.51,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-19",
+      "price": 2848.69,
+      "lower": 2790.0,
+      "upper": 2913.24,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-20",
+      "price": 2849.45,
+      "lower": 2790.28,
+      "upper": 2915.09,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-21",
+      "price": 2850.29,
+      "lower": 2790.59,
+      "upper": 2917.06,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-22",
+      "price": 2851.21,
+      "lower": 2790.94,
+      "upper": 2919.17,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-23",
+      "price": 2852.21,
+      "lower": 2791.34,
+      "upper": 2921.4,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-24",
+      "price": 2853.29,
+      "lower": 2791.77,
+      "upper": 2923.76,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-25",
+      "price": 2854.46,
+      "lower": 2792.24,
+      "upper": 2926.25,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-26",
+      "price": 2855.73,
+      "lower": 2792.77,
+      "upper": 2928.88,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-27",
+      "price": 2857.09,
+      "lower": 2793.33,
+      "upper": 2931.64,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-28",
+      "price": 2858.55,
+      "lower": 2793.95,
+      "upper": 2934.53,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-29",
+      "price": 2860.11,
+      "lower": 2794.62,
+      "upper": 2937.56,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-30",
+      "price": 2861.78,
+      "lower": 2795.35,
+      "upper": 2940.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-31",
+      "price": 2863.56,
+      "lower": 2796.12,
+      "upper": 2944.04,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-01",
+      "price": 2865.44,
+      "lower": 2796.96,
+      "upper": 2947.49,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-02",
+      "price": 2867.45,
+      "lower": 2797.86,
+      "upper": 2951.09,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-03",
+      "price": 2869.57,
+      "lower": 2798.81,
+      "upper": 2954.83,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-04",
+      "price": 2871.82,
+      "lower": 2799.84,
+      "upper": 2958.71,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-05",
+      "price": 2874.19,
+      "lower": 2800.92,
+      "upper": 2962.74,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-06",
+      "price": 2876.68,
+      "lower": 2802.08,
+      "upper": 2966.92,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-07",
+      "price": 2879.31,
+      "lower": 2803.3,
+      "upper": 2971.26,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-08",
+      "price": 2882.08,
+      "lower": 2804.6,
+      "upper": 2975.74,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-09",
+      "price": 2884.99,
+      "lower": 2805.97,
+      "upper": 2980.38,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-10",
+      "price": 2888.03,
+      "lower": 2807.42,
+      "upper": 2985.17,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-11",
+      "price": 2891.22,
+      "lower": 2808.95,
+      "upper": 2990.12,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-12",
+      "price": 2894.57,
+      "lower": 2810.55,
+      "upper": 2995.22,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-13",
+      "price": 2898.06,
+      "lower": 2812.24,
+      "upper": 3000.49,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-14",
+      "price": 2901.71,
+      "lower": 2814.02,
+      "upper": 3005.92,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-15",
+      "price": 2905.51,
+      "lower": 2815.88,
+      "upper": 3011.5,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-16",
+      "price": 2909.48,
+      "lower": 2817.82,
+      "upper": 3017.26,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-17",
+      "price": 2913.62,
+      "lower": 2819.86,
+      "upper": 3023.17,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-18",
+      "price": 2917.92,
+      "lower": 2822.0,
+      "upper": 3029.26,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-19",
+      "price": 2922.4,
+      "lower": 2824.22,
+      "upper": 3035.51,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-20",
+      "price": 2927.05,
+      "lower": 2826.54,
+      "upper": 3041.93,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-21",
+      "price": 2931.88,
+      "lower": 2828.97,
+      "upper": 3048.53,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-22",
+      "price": 2936.89,
+      "lower": 2831.49,
+      "upper": 3055.29,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-23",
+      "price": 2942.09,
+      "lower": 2834.12,
+      "upper": 3062.23,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-24",
+      "price": 2947.47,
+      "lower": 2836.85,
+      "upper": 3069.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-25",
+      "price": 2953.05,
+      "lower": 2839.68,
+      "upper": 3076.64,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-26",
+      "price": 2958.82,
+      "lower": 2842.63,
+      "upper": 3084.11,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-27",
+      "price": 2964.79,
+      "lower": 2845.69,
+      "upper": 3091.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-28",
+      "price": 2970.97,
+      "lower": 2848.86,
+      "upper": 3099.6,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-29",
+      "price": 2977.35,
+      "lower": 2852.15,
+      "upper": 3107.62,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-30",
+      "price": 2983.93,
+      "lower": 2855.55,
+      "upper": 3115.82,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-10-01",
+      "price": 2990.73,
+      "lower": 2859.07,
+      "upper": 3124.21,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-10-02",
+      "price": 2997.75,
+      "lower": 2862.72,
+      "upper": 3132.78,
+      "is_anchor": true,
+      "anchor_horizon": 90
+    }
+  ],
+  "Maize": [
+    {
+      "date": "2026-07-05",
+      "price": 1924.46,
+      "lower": 1920.5,
+      "upper": 1928.43,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-06",
+      "price": 1931.21,
+      "lower": 1923.18,
+      "upper": 1939.27,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-07",
+      "price": 1937.77,
+      "lower": 1925.78,
+      "upper": 1949.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-08",
+      "price": 1943.8,
+      "lower": 1928.21,
+      "upper": 1959.46,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-09",
+      "price": 1948.97,
+      "lower": 1930.35,
+      "upper": 1967.65,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-10",
+      "price": 1952.95,
+      "lower": 1932.12,
+      "upper": 1973.83,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-11",
+      "price": 1955.41,
+      "lower": 1933.42,
+      "upper": 1977.41,
+      "is_anchor": true,
+      "anchor_horizon": 7
+    },
+    {
+      "date": "2026-07-12",
+      "price": 1956.94,
+      "lower": 1934.43,
+      "upper": 1979.41,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-13",
+      "price": 1958.35,
+      "lower": 1935.41,
+      "upper": 1981.22,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-14",
+      "price": 1959.65,
+      "lower": 1936.36,
+      "upper": 1982.86,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-15",
+      "price": 1960.84,
+      "lower": 1937.28,
+      "upper": 1984.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-16",
+      "price": 1961.94,
+      "lower": 1938.17,
+      "upper": 1985.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-17",
+      "price": 1962.96,
+      "lower": 1939.02,
+      "upper": 1986.91,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-18",
+      "price": 1963.89,
+      "lower": 1939.83,
+      "upper": 1988.01,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-19",
+      "price": 1964.74,
+      "lower": 1940.61,
+      "upper": 1989.01,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-20",
+      "price": 1965.53,
+      "lower": 1941.34,
+      "upper": 1989.91,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-21",
+      "price": 1966.26,
+      "lower": 1942.04,
+      "upper": 1990.74,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-22",
+      "price": 1966.94,
+      "lower": 1942.69,
+      "upper": 1991.51,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-23",
+      "price": 1967.57,
+      "lower": 1943.3,
+      "upper": 1992.22,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-24",
+      "price": 1968.16,
+      "lower": 1943.87,
+      "upper": 1992.9,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-25",
+      "price": 1968.72,
+      "lower": 1944.39,
+      "upper": 1993.55,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-26",
+      "price": 1969.26,
+      "lower": 1944.86,
+      "upper": 1994.2,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-27",
+      "price": 1969.79,
+      "lower": 1945.28,
+      "upper": 1994.84,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-28",
+      "price": 1970.3,
+      "lower": 1945.64,
+      "upper": 1995.5,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-29",
+      "price": 1970.82,
+      "lower": 1945.96,
+      "upper": 1996.19,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-30",
+      "price": 1971.34,
+      "lower": 1946.22,
+      "upper": 1996.92,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-31",
+      "price": 1971.87,
+      "lower": 1946.43,
+      "upper": 1997.71,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-01",
+      "price": 1972.42,
+      "lower": 1946.58,
+      "upper": 1998.57,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-02",
+      "price": 1973.0,
+      "lower": 1946.67,
+      "upper": 1999.51,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-03",
+      "price": 1973.62,
+      "lower": 1946.7,
+      "upper": 2000.54,
+      "is_anchor": true,
+      "anchor_horizon": 30
+    },
+    {
+      "date": "2026-08-04",
+      "price": 1974.26,
+      "lower": 1946.7,
+      "upper": 2001.63,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-05",
+      "price": 1974.89,
+      "lower": 1946.7,
+      "upper": 2002.72,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-06",
+      "price": 1975.52,
+      "lower": 1946.7,
+      "upper": 2003.81,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-07",
+      "price": 1976.15,
+      "lower": 1946.7,
+      "upper": 2004.91,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-08",
+      "price": 1976.78,
+      "lower": 1946.69,
+      "upper": 2006.01,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-09",
+      "price": 1977.4,
+      "lower": 1946.69,
+      "upper": 2007.12,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-10",
+      "price": 1978.02,
+      "lower": 1946.68,
+      "upper": 2008.23,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-11",
+      "price": 1978.64,
+      "lower": 1946.67,
+      "upper": 2009.34,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-12",
+      "price": 1979.25,
+      "lower": 1946.66,
+      "upper": 2010.46,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-13",
+      "price": 1979.87,
+      "lower": 1946.64,
+      "upper": 2011.58,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-14",
+      "price": 1980.48,
+      "lower": 1946.62,
+      "upper": 2012.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-15",
+      "price": 1981.08,
+      "lower": 1946.6,
+      "upper": 2013.83,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-16",
+      "price": 1981.68,
+      "lower": 1946.57,
+      "upper": 2014.96,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-17",
+      "price": 1982.28,
+      "lower": 1946.54,
+      "upper": 2016.1,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-18",
+      "price": 1982.88,
+      "lower": 1946.5,
+      "upper": 2017.24,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-19",
+      "price": 1983.47,
+      "lower": 1946.46,
+      "upper": 2018.39,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-20",
+      "price": 1984.06,
+      "lower": 1946.42,
+      "upper": 2019.54,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-21",
+      "price": 1984.64,
+      "lower": 1946.36,
+      "upper": 2020.69,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-22",
+      "price": 1985.22,
+      "lower": 1946.3,
+      "upper": 2021.85,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-23",
+      "price": 1985.79,
+      "lower": 1946.24,
+      "upper": 2023.01,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-24",
+      "price": 1986.36,
+      "lower": 1946.16,
+      "upper": 2024.18,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-25",
+      "price": 1986.93,
+      "lower": 1946.08,
+      "upper": 2025.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-26",
+      "price": 1987.49,
+      "lower": 1946.0,
+      "upper": 2026.52,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-27",
+      "price": 1988.05,
+      "lower": 1945.9,
+      "upper": 2027.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-28",
+      "price": 1988.6,
+      "lower": 1945.8,
+      "upper": 2028.89,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-29",
+      "price": 1989.15,
+      "lower": 1945.68,
+      "upper": 2030.08,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-30",
+      "price": 1989.69,
+      "lower": 1945.56,
+      "upper": 2031.27,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-31",
+      "price": 1990.22,
+      "lower": 1945.43,
+      "upper": 2032.47,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-01",
+      "price": 1990.75,
+      "lower": 1945.29,
+      "upper": 2033.67,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-02",
+      "price": 1991.28,
+      "lower": 1945.14,
+      "upper": 2034.88,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-03",
+      "price": 1991.8,
+      "lower": 1944.98,
+      "upper": 2036.09,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-04",
+      "price": 1992.31,
+      "lower": 1944.81,
+      "upper": 2037.3,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-05",
+      "price": 1992.82,
+      "lower": 1944.62,
+      "upper": 2038.52,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-06",
+      "price": 1993.32,
+      "lower": 1944.43,
+      "upper": 2039.75,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-07",
+      "price": 1993.81,
+      "lower": 1944.22,
+      "upper": 2040.98,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-08",
+      "price": 1994.3,
+      "lower": 1944.0,
+      "upper": 2042.22,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-09",
+      "price": 1994.79,
+      "lower": 1943.77,
+      "upper": 2043.46,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-10",
+      "price": 1995.26,
+      "lower": 1943.53,
+      "upper": 2044.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-11",
+      "price": 1995.73,
+      "lower": 1943.27,
+      "upper": 2045.95,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-12",
+      "price": 1996.19,
+      "lower": 1943.0,
+      "upper": 2047.21,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-13",
+      "price": 1996.65,
+      "lower": 1942.71,
+      "upper": 2048.47,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-14",
+      "price": 1997.1,
+      "lower": 1942.42,
+      "upper": 2049.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-15",
+      "price": 1997.54,
+      "lower": 1942.1,
+      "upper": 2051.0,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-16",
+      "price": 1997.97,
+      "lower": 1941.77,
+      "upper": 2052.28,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-17",
+      "price": 1998.4,
+      "lower": 1941.43,
+      "upper": 2053.56,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-18",
+      "price": 1998.82,
+      "lower": 1941.07,
+      "upper": 2054.85,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-19",
+      "price": 1999.23,
+      "lower": 1940.7,
+      "upper": 2056.14,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-20",
+      "price": 1999.63,
+      "lower": 1940.31,
+      "upper": 2057.43,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-21",
+      "price": 2000.02,
+      "lower": 1939.9,
+      "upper": 2058.74,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-22",
+      "price": 2000.41,
+      "lower": 1939.47,
+      "upper": 2060.04,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-23",
+      "price": 2000.79,
+      "lower": 1939.03,
+      "upper": 2061.36,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-24",
+      "price": 2001.16,
+      "lower": 1938.57,
+      "upper": 2062.68,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-25",
+      "price": 2001.52,
+      "lower": 1938.09,
+      "upper": 2064.0,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-26",
+      "price": 2001.88,
+      "lower": 1937.59,
+      "upper": 2065.33,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-27",
+      "price": 2002.22,
+      "lower": 1937.08,
+      "upper": 2066.66,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-28",
+      "price": 2002.56,
+      "lower": 1936.55,
+      "upper": 2068.0,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-29",
+      "price": 2002.88,
+      "lower": 1935.99,
+      "upper": 2069.35,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-30",
+      "price": 2003.2,
+      "lower": 1935.42,
+      "upper": 2070.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-10-01",
+      "price": 2003.51,
+      "lower": 1934.82,
+      "upper": 2072.06,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-10-02",
+      "price": 2003.81,
+      "lower": 1934.21,
+      "upper": 2073.42,
+      "is_anchor": true,
+      "anchor_horizon": 90
+    }
+  ],
+  "Mustard": [
+    {
+      "date": "2026-06-26",
+      "price": 7030.42,
+      "lower": 7013.3,
+      "upper": 7047.54,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-06-27",
+      "price": 7061.09,
+      "lower": 7026.14,
+      "upper": 7096.03,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-06-28",
+      "price": 7089.51,
+      "lower": 7037.25,
+      "upper": 7141.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-06-29",
+      "price": 7114.2,
+      "lower": 7046.35,
+      "upper": 7182.05,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-06-30",
+      "price": 7133.68,
+      "lower": 7053.19,
+      "upper": 7214.16,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-01",
+      "price": 7146.45,
+      "lower": 7057.49,
+      "upper": 7235.42,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-02",
+      "price": 7151.04,
+      "lower": 7058.98,
+      "upper": 7243.1,
+      "is_anchor": true,
+      "anchor_horizon": 7
+    },
+    {
+      "date": "2026-07-03",
+      "price": 7148.59,
+      "lower": 7056.6,
+      "upper": 7240.57,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-04",
+      "price": 7141.52,
+      "lower": 7049.76,
+      "upper": 7233.29,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-05",
+      "price": 7130.29,
+      "lower": 7038.87,
+      "upper": 7221.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-06",
+      "price": 7115.32,
+      "lower": 7024.37,
+      "upper": 7206.26,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-07",
+      "price": 7097.05,
+      "lower": 7006.67,
+      "upper": 7187.43,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-08",
+      "price": 7075.93,
+      "lower": 6986.21,
+      "upper": 7165.65,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-09",
+      "price": 7052.4,
+      "lower": 6963.41,
+      "upper": 7141.38,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-10",
+      "price": 7026.89,
+      "lower": 6938.69,
+      "upper": 7115.08,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-11",
+      "price": 6999.84,
+      "lower": 6912.49,
+      "upper": 7087.19,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-12",
+      "price": 6971.69,
+      "lower": 6885.21,
+      "upper": 7058.16,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-13",
+      "price": 6942.88,
+      "lower": 6857.31,
+      "upper": 7028.46,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-14",
+      "price": 6913.86,
+      "lower": 6829.18,
+      "upper": 6998.53,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-15",
+      "price": 6885.05,
+      "lower": 6801.28,
+      "upper": 6968.83,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-16",
+      "price": 6856.9,
+      "lower": 6774.0,
+      "upper": 6939.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-17",
+      "price": 6829.85,
+      "lower": 6747.8,
+      "upper": 6911.91,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-18",
+      "price": 6804.34,
+      "lower": 6723.08,
+      "upper": 6885.61,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-19",
+      "price": 6780.81,
+      "lower": 6700.28,
+      "upper": 6861.34,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-20",
+      "price": 6759.69,
+      "lower": 6679.82,
+      "upper": 6839.56,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-21",
+      "price": 6741.42,
+      "lower": 6662.12,
+      "upper": 6820.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-22",
+      "price": 6726.45,
+      "lower": 6647.62,
+      "upper": 6805.29,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-23",
+      "price": 6715.22,
+      "lower": 6636.73,
+      "upper": 6793.7,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-24",
+      "price": 6708.15,
+      "lower": 6629.89,
+      "upper": 6786.42,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-25",
+      "price": 6705.7,
+      "lower": 6627.51,
+      "upper": 6783.89,
+      "is_anchor": true,
+      "anchor_horizon": 30
+    },
+    {
+      "date": "2026-07-26",
+      "price": 6705.91,
+      "lower": 6627.71,
+      "upper": 6784.11,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-27",
+      "price": 6706.55,
+      "lower": 6628.32,
+      "upper": 6784.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-28",
+      "price": 6707.62,
+      "lower": 6629.35,
+      "upper": 6785.89,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-29",
+      "price": 6709.15,
+      "lower": 6630.82,
+      "upper": 6787.49,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-30",
+      "price": 6711.16,
+      "lower": 6632.74,
+      "upper": 6789.57,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-07-31",
+      "price": 6713.64,
+      "lower": 6635.12,
+      "upper": 6792.16,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-01",
+      "price": 6716.62,
+      "lower": 6637.98,
+      "upper": 6795.26,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-02",
+      "price": 6720.11,
+      "lower": 6641.32,
+      "upper": 6798.89,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-03",
+      "price": 6724.12,
+      "lower": 6645.17,
+      "upper": 6803.07,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-04",
+      "price": 6728.67,
+      "lower": 6649.54,
+      "upper": 6807.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-05",
+      "price": 6733.77,
+      "lower": 6654.44,
+      "upper": 6813.11,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-06",
+      "price": 6739.44,
+      "lower": 6659.88,
+      "upper": 6819.0,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-07",
+      "price": 6745.69,
+      "lower": 6665.88,
+      "upper": 6825.5,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-08",
+      "price": 6752.52,
+      "lower": 6672.44,
+      "upper": 6832.6,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-09",
+      "price": 6759.97,
+      "lower": 6679.59,
+      "upper": 6840.34,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-10",
+      "price": 6768.03,
+      "lower": 6687.34,
+      "upper": 6848.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-11",
+      "price": 6776.73,
+      "lower": 6695.7,
+      "upper": 6857.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-12",
+      "price": 6786.08,
+      "lower": 6704.68,
+      "upper": 6867.48,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-13",
+      "price": 6796.09,
+      "lower": 6714.3,
+      "upper": 6877.87,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-14",
+      "price": 6806.77,
+      "lower": 6724.57,
+      "upper": 6888.97,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-15",
+      "price": 6818.14,
+      "lower": 6735.5,
+      "upper": 6900.78,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-16",
+      "price": 6830.22,
+      "lower": 6747.12,
+      "upper": 6913.32,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-17",
+      "price": 6843.01,
+      "lower": 6759.42,
+      "upper": 6926.61,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-18",
+      "price": 6856.53,
+      "lower": 6772.42,
+      "upper": 6940.64,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-19",
+      "price": 6870.8,
+      "lower": 6786.15,
+      "upper": 6955.45,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-20",
+      "price": 6885.82,
+      "lower": 6800.6,
+      "upper": 6971.05,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-21",
+      "price": 6901.62,
+      "lower": 6815.8,
+      "upper": 6987.44,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-22",
+      "price": 6918.2,
+      "lower": 6831.76,
+      "upper": 7004.65,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-23",
+      "price": 6935.58,
+      "lower": 6848.49,
+      "upper": 7022.69,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-24",
+      "price": 6953.78,
+      "lower": 6866.0,
+      "upper": 7041.56,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-25",
+      "price": 6972.8,
+      "lower": 6884.31,
+      "upper": 7061.29,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-26",
+      "price": 6992.66,
+      "lower": 6903.43,
+      "upper": 7081.9,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-27",
+      "price": 7013.38,
+      "lower": 6923.38,
+      "upper": 7103.38,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-28",
+      "price": 7034.96,
+      "lower": 6944.16,
+      "upper": 7125.77,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-29",
+      "price": 7057.43,
+      "lower": 6965.8,
+      "upper": 7149.07,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-30",
+      "price": 7080.79,
+      "lower": 6988.3,
+      "upper": 7173.29,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-08-31",
+      "price": 7105.07,
+      "lower": 7011.68,
+      "upper": 7198.45,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-01",
+      "price": 7130.26,
+      "lower": 7035.96,
+      "upper": 7224.57,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-02",
+      "price": 7156.39,
+      "lower": 7061.13,
+      "upper": 7251.66,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-03",
+      "price": 7183.48,
+      "lower": 7087.23,
+      "upper": 7279.73,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-04",
+      "price": 7211.53,
+      "lower": 7114.26,
+      "upper": 7308.8,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-05",
+      "price": 7240.55,
+      "lower": 7142.23,
+      "upper": 7338.88,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-06",
+      "price": 7270.57,
+      "lower": 7171.16,
+      "upper": 7369.99,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-07",
+      "price": 7301.6,
+      "lower": 7201.07,
+      "upper": 7402.14,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-08",
+      "price": 7333.64,
+      "lower": 7231.96,
+      "upper": 7435.34,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-09",
+      "price": 7366.72,
+      "lower": 7263.85,
+      "upper": 7469.6,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-10",
+      "price": 7400.85,
+      "lower": 7296.75,
+      "upper": 7504.95,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-11",
+      "price": 7436.04,
+      "lower": 7330.68,
+      "upper": 7541.4,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-12",
+      "price": 7472.3,
+      "lower": 7365.64,
+      "upper": 7578.96,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-13",
+      "price": 7509.65,
+      "lower": 7401.66,
+      "upper": 7617.64,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-14",
+      "price": 7548.1,
+      "lower": 7438.75,
+      "upper": 7657.46,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-15",
+      "price": 7587.67,
+      "lower": 7476.91,
+      "upper": 7698.44,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-16",
+      "price": 7628.37,
+      "lower": 7516.17,
+      "upper": 7740.58,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-17",
+      "price": 7670.22,
+      "lower": 7556.53,
+      "upper": 7783.9,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-18",
+      "price": 7713.22,
+      "lower": 7598.02,
+      "upper": 7828.42,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-19",
+      "price": 7757.39,
+      "lower": 7640.63,
+      "upper": 7874.15,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-20",
+      "price": 7802.75,
+      "lower": 7684.4,
+      "upper": 7921.11,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-21",
+      "price": 7849.3,
+      "lower": 7729.32,
+      "upper": 7969.3,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-22",
+      "price": 7897.07,
+      "lower": 7775.42,
+      "upper": 8018.74,
+      "is_anchor": false,
+      "anchor_horizon": null
+    },
+    {
+      "date": "2026-09-23",
+      "price": 7946.07,
+      "lower": 7822.7,
+      "upper": 8069.45,
+      "is_anchor": true,
+      "anchor_horizon": 90
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgmarknetTable } from './AgmarknetTable';
 import { AgmarknetFilters } from './AgmarknetFilters';
+import AIPredictions from '../AIPredictions';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
+const API_URL = 'http://localhost:3001/api';
 export const AgmarknetDashboard: React.FC = () => {
   const [filters, setFilters] = useState({
     state: 5, // Bihar (Default)
@@ -184,6 +184,11 @@ export const AgmarknetDashboard: React.FC = () => {
     <div className="main-layout py-8" style={{ background: 'var(--bg-color)' }}>
       
       <div className="max-w-[1600px] mx-auto w-full px-6">
+        {/* AI Predictions */}
+        <div className="mb-10">
+          <AIPredictions />
+        </div>
+
         {/* Header section */}
         <div className="flex justify-between items-start mb-6">
           <div>

@@ -1,5 +1,5 @@
 // JWT-based API client for backend auth and data
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://grainology-xcg8.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const AUTH_SYNC_STORAGE_KEY = 'grainology_auth_sync';
 const AUTH_SYNC_EVENT = 'grainology-auth-changed';
 const SESSION_RETRY_COOLDOWN_MS = 60000;
@@ -53,7 +53,18 @@ class ApiClient {
 
   async request(endpoint, options = {}) {
     const { authToken, _retryCount = 0, ...fetchOptions } = options;
-    const url = `${API_BASE_URL}${endpoint}`;
+    
+    // Default to production or configured VITE_API_URL
+    let baseUrl = API_BASE_URL;
+    
+    // In dev mode, route specific endpoints we are testing to the local backend
+    // since the local backend cannot connect to MongoDB Atlas (IP whitelist/DNS issues)
+    // but we still need to test the local ML predictions and Agmarknet fallback fixes
+    if (isDev && (endpoint.startsWith('/mandi/predictions') || endpoint.startsWith('/agmarknet/'))) {
+      baseUrl = 'http://localhost:3001/api';
+    }
+    
+    const url = `${baseUrl}${endpoint}`;
     const isSessionCheck = endpoint === '/auth/session';
     const method = String(fetchOptions.method || 'GET').toUpperCase();
     const isRetriableRequest = method === 'GET';

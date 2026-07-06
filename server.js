@@ -36,6 +36,7 @@ import siteSettingsRoutes from './routes/siteSettings.js';
 import contactInquiryRoutes from './routes/contactInquiries.js';
 import agmarknetRoutes from './routes/agmarknet.js';
 import { startAgmarknetCron } from './jobs/agmarknetCron.js';
+import { startAIPredictionCron } from './jobs/aiPredictionCron.js';
 
 dotenv.config();
 
@@ -325,6 +326,7 @@ app.use((req, res) => {
 // ----
 const server = app.listen(PORT, '0.0.0.0', () => {
   startAgmarknetCron();
+  startAIPredictionCron();
   console.log(`✅ API running on http://0.0.0.0:${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

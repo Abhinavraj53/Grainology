@@ -53,78 +53,94 @@ export async function fetchDashboardData(payload) {
 
 // ---- Cache Service ----
 export async function getFiltersCache(dashboardName = 'marketwise_price_arrival') {
-  const { data, error } = await getSupabaseAdmin()
-    .from('agmarknet_filters_cache')
-    .select('*')
-    .eq('dashboard_name', dashboardName)
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data;
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('agmarknet_filters_cache')
+      .select('*')
+      .eq('dashboard_name', dashboardName)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  } catch (err) {
+    return null;
+  }
 }
 
 export async function saveFiltersCache(dashboardName, filtersData, ttlHours = 24) {
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + ttlHours);
-  const { data: existing } = await getSupabaseAdmin()
-    .from('agmarknet_filters_cache')
-    .select('id')
-    .eq('dashboard_name', dashboardName)
-    .limit(1)
-    .maybeSingle();
+  try {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + ttlHours);
+    const { data: existing } = await getSupabaseAdmin()
+      .from('agmarknet_filters_cache')
+      .select('id')
+      .eq('dashboard_name', dashboardName)
+      .limit(1)
+      .maybeSingle();
 
-  if (existing) {
-    await getSupabaseAdmin().from('agmarknet_filters_cache').update({
-      data: filtersData,
-      fetched_at: new Date().toISOString(),
-      expires_at: expiresAt.toISOString()
-    }).eq('id', existing.id);
-  } else {
-    await getSupabaseAdmin().from('agmarknet_filters_cache').insert({
-      dashboard_name: dashboardName,
-      data: filtersData,
-      expires_at: expiresAt.toISOString()
-    });
+    if (existing) {
+      await getSupabaseAdmin().from('agmarknet_filters_cache').update({
+        data: filtersData,
+        fetched_at: new Date().toISOString(),
+        expires_at: expiresAt.toISOString()
+      }).eq('id', existing.id);
+    } else {
+      await getSupabaseAdmin().from('agmarknet_filters_cache').insert({
+        dashboard_name: dashboardName,
+        data: filtersData,
+        expires_at: expiresAt.toISOString()
+      });
+    }
+  } catch (err) {
+    console.warn('Skipped saveFiltersCache due to Supabase error:', err.message);
   }
 }
 
 export async function getMarketwiseCache(cacheKey) {
-  const { data, error } = await getSupabaseAdmin()
-    .from('agmarknet_marketwise_cache')
-    .select('*')
-    .eq('cache_key', cacheKey)
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data;
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('agmarknet_marketwise_cache')
+      .select('*')
+      .eq('cache_key', cacheKey)
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  } catch (err) {
+    return null;
+  }
 }
 
 export async function saveMarketwiseCache(cacheKey, payload, columns, records, reportedDates, ttlHours = 24) {
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + ttlHours);
+  try {
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + ttlHours);
 
-  const { data: existing } = await getSupabaseAdmin()
-    .from('agmarknet_marketwise_cache')
-    .select('id')
-    .eq('cache_key', cacheKey)
-    .limit(1)
-    .maybeSingle();
+    const { data: existing } = await getSupabaseAdmin()
+      .from('agmarknet_marketwise_cache')
+      .select('id')
+      .eq('cache_key', cacheKey)
+      .limit(1)
+      .maybeSingle();
 
-  const row = {
-    cache_key: cacheKey,
-    request_payload: payload,
-    response_columns: columns,
-    records: records,
-    reported_dates: reportedDates,
-    fetched_at: new Date().toISOString(),
-    expires_at: expiresAt.toISOString(),
-    source_status: 'success'
-  };
+    const row = {
+      cache_key: cacheKey,
+      request_payload: payload,
+      response_columns: columns,
+      records: records,
+      reported_dates: reportedDates,
+      fetched_at: new Date().toISOString(),
+      expires_at: expiresAt.toISOString(),
+      source_status: 'success'
+    };
 
-  if (existing) {
-    await getSupabaseAdmin().from('agmarknet_marketwise_cache').update(row).eq('id', existing.id);
-  } else {
-    await getSupabaseAdmin().from('agmarknet_marketwise_cache').insert(row);
+    if (existing) {
+      await getSupabaseAdmin().from('agmarknet_marketwise_cache').update(row).eq('id', existing.id);
+    } else {
+      await getSupabaseAdmin().from('agmarknet_marketwise_cache').insert(row);
+    }
+  } catch (err) {
+    console.warn('Skipped saveMarketwiseCache due to Supabase error:', err.message);
   }
 }
 
@@ -178,15 +194,19 @@ export function normalizeMarketwiseData(rawResponse) {
 
 // ---- MSP Fallback ----
 export async function getFallbackMspByCommodityName(commodityName) {
-  const { data, error } = await getSupabaseAdmin()
-    .from('msp_fallback_prices')
-    .select('msp_price')
-    .ilike('commodity_name', `%${commodityName}%`)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  return Number(data.msp_price);
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('msp_fallback_prices')
+      .select('msp_price')
+      .ilike('commodity_name', `%${commodityName}%`)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return Number(data.msp_price);
+  } catch (err) {
+    return null;
+  }
 }
 
 export async function applyFallbackMsp(records) {
@@ -223,15 +243,19 @@ export async function refreshMarketwiseData(cacheKey, payload) {
 }
 
 export const getCachedStateIds = async () => {
-  const { data, error } = await getSupabaseAdmin()
-    .from('agmarknet_marketwise_cache')
-    .select('request_payload, records');
-  if (error) return [];
-  return [...new Set((data || [])
-    .filter((row) => Array.isArray(row.records) && row.records.length > 0)
-    .map((row) => Number(row.request_payload?.state))
-    .filter(Number.isFinite))]
-    .sort((left, right) => left - right);
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from('agmarknet_marketwise_cache')
+      .select('request_payload, records');
+    if (error) return [];
+    return [...new Set((data || [])
+      .filter((row) => Array.isArray(row.records) && row.records.length > 0)
+      .map((row) => Number(row.request_payload?.state))
+      .filter(Number.isFinite))]
+      .sort((left, right) => left - right);
+  } catch (err) {
+    return [];
+  }
 };
 
 export const getAgmarknetFilters = async ({ forceRefresh = false } = {}) => {

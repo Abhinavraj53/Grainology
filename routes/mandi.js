@@ -3,7 +3,13 @@ import axios from 'axios';
 import MandiPrice from '../models/MandiPrice.js';
 import User from '../models/User.js';
 import { authenticate, isAdminRole } from '../middleware/auth.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { fetchCedaAgmarknet } from '../utils/cedaAgmarknet.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -607,6 +613,47 @@ router.get('/', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Get mandi prices error:', error);
     res.status(500).json({ error: error.message || 'Failed to fetch mandi prices' });
+  }
+});
+
+// Get AI predictions
+router.get('/predictions', async (req, res) => {
+  try {
+    const dataPath = path.join(__dirname, '..', 'services', 'ml-pipeline', 'dashboard', 'data');
+    
+    // Read JSON files
+    const readJson = async (filename) => {
+      try {
+        const content = await fs.promises.readFile(path.join(dataPath, filename), 'utf-8');
+        return JSON.parse(content);
+      } catch (err) {
+        return null;
+      }
+    };
+
+    const predictions = await readJson('predictions.json');
+    const actuals = await readJson('actuals.json');
+    const forecastSeries = await readJson('forecast_series.json');
+    const reasoning = await readJson('reasoning.json');
+    const backtest = await readJson('backtest.json');
+
+    if (!predictions) {
+      return res.status(404).json({ success: false, error: 'Prediction data not found' });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        predictions,
+        actuals,
+        forecastSeries,
+        reasoning,
+        backtest
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching AI predictions:', error);
+    res.status(500).json({ success: false, error: 'Failed to load AI predictions' });
   }
 });
 

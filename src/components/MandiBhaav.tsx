@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertCircle, Download, Printer, RefreshCw, TrendingUp } from 'lucide-react';
+import AIPredictions from './AIPredictions';
 
 interface AgmarknetFilterData {
   state_data?: Array<{ state_id: number; state_name: string }>;
@@ -257,6 +258,7 @@ export default function MandiBhaav() {
 
   return (
     <section data-testid="agmarknet-dashboard" className="rounded-xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 md:p-7">
+      <AIPredictions />
       <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <h1 className="text-3xl font-semibold text-slate-800">Market Wise Price & Arrival</h1>

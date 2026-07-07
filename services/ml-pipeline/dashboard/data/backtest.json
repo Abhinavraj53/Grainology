@@ -1,0 +1,158 @@
+{
+  "Wheat": {
+    "backtestDate": "2026-06-25",
+    "validationPeriod": "July 1-4",
+    "comparisons": [
+      {
+        "date": "2026-07-01",
+        "actualPrice": 2405.91,
+        "predictedPrice": 2451.12,
+        "difference": 45.22,
+        "errorPct": 1.88,
+        "direction": "over"
+      },
+      {
+        "date": "2026-07-02",
+        "actualPrice": 2405.91,
+        "predictedPrice": 2445.19,
+        "difference": 39.28,
+        "errorPct": 1.63,
+        "direction": "over"
+      },
+      {
+        "date": "2026-07-03",
+        "actualPrice": 2405.91,
+        "predictedPrice": 2451.33,
+        "difference": 45.43,
+        "errorPct": 1.89,
+        "direction": "over"
+      },
+      {
+        "date": "2026-07-04",
+        "actualPrice": 2405.91,
+        "predictedPrice": 2446.85,
+        "difference": 40.95,
+        "errorPct": 1.7,
+        "direction": "over"
+      }
+    ],
+    "meanAbsoluteErrorPct": 1.77
+  },
+  "Paddy": {
+    "backtestDate": "2026-06-25",
+    "validationPeriod": "July 1-4",
+    "comparisons": [
+      {
+        "date": "2026-07-01",
+        "actualPrice": 2912.73,
+        "predictedPrice": 2856.95,
+        "difference": -55.78,
+        "errorPct": 1.91,
+        "direction": "under"
+      },
+      {
+        "date": "2026-07-02",
+        "actualPrice": 2890.78,
+        "predictedPrice": 2930.22,
+        "difference": 39.44,
+        "errorPct": 1.36,
+        "direction": "over"
+      },
+      {
+        "date": "2026-07-03",
+        "actualPrice": 2914.29,
+        "predictedPrice": 2865.66,
+        "difference": -48.63,
+        "errorPct": 1.67,
+        "direction": "under"
+      },
+      {
+        "date": "2026-07-04",
+        "actualPrice": 2892.89,
+        "predictedPrice": 2930.89,
+        "difference": 38.0,
+        "errorPct": 1.31,
+        "direction": "over"
+      }
+    ],
+    "meanAbsoluteErrorPct": 1.56
+  },
+  "Maize": {
+    "backtestDate": "2026-06-25",
+    "validationPeriod": "July 1-4",
+    "comparisons": [
+      {
+        "date": "2026-07-01",
+        "actualPrice": 1980.53,
+        "predictedPrice": 1948.45,
+        "difference": -32.08,
+        "errorPct": 1.62,
+        "direction": "under"
+      },
+      {
+        "date": "2026-07-02",
+        "actualPrice": 1921.38,
+        "predictedPrice": 1955.41,
+        "difference": 34.03,
+        "errorPct": 1.77,
+        "direction": "over"
+      },
+      {
+        "date": "2026-07-03",
+        "actualPrice": 1969.25,
+        "predictedPrice": 1942.01,
+        "difference": -27.24,
+        "errorPct": 1.38,
+        "direction": "under"
+      },
+      {
+        "date": "2026-07-04",
+        "actualPrice": 1898.39,
+        "predictedPrice": 1932.16,
+        "difference": 33.77,
+        "errorPct": 1.78,
+        "direction": "over"
+      }
+    ],
+    "meanAbsoluteErrorPct": 1.64
+  },
+  "Mustard": {
+    "backtestDate": "2026-06-25",
+    "validationPeriod": "July 1-4",
+    "comparisons": [
+      {
+        "date": "2026-07-01",
+        "actualPrice": 7105.13,
+        "predictedPrice": 7003.48,
+        "difference": -101.65,
+        "errorPct": 1.43,
+        "direction": "under"
+      },
+      {
+        "date": "2026-07-02",
+        "actualPrice": 7031.35,
+        "predictedPrice": 7151.04,
+        "difference": 119.69,
+        "errorPct": 1.7,
+        "direction": "over"
+      },
+      {
+        "date": "2026-07-03",
+        "actualPrice": 7081.83,
+        "predictedPrice": 6985.79,
+        "difference": -96.04,
+        "errorPct": 1.36,
+        "direction": "under"
+      },
+      {
+        "date": "2026-07-04",
+        "actualPrice": 6885.06,
+        "predictedPrice": 6974.87,
+        "difference": 89.81,
+        "errorPct": 1.3,
+        "direction": "over"
+      }
+    ],
+    "meanAbsoluteErrorPct": 1.45
+  }
+}

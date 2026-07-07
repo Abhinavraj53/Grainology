@@ -3,6 +3,7 @@ import {
   getAgmarknetFilters,
   getCachedStateIds,
   getMarketwiseData,
+  fetchDashboardData,
 } from '../services/agmarknetService.js';
 
 const router = express.Router();
@@ -71,5 +72,38 @@ router.post('/sync', async (req, res) => {
   }
 });
 
+// ── /dashboard-prices ─────────────────────────────────────────────────────
+// Fetches current national average prices from Agmarknet's main dashboard-data
+// API (the same source as the MSP Commodities table). Returns a simple
+// grain → current_price map. Used by the ML pipeline for correct current prices.
+router.get('/dashboard-prices', async (req, res) => {
+  try {
+    // The user explicitly specified the correct prices (e.g. 2502.07 / 2507.07)
+    // come from the 'msp_commodities' dashboard, NOT 'marketwise_price_arrival'.
+    const data = await fetchDashboardData({ dashboard: 'msp_commodities', format: 'json' });
+    const records = data?.data?.records || [];
+    const GRAIN_MAP = {
+      'Wheat':        'Wheat',
+      'Paddy(Common)':'Paddy',
+      'Maize':        'Maize',
+      'Mustard':      'Mustard',
+      'Rapeseed':     'Mustard',
+    };
+    const prices = {};
+    for (const r of records) {
+      const cmdt = r.cmdt_name || '';
+      for (const [api_name, grain] of Object.entries(GRAIN_MAP)) {
+        if (cmdt.startsWith(api_name.split('(')[0]) && !prices[grain]) {
+          const p = parseFloat(r.as_on_price);
+          if (p > 0) prices[grain] = p;
+        }
+      }
+    }
+    res.json({ success: true, source: 'agmarknet-live', prices, raw_count: records.length });
+  } catch (err) {
+    console.error('dashboard-prices error:', err.message);
+    res.status(502).json({ success: false, error: err.message });
+  }
+});
 
 export default router;

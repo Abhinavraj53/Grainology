@@ -1,0 +1,2040 @@
+{
+  "Wheat": {
+    "name": "Wheat",
+    "icon": "\ud83c\udf3e",
+    "color": "#F59E0B",
+    "unit": "Rs/Quintal",
+    "current_price": 2502.07,
+    "current_price_low": 2427.01,
+    "current_price_high": 2577.13,
+    "last_data_date": "2026-07-04",
+    "forecast_as_of": "2026-07-04",
+    "horizons": {
+      "6": {
+        "horizon_days": 6,
+        "horizon_label": "6-Day",
+        "target_date": "2026-07-10",
+        "predicted_price": 2501.78,
+        "lower_bound": 2501.66,
+        "upper_bound": 2501.91,
+        "change_pct": -0.01,
+        "direction": "down",
+        "metrics": {
+          "ensemble_mape": 1.498,
+          "ensemble_mae": 17.67,
+          "ensemble_r2": 0.9974,
+          "baseline_mape": 1.423
+        },
+        "top_features": [
+          [
+            "roll_mean_14",
+            4.165458044148311
+          ],
+          [
+            "price_lag_3",
+            3.142569679904086
+          ],
+          [
+            "roll_std_90",
+            2.4388520088473973
+          ],
+          [
+            "vol_log_ret_7",
+            2.437817649991461
+          ],
+          [
+            "msp_gap_ratio",
+            2.2257131155810788
+          ],
+          [
+            "cos_90d_k3",
+            2.2005140725054595
+          ],
+          [
+            "msp_pct_diff",
+            2.1599450782473375
+          ],
+          [
+            "months_to_harvest",
+            2.1011482370613797
+          ],
+          [
+            "vol_log_ret_30",
+            2.077053130586851
+          ],
+          [
+            "roll_mean_60",
+            2.0440264973192193
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.423,
+          "xgboost": 1.456,
+          "catboost": 1.52,
+          "ridge": 2.063
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.5,
+        "ensemble_weights": {
+          "lightgbm": 0.278,
+          "xgboost": 0.271,
+          "catboost": 0.26,
+          "ridge": 0.191
+        }
+      },
+      "7": {
+        "horizon_days": 7,
+        "horizon_label": "7-Day",
+        "target_date": "2026-07-11",
+        "predicted_price": 2507.61,
+        "lower_bound": 2506.29,
+        "upper_bound": 2508.94,
+        "change_pct": 0.22,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.485,
+          "ensemble_mae": 17.25,
+          "ensemble_r2": 0.997,
+          "baseline_mape": 1.425
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            0.00020976865198463202
+          ],
+          [
+            "msp_pct_diff",
+            0.00020976840460207313
+          ],
+          [
+            "month",
+            0.00015063041064422578
+          ],
+          [
+            "months_to_harvest",
+            0.00015063041064422578
+          ],
+          [
+            "cross_maize_lag30",
+            0.00014152811490930617
+          ],
+          [
+            "cos_30d_k2",
+            0.00012861685536336154
+          ],
+          [
+            "roll_range_7",
+            9.535677963867784e-05
+          ],
+          [
+            "vol_log_ret_7",
+            9.10692397155799e-05
+          ],
+          [
+            "price_lag_2",
+            8.68365605128929e-05
+          ],
+          [
+            "log_price_lag_2",
+            8.667836664244533e-05
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.435,
+          "xgboost": 1.425,
+          "catboost": 1.528,
+          "ridge": 2.034
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.5,
+        "ensemble_weights": {
+          "lightgbm": 0.274,
+          "xgboost": 0.276,
+          "catboost": 0.257,
+          "ridge": 0.193
+        }
+      },
+      "8": {
+        "horizon_days": 8,
+        "horizon_label": "8-Day",
+        "target_date": "2026-07-12",
+        "predicted_price": 2505.69,
+        "lower_bound": 2503.61,
+        "upper_bound": 2507.77,
+        "change_pct": 0.14,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.51,
+          "ensemble_mae": 18.07,
+          "ensemble_r2": 0.9973,
+          "baseline_mape": 1.445
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            124.0
+          ],
+          [
+            "day_of_week",
+            81.0
+          ],
+          [
+            "day_of_year",
+            50.0
+          ],
+          [
+            "vol_log_ret_90",
+            38.0
+          ],
+          [
+            "sin_365d_k4",
+            37.0
+          ],
+          [
+            "trend_slope_30",
+            35.0
+          ],
+          [
+            "sin_90d_k1",
+            32.0
+          ],
+          [
+            "roll_cv_14",
+            28.0
+          ],
+          [
+            "roll_cv_7",
+            25.0
+          ],
+          [
+            "sin_365d_k1",
+            25.0
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.455,
+          "xgboost": 1.445,
+          "catboost": 1.543,
+          "ridge": 2.154
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.5,
+        "ensemble_weights": {
+          "lightgbm": 0.276,
+          "xgboost": 0.278,
+          "catboost": 0.26,
+          "ridge": 0.186
+        }
+      },
+      "9": {
+        "horizon_days": 9,
+        "horizon_label": "9-Day",
+        "target_date": "2026-07-13",
+        "predicted_price": 2486.61,
+        "lower_bound": 2484.49,
+        "upper_bound": 2488.73,
+        "change_pct": -0.62,
+        "direction": "down",
+        "metrics": {
+          "ensemble_mape": 1.517,
+          "ensemble_mae": 18.11,
+          "ensemble_r2": 0.9976,
+          "baseline_mape": 1.468
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            165.4795902852999
+          ],
+          [
+            "day_of_week",
+            109.92570508238975
+          ],
+          [
+            "sin_365d_k4",
+            79.78475171474669
+          ],
+          [
+            "day_of_year",
+            56.14482528074767
+          ],
+          [
+            "market_count_roll7",
+            54.96282895904772
+          ],
+          [
+            "sin_365d_k3",
+            41.96086942034826
+          ],
+          [
+            "sin_365d_k1",
+            40.187874937798334
+          ],
+          [
+            "roll_cv_14",
+            39.00587861609838
+          ],
+          [
+            "sin_365d_k2",
+            37.23288413354845
+          ],
+          [
+            "trend_slope_30",
+            37.23288413354845
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.468,
+          "xgboost": 1.542,
+          "catboost": 1.634
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.5,
+        "ensemble_weights": {
+          "lightgbm": 0.351,
+          "xgboost": 0.334,
+          "catboost": 0.315
+        }
+      },
+      "10": {
+        "horizon_days": 10,
+        "horizon_label": "10-Day",
+        "target_date": "2026-07-14",
+        "predicted_price": 2504.04,
+        "lower_bound": 2502.01,
+        "upper_bound": 2506.08,
+        "change_pct": 0.08,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.427,
+          "ensemble_mae": 17.81,
+          "ensemble_r2": 0.9978,
+          "baseline_mape": 1.386
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            19.391884721726278
+          ],
+          [
+            "msp_pct_diff",
+            18.075401358193623
+          ],
+          [
+            "day_of_week",
+            7.649626043142376
+          ],
+          [
+            "arr_roll_mean_60",
+            6.81877886168904
+          ],
+          [
+            "log_arr_lag_1",
+            4.678045660411283
+          ],
+          [
+            "arrival_stale",
+            4.670251095449923
+          ],
+          [
+            "msp",
+            4.420905273631505
+          ],
+          [
+            "market_count_roll7",
+            2.9197866971659288
+          ],
+          [
+            "cross_paddy",
+            2.5303728120614686
+          ],
+          [
+            "roll_cv_90",
+            2.374737697597924
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.386,
+          "xgboost": 1.453,
+          "catboost": 1.572
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.6,
+        "ensemble_weights": {
+          "lightgbm": 0.353,
+          "xgboost": 0.336,
+          "catboost": 0.311
+        }
+      },
+      "30": {
+        "horizon_days": 30,
+        "horizon_label": "30-Day",
+        "target_date": "2026-08-03",
+        "predicted_price": 2545.06,
+        "lower_bound": 2543.72,
+        "upper_bound": 2546.41,
+        "change_pct": 1.72,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.721,
+          "ensemble_mae": 20.13,
+          "ensemble_r2": 0.9967,
+          "baseline_mape": 1.712
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            8.910021079746278
+          ],
+          [
+            "msp_pct_diff",
+            8.721508699394093
+          ],
+          [
+            "sin_365d_k1",
+            7.643870976662198
+          ],
+          [
+            "day_of_year",
+            6.07158910277054
+          ],
+          [
+            "day_of_week",
+            4.534995942271815
+          ],
+          [
+            "month",
+            3.6006514313531093
+          ],
+          [
+            "sin_365d_k2",
+            3.133359029739036
+          ],
+          [
+            "arr_roll_mean_60",
+            3.0303921872118647
+          ],
+          [
+            "quarter",
+            2.919435725411905
+          ],
+          [
+            "trend_slope_365",
+            2.621284222066674
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.712,
+          "xgboost": 1.712,
+          "catboost": 1.93
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.3,
+        "ensemble_weights": {
+          "lightgbm": 0.346,
+          "xgboost": 0.346,
+          "catboost": 0.307
+        }
+      },
+      "90": {
+        "horizon_days": 90,
+        "horizon_label": "90-Day",
+        "target_date": "2026-10-02",
+        "predicted_price": 2411.22,
+        "lower_bound": 2398.65,
+        "upper_bound": 2423.79,
+        "change_pct": -3.63,
+        "direction": "down",
+        "metrics": {
+          "ensemble_mape": 1.615,
+          "ensemble_mae": 19.27,
+          "ensemble_r2": 0.9974,
+          "baseline_mape": 1.611
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            0.0020539993420243263
+          ],
+          [
+            "msp_pct_diff",
+            0.002053998876363039
+          ],
+          [
+            "ewma_ratio_7",
+            0.0009353189379908144
+          ],
+          [
+            "trend_slope_30",
+            0.000874775811098516
+          ],
+          [
+            "ewma_ratio_14",
+            0.0008427589200437069
+          ],
+          [
+            "sin_7d_k2",
+            0.0008212487446144223
+          ],
+          [
+            "trend_slope_365",
+            0.0008133322116918862
+          ],
+          [
+            "cos_7d_k4",
+            0.0008049049647524953
+          ],
+          [
+            "cos_7d_k3",
+            0.0008049049647524953
+          ],
+          [
+            "sin_90d_k2",
+            0.0007589746383018792
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.611,
+          "xgboost": 1.653,
+          "catboost": 1.785
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.4,
+        "ensemble_weights": {
+          "lightgbm": 0.348,
+          "xgboost": 0.339,
+          "catboost": 0.314
+        }
+      }
+    }
+  },
+  "Paddy": {
+    "name": "Paddy",
+    "icon": "\ud83c\udf5a",
+    "color": "#10B981",
+    "unit": "Rs/Quintal",
+    "current_price": 2786.82,
+    "current_price_low": 2703.22,
+    "current_price_high": 2870.42,
+    "last_data_date": "2026-07-04",
+    "forecast_as_of": "2026-07-04",
+    "horizons": {
+      "6": {
+        "horizon_days": 6,
+        "horizon_label": "6-Day",
+        "target_date": "2026-07-10",
+        "predicted_price": 2856.95,
+        "lower_bound": 2830.57,
+        "upper_bound": 2883.33,
+        "change_pct": 2.52,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.388,
+          "ensemble_mae": 14.88,
+          "ensemble_r2": 0.9962,
+          "baseline_mape": 1.35
+        },
+        "top_features": [
+          [
+            "price_vs_yr_mean",
+            0.040757376700639725
+          ],
+          [
+            "msp_pct_diff",
+            0.022058390080928802
+          ],
+          [
+            "msp_gap_ratio",
+            0.022013939917087555
+          ],
+          [
+            "sin_7d_k4",
+            0.021048305556178093
+          ],
+          [
+            "price_pct_range_90",
+            0.019250687211751938
+          ],
+          [
+            "sin_7d_k1",
+            0.017400171607732773
+          ],
+          [
+            "cross_maize_lag30",
+            0.016673395410180092
+          ],
+          [
+            "arr_roll_std_14",
+            0.016544241458177567
+          ],
+          [
+            "spread_paddy_maize",
+            0.01580760069191456
+          ],
+          [
+            "ewma_ratio_7",
+            0.014034045860171318
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.35,
+          "xgboost": 1.367,
+          "catboost": 1.412,
+          "ridge": 1.893
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.6,
+        "ensemble_weights": {
+          "lightgbm": 0.273,
+          "xgboost": 0.27,
+          "catboost": 0.261,
+          "ridge": 0.195
+        }
+      },
+      "7": {
+        "horizon_days": 7,
+        "horizon_label": "7-Day",
+        "target_date": "2026-07-11",
+        "predicted_price": 2930.22,
+        "lower_bound": 2898.39,
+        "upper_bound": 2962.06,
+        "change_pct": 5.15,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.377,
+          "ensemble_mae": 14.96,
+          "ensemble_r2": 0.9962,
+          "baseline_mape": 1.337
+        },
+        "top_features": [
+          [
+            "arr_roll_std_14",
+            0.010798477937297242
+          ],
+          [
+            "roll_max_90",
+            0.008826820041291936
+          ],
+          [
+            "arr_roll_mean_14",
+            0.008093269092545038
+          ],
+          [
+            "log_arr_lag_60",
+            0.007272064203368417
+          ],
+          [
+            "roll_range_14",
+            0.007058699766706934
+          ],
+          [
+            "msp_pct_diff",
+            0.00704132092118747
+          ],
+          [
+            "arr_lag_60",
+            0.0070176144759362315
+          ],
+          [
+            "roll_std_30",
+            0.006984449338395562
+          ],
+          [
+            "price_lag_14",
+            0.006615173308393929
+          ],
+          [
+            "msp_gap_ratio",
+            0.006285988979069903
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.374,
+          "xgboost": 1.337,
+          "catboost": 1.395,
+          "ridge": 1.683
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.6,
+        "ensemble_weights": {
+          "lightgbm": 0.261,
+          "xgboost": 0.268,
+          "catboost": 0.257,
+          "ridge": 0.213
+        }
+      },
+      "8": {
+        "horizon_days": 8,
+        "horizon_label": "8-Day",
+        "target_date": "2026-07-12",
+        "predicted_price": 2865.66,
+        "lower_bound": 2837.87,
+        "upper_bound": 2893.45,
+        "change_pct": 2.83,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.552,
+          "ensemble_mae": 16.11,
+          "ensemble_r2": 0.9956,
+          "baseline_mape": 1.454
+        },
+        "top_features": [
+          [
+            "msp_pct_diff",
+            0.002241594949737191
+          ],
+          [
+            "msp_gap_ratio",
+            0.002241594949737191
+          ],
+          [
+            "cos_30d_k2",
+            0.001481085317209363
+          ],
+          [
+            "market_count_roll7",
+            0.0012802385026589036
+          ],
+          [
+            "roll_min_7",
+            0.0011660216841846704
+          ],
+          [
+            "roll_range_90",
+            0.0011071843327954412
+          ],
+          [
+            "roll_max_90",
+            0.0011071843327954412
+          ],
+          [
+            "cross_wheat_lag14",
+            0.0010832961415871978
+          ],
+          [
+            "price_pct_range_30",
+            0.0010527032427489758
+          ],
+          [
+            "cross_wheat_lag30",
+            0.0010415776632726192
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.549,
+          "xgboost": 1.454,
+          "catboost": 1.531,
+          "ridge": 2.102
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.4,
+        "ensemble_weights": {
+          "lightgbm": 0.262,
+          "xgboost": 0.279,
+          "catboost": 0.265,
+          "ridge": 0.193
+        }
+      },
+      "9": {
+        "horizon_days": 9,
+        "horizon_label": "9-Day",
+        "target_date": "2026-07-13",
+        "predicted_price": 2930.89,
+        "lower_bound": 2923.23,
+        "upper_bound": 2938.54,
+        "change_pct": 5.17,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.297,
+          "ensemble_mae": 14.39,
+          "ensemble_r2": 0.9972,
+          "baseline_mape": 1.284
+        },
+        "top_features": [
+          [
+            "arr_roll_std_14",
+            0.03886370733380318
+          ],
+          [
+            "cos_7d_k2",
+            0.029479853808879852
+          ],
+          [
+            "arr_roll_mean_7",
+            0.02771098166704178
+          ],
+          [
+            "arr_roll_std_90",
+            0.026400605216622353
+          ],
+          [
+            "msp_pct_diff",
+            0.025723792612552643
+          ],
+          [
+            "ewma_ratio_90",
+            0.02528582513332367
+          ],
+          [
+            "msp_gap_ratio",
+            0.024719389155507088
+          ],
+          [
+            "roll_min_7",
+            0.02468961291015148
+          ],
+          [
+            "roll_min_60",
+            0.019188236445188522
+          ],
+          [
+            "vol_log_ret_30",
+            0.0170602984726429
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.284,
+          "xgboost": 1.312,
+          "catboost": 1.368
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.7,
+        "ensemble_weights": {
+          "lightgbm": 0.343,
+          "xgboost": 0.335,
+          "catboost": 0.322
+        }
+      },
+      "10": {
+        "horizon_days": 10,
+        "horizon_label": "10-Day",
+        "target_date": "2026-07-14",
+        "predicted_price": 2952.19,
+        "lower_bound": 2915.87,
+        "upper_bound": 2988.51,
+        "change_pct": 5.93,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.401,
+          "ensemble_mae": 14.89,
+          "ensemble_r2": 0.9969,
+          "baseline_mape": 1.35
+        },
+        "top_features": [
+          [
+            "arr_roll_std_14",
+            0.02800921206919818
+          ],
+          [
+            "msp_pct_diff",
+            0.02195719400087671
+          ],
+          [
+            "msp_gap_ratio",
+            0.019435804821817598
+          ],
+          [
+            "arr_roll_mean_90",
+            0.017414419364179326
+          ],
+          [
+            "ewma_ratio_7",
+            0.011300553238045687
+          ],
+          [
+            "roll_range_14",
+            0.010846626085926401
+          ],
+          [
+            "cos_7d_k1",
+            0.010303682585363152
+          ],
+          [
+            "arr_roll_mean_7",
+            0.01015863865139336
+          ],
+          [
+            "arr_roll_mean_14",
+            0.008415384499046484
+          ],
+          [
+            "ewma_ratio_90",
+            0.007759262068421773
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.547,
+          "xgboost": 1.35,
+          "catboost": 1.464
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.6,
+        "ensemble_weights": {
+          "lightgbm": 0.312,
+          "xgboost": 0.358,
+          "catboost": 0.33
+        }
+      },
+      "30": {
+        "horizon_days": 30,
+        "horizon_label": "30-Day",
+        "target_date": "2026-08-03",
+        "predicted_price": 2844.01,
+        "lower_bound": 2788.59,
+        "upper_bound": 2899.43,
+        "change_pct": 2.05,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.414,
+          "ensemble_mae": 14.86,
+          "ensemble_r2": 0.9969,
+          "baseline_mape": 1.397
+        },
+        "top_features": [
+          [
+            "arr_roll_std_14",
+            0.042551733553409576
+          ],
+          [
+            "arr_roll_std_30",
+            0.03741304948925972
+          ],
+          [
+            "arr_lag_7",
+            0.029787998646497726
+          ],
+          [
+            "msp_pct_diff",
+            0.02476159669458866
+          ],
+          [
+            "msp_gap_ratio",
+            0.022549469023942947
+          ],
+          [
+            "price_pct_range_60",
+            0.022058291360735893
+          ],
+          [
+            "log_arr_lag_7",
+            0.02154501900076866
+          ],
+          [
+            "ewma_ratio_90",
+            0.021327774971723557
+          ],
+          [
+            "cross_maize_lag30",
+            0.019804822281003
+          ],
+          [
+            "roll_std_90",
+            0.01858626678586006
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.456,
+          "xgboost": 1.397,
+          "catboost": 1.499
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.6,
+        "ensemble_weights": {
+          "lightgbm": 0.332,
+          "xgboost": 0.346,
+          "catboost": 0.322
+        }
+      },
+      "90": {
+        "horizon_days": 90,
+        "horizon_label": "90-Day",
+        "target_date": "2026-10-02",
+        "predicted_price": 2997.75,
+        "lower_bound": 2862.72,
+        "upper_bound": 3132.78,
+        "change_pct": 7.57,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.35,
+          "ensemble_mae": 14.59,
+          "ensemble_r2": 0.9979,
+          "baseline_mape": 1.325
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            1772.0
+          ],
+          [
+            "msp_pct_diff",
+            475.0
+          ],
+          [
+            "trend_slope_365",
+            466.0
+          ],
+          [
+            "arr_roll_mean_90",
+            383.0
+          ],
+          [
+            "spread_paddy_wheat",
+            331.0
+          ],
+          [
+            "market_count_roll7",
+            323.0
+          ],
+          [
+            "cos_365d_k1",
+            319.0
+          ],
+          [
+            "arr_roll_std_90",
+            241.0
+          ],
+          [
+            "sin_365d_k1",
+            237.0
+          ],
+          [
+            "vol_log_ret_90",
+            227.0
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.528,
+          "xgboost": 1.325,
+          "catboost": 1.444
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.7,
+        "ensemble_weights": {
+          "lightgbm": 0.311,
+          "xgboost": 0.359,
+          "catboost": 0.33
+        }
+      }
+    }
+  },
+  "Maize": {
+    "name": "Maize",
+    "icon": "\ud83c\udf3d",
+    "color": "#F97316",
+    "unit": "Rs/Quintal",
+    "current_price": 1917.85,
+    "current_price_low": 1860.31,
+    "current_price_high": 1975.39,
+    "last_data_date": "2026-07-04",
+    "forecast_as_of": "2026-07-04",
+    "horizons": {
+      "6": {
+        "horizon_days": 6,
+        "horizon_label": "6-Day",
+        "target_date": "2026-07-10",
+        "predicted_price": 1948.45,
+        "lower_bound": 1924.4,
+        "upper_bound": 1972.5,
+        "change_pct": 1.6,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.909,
+          "ensemble_mae": 20.64,
+          "ensemble_r2": 0.9963,
+          "baseline_mape": 1.811
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            67.33045693966857
+          ],
+          [
+            "market_count_lag1",
+            45.59869083333502
+          ],
+          [
+            "msp_pct_diff",
+            42.48621280278522
+          ],
+          [
+            "log_ret_lag_14",
+            40.16348310872553
+          ],
+          [
+            "log_ret_lag_7",
+            37.41514237970982
+          ],
+          [
+            "cos_365d_k1",
+            24.376658621594192
+          ],
+          [
+            "day_of_week",
+            24.262212918505227
+          ],
+          [
+            "cos_365d_k2",
+            23.80509952811766
+          ],
+          [
+            "sin_365d_k1",
+            23.516305964361457
+          ],
+          [
+            "momentum_7_30",
+            20.648463773585668
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.811,
+          "xgboost": 1.856,
+          "catboost": 1.989,
+          "ridge": 2.362
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.1,
+        "ensemble_weights": {
+          "lightgbm": 0.274,
+          "xgboost": 0.267,
+          "catboost": 0.249,
+          "ridge": 0.21
+        }
+      },
+      "7": {
+        "horizon_days": 7,
+        "horizon_label": "7-Day",
+        "target_date": "2026-07-11",
+        "predicted_price": 1955.41,
+        "lower_bound": 1933.42,
+        "upper_bound": 1977.41,
+        "change_pct": 1.96,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.835,
+          "ensemble_mae": 19.38,
+          "ensemble_r2": 0.9965,
+          "baseline_mape": 1.769
+        },
+        "top_features": [
+          [
+            "msp_pct_diff",
+            6.365594107787728
+          ],
+          [
+            "msp_gap_ratio",
+            5.884143649908049
+          ],
+          [
+            "cos_365d_k2",
+            2.793854734395931
+          ],
+          [
+            "arr_roll_mean_30",
+            2.045523623758641
+          ],
+          [
+            "market_count_roll7",
+            1.8733697695387925
+          ],
+          [
+            "roll_std_30",
+            1.7537188705478584
+          ],
+          [
+            "roll_min_90",
+            1.2435080703271777
+          ],
+          [
+            "arrival_stale",
+            1.2147561608374193
+          ],
+          [
+            "ewma_180",
+            1.1235455502827845
+          ],
+          [
+            "sin_365d_k1",
+            0.884203700175832
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.769,
+          "xgboost": 1.769,
+          "catboost": 1.87,
+          "ridge": 2.205
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.2,
+        "ensemble_weights": {
+          "lightgbm": 0.267,
+          "xgboost": 0.267,
+          "catboost": 0.252,
+          "ridge": 0.214
+        }
+      },
+      "8": {
+        "horizon_days": 8,
+        "horizon_label": "8-Day",
+        "target_date": "2026-07-12",
+        "predicted_price": 1942.01,
+        "lower_bound": 1915.58,
+        "upper_bound": 1968.43,
+        "change_pct": 1.26,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.887,
+          "ensemble_mae": 20.46,
+          "ensemble_r2": 0.9963,
+          "baseline_mape": 1.747
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            128.74179015699335
+          ],
+          [
+            "day_of_week",
+            98.38462509472747
+          ],
+          [
+            "spread_maize_paddy",
+            81.59034570886058
+          ],
+          [
+            "msp_pct_diff",
+            68.6836787948907
+          ],
+          [
+            "trend_slope_365",
+            63.19239275749327
+          ],
+          [
+            "sin_365d_k1",
+            55.89247521400039
+          ],
+          [
+            "arr_lag_90",
+            44.57666996888876
+          ],
+          [
+            "price_vs_yr_mean",
+            42.01454317795364
+          ],
+          [
+            "cos_365d_k2",
+            40.12016867747975
+          ],
+          [
+            "log_ret_lag_7",
+            39.804953935764395
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.761,
+          "xgboost": 1.747,
+          "catboost": 1.958,
+          "ridge": 2.546
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.1,
+        "ensemble_weights": {
+          "lightgbm": 0.278,
+          "xgboost": 0.28,
+          "catboost": 0.25,
+          "ridge": 0.192
+        }
+      },
+      "9": {
+        "horizon_days": 9,
+        "horizon_label": "9-Day",
+        "target_date": "2026-07-13",
+        "predicted_price": 1932.16,
+        "lower_bound": 1914.06,
+        "upper_bound": 1950.26,
+        "change_pct": 0.75,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.659,
+          "ensemble_mae": 18.23,
+          "ensemble_r2": 0.9974,
+          "baseline_mape": 1.663
+        },
+        "top_features": [
+          [
+            "msp_pct_diff",
+            0.0015699418727308512
+          ],
+          [
+            "msp_gap_ratio",
+            0.0015699414070695639
+          ],
+          [
+            "cos_7d_k2",
+            0.0014956665690988302
+          ],
+          [
+            "log_price_lag_5",
+            0.0011837619822472334
+          ],
+          [
+            "price_lag_5",
+            0.0011779246851801872
+          ],
+          [
+            "cross_paddy_lag7",
+            0.001176237128674984
+          ],
+          [
+            "sin_7d_k1",
+            0.0011622169986367226
+          ],
+          [
+            "cross_wheat_lag14",
+            0.0009883134625852108
+          ],
+          [
+            "sin_30d_k4",
+            0.0009132677805610001
+          ],
+          [
+            "cos_7d_k3",
+            0.0007420405745506287
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.682,
+          "xgboost": 1.663,
+          "catboost": 1.844
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.3,
+        "ensemble_weights": {
+          "lightgbm": 0.342,
+          "xgboost": 0.346,
+          "catboost": 0.312
+        }
+      },
+      "10": {
+        "horizon_days": 10,
+        "horizon_label": "10-Day",
+        "target_date": "2026-07-14",
+        "predicted_price": 1933.84,
+        "lower_bound": 1907.41,
+        "upper_bound": 1960.28,
+        "change_pct": 0.83,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.803,
+          "ensemble_mae": 19.39,
+          "ensemble_r2": 0.9969,
+          "baseline_mape": 1.755
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            0.002045358531177044
+          ],
+          [
+            "msp_pct_diff",
+            0.0020453575998544693
+          ],
+          [
+            "cos_7d_k1",
+            0.0015398373361676931
+          ],
+          [
+            "sin_7d_k4",
+            0.0013389945961534977
+          ],
+          [
+            "sin_7d_k3",
+            0.0013389945961534977
+          ],
+          [
+            "sin_30d_k4",
+            0.001312414649873972
+          ],
+          [
+            "spread_maize_paddy",
+            0.0010979344369843602
+          ],
+          [
+            "sin_7d_k1",
+            0.0010730769718065858
+          ],
+          [
+            "day_of_week",
+            0.0008782531367614865
+          ],
+          [
+            "sin_7d_k2",
+            0.0008692929404787719
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.755,
+          "xgboost": 1.8,
+          "catboost": 1.991
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.2,
+        "ensemble_weights": {
+          "lightgbm": 0.35,
+          "xgboost": 0.341,
+          "catboost": 0.309
+        }
+      },
+      "30": {
+        "horizon_days": 30,
+        "horizon_label": "30-Day",
+        "target_date": "2026-08-03",
+        "predicted_price": 1973.62,
+        "lower_bound": 1946.7,
+        "upper_bound": 2000.54,
+        "change_pct": 2.91,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.923,
+          "ensemble_mae": 21.57,
+          "ensemble_r2": 0.9963,
+          "baseline_mape": 1.861
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            126.08233585478776
+          ],
+          [
+            "trend_slope_365",
+            107.10221311507595
+          ],
+          [
+            "msp_pct_diff",
+            89.0267319077328
+          ],
+          [
+            "day_of_week",
+            66.43596276281816
+          ],
+          [
+            "spread_maize_paddy",
+            56.49144281595791
+          ],
+          [
+            "roll_cv_90",
+            56.03319479385955
+          ],
+          [
+            "roll_range_90",
+            49.25498574621525
+          ],
+          [
+            "vol_log_ret_60",
+            46.091821523981245
+          ],
+          [
+            "momentum_30_90",
+            44.73617971445238
+          ],
+          [
+            "spread_maize_wheat",
+            43.38053790492352
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.861,
+          "xgboost": 1.897,
+          "catboost": 2.167
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.1,
+        "ensemble_weights": {
+          "lightgbm": 0.352,
+          "xgboost": 0.345,
+          "catboost": 0.302
+        }
+      },
+      "90": {
+        "horizon_days": 90,
+        "horizon_label": "90-Day",
+        "target_date": "2026-10-02",
+        "predicted_price": 2003.81,
+        "lower_bound": 1934.21,
+        "upper_bound": 2073.42,
+        "change_pct": 4.48,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.8,
+          "ensemble_mae": 19.98,
+          "ensemble_r2": 0.9967,
+          "baseline_mape": 1.694
+        },
+        "top_features": [
+          [
+            "months_to_harvest",
+            0.22057472169399261
+          ],
+          [
+            "ewma_180",
+            0.060796625912189484
+          ],
+          [
+            "is_sowing_season",
+            0.03771200403571129
+          ],
+          [
+            "log_price_lag_90",
+            0.03412140905857086
+          ],
+          [
+            "sin_365d_k2",
+            0.02703581191599369
+          ],
+          [
+            "price_lag_90",
+            0.01837831921875477
+          ],
+          [
+            "trend_slope_365",
+            0.01777643896639347
+          ],
+          [
+            "is_harvest_season",
+            0.016763368621468544
+          ],
+          [
+            "roll_mean_90",
+            0.01665395498275757
+          ],
+          [
+            "arr_roll_mean_90",
+            0.016593366861343384
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.694,
+          "xgboost": 1.856,
+          "catboost": 2.11
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.2,
+        "ensemble_weights": {
+          "lightgbm": 0.368,
+          "xgboost": 0.336,
+          "catboost": 0.296
+        }
+      }
+    }
+  },
+  "Mustard": {
+    "name": "Mustard",
+    "icon": "\ud83c\udf3f",
+    "color": "#A78BFA",
+    "unit": "Rs/Quintal",
+    "current_price": 6999.0,
+    "current_price_low": 6650.0,
+    "current_price_high": 7222.5,
+    "last_data_date": "2026-06-25",
+    "forecast_as_of": "2026-07-04",
+    "horizons": {
+      "6": {
+        "horizon_days": 6,
+        "horizon_label": "6-Day",
+        "target_date": "2026-07-01",
+        "predicted_price": 7003.48,
+        "lower_bound": 6999.09,
+        "upper_bound": 7007.88,
+        "change_pct": 0.06,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.904,
+          "ensemble_mae": 55.78,
+          "ensemble_r2": 0.9965,
+          "baseline_mape": 1.848
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            14.158142224434739
+          ],
+          [
+            "msp_pct_diff",
+            8.89350330145831
+          ],
+          [
+            "roll_cv_7",
+            7.084099614364251
+          ],
+          [
+            "cross_wheat_lag30",
+            5.954092777530118
+          ],
+          [
+            "log_ret_lag_7",
+            5.287303442329181
+          ],
+          [
+            "spread_mustard_wheat",
+            4.624106002693645
+          ],
+          [
+            "roll_max_14",
+            3.1458892973872112
+          ],
+          [
+            "ewma_ratio_7",
+            2.8214451228398985
+          ],
+          [
+            "cos_365d_k2",
+            2.7785479385814633
+          ],
+          [
+            "arr_roll_mean_7",
+            2.7384812462066965
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.848,
+          "xgboost": 1.96,
+          "catboost": 1.939,
+          "ridge": 2.451
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.1,
+        "ensemble_weights": {
+          "lightgbm": 0.274,
+          "xgboost": 0.258,
+          "catboost": 0.261,
+          "ridge": 0.207
+        }
+      },
+      "7": {
+        "horizon_days": 7,
+        "horizon_label": "7-Day",
+        "target_date": "2026-07-02",
+        "predicted_price": 7151.04,
+        "lower_bound": 7058.98,
+        "upper_bound": 7243.1,
+        "change_pct": 2.17,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.927,
+          "ensemble_mae": 53.63,
+          "ensemble_r2": 0.9964,
+          "baseline_mape": 1.885
+        },
+        "top_features": [
+          [
+            "msp_pct_diff",
+            10.433309999591367
+          ],
+          [
+            "day_of_year",
+            9.955400186844312
+          ],
+          [
+            "price_spread_roll7",
+            9.090771766126858
+          ],
+          [
+            "log_arr_lag_1",
+            8.781519758325397
+          ],
+          [
+            "cos_365d_k3",
+            6.879502958150054
+          ],
+          [
+            "cos_365d_k1",
+            6.165161622113647
+          ],
+          [
+            "roll_cv_7",
+            5.994361784986747
+          ],
+          [
+            "msp_gap_ratio",
+            5.186835986256818
+          ],
+          [
+            "roll_std_90",
+            5.168156885664907
+          ],
+          [
+            "arr_roll_std_60",
+            5.159627218612541
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.885,
+          "xgboost": 1.889,
+          "catboost": 1.968,
+          "ridge": 2.419
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.1,
+        "ensemble_weights": {
+          "lightgbm": 0.268,
+          "xgboost": 0.267,
+          "catboost": 0.256,
+          "ridge": 0.209
+        }
+      },
+      "8": {
+        "horizon_days": 8,
+        "horizon_label": "8-Day",
+        "target_date": "2026-07-03",
+        "predicted_price": 6985.79,
+        "lower_bound": 6904.48,
+        "upper_bound": 7067.11,
+        "change_pct": -0.19,
+        "direction": "down",
+        "metrics": {
+          "ensemble_mape": 1.994,
+          "ensemble_mae": 59.76,
+          "ensemble_r2": 0.9967,
+          "baseline_mape": 1.882
+        },
+        "top_features": [
+          [
+            "day_of_week",
+            53.93157865330067
+          ],
+          [
+            "msp_gap_ratio",
+            43.36377741849197
+          ],
+          [
+            "cos_365d_k3",
+            38.20153487942131
+          ],
+          [
+            "trend_slope_7",
+            33.988130297132194
+          ],
+          [
+            "price_spread_roll7",
+            30.915636834789762
+          ],
+          [
+            "day_of_year",
+            29.493832076023804
+          ],
+          [
+            "log_ret_lag_7",
+            25.011632111253384
+          ],
+          [
+            "vol_log_ret_60",
+            23.595065660819042
+          ],
+          [
+            "price_vs_yr_mean",
+            23.033278383180495
+          ],
+          [
+            "vol_log_ret_90",
+            21.909703827903396
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.995,
+          "xgboost": 1.882,
+          "catboost": 2.077,
+          "ridge": 2.648
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.0,
+        "ensemble_weights": {
+          "lightgbm": 0.265,
+          "xgboost": 0.281,
+          "catboost": 0.255,
+          "ridge": 0.2
+        }
+      },
+      "9": {
+        "horizon_days": 9,
+        "horizon_label": "9-Day",
+        "target_date": "2026-07-04",
+        "predicted_price": 6974.87,
+        "lower_bound": 6909.03,
+        "upper_bound": 7040.72,
+        "change_pct": -0.34,
+        "direction": "down",
+        "metrics": {
+          "ensemble_mape": 1.935,
+          "ensemble_mae": 60.2,
+          "ensemble_r2": 0.9969,
+          "baseline_mape": 1.824
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            716.2608311433927
+          ],
+          [
+            "day_of_week",
+            532.8089083235953
+          ],
+          [
+            "trend_slope_365",
+            467.3954689615079
+          ],
+          [
+            "roll_cv_90",
+            438.16041226336824
+          ],
+          [
+            "trend_slope_30",
+            347.1662982904085
+          ],
+          [
+            "vol_log_ret_90",
+            341.31928695078057
+          ],
+          [
+            "msp_pct_diff",
+            340.2590566566081
+          ],
+          [
+            "vol_log_ret_60",
+            290.15808914792433
+          ],
+          [
+            "roll_cv_60",
+            289.79249952030943
+          ],
+          [
+            "day_of_year",
+            266.8737727331811
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.824,
+          "xgboost": 1.993,
+          "catboost": 2.02,
+          "ridge": 2.663
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.1,
+        "ensemble_weights": {
+          "lightgbm": 0.285,
+          "xgboost": 0.261,
+          "catboost": 0.258,
+          "ridge": 0.195
+        }
+      },
+      "10": {
+        "horizon_days": 10,
+        "horizon_label": "10-Day",
+        "target_date": "2026-07-05",
+        "predicted_price": 7064.29,
+        "lower_bound": 7026.03,
+        "upper_bound": 7102.54,
+        "change_pct": 0.93,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.751,
+          "ensemble_mae": 53.16,
+          "ensemble_r2": 0.9972,
+          "baseline_mape": 1.744
+        },
+        "top_features": [
+          [
+            "msp_gap_ratio",
+            570.0
+          ],
+          [
+            "sin_365d_k3",
+            357.0
+          ],
+          [
+            "day_of_week",
+            349.0
+          ],
+          [
+            "sin_90d_k1",
+            277.0
+          ],
+          [
+            "msp_pct_diff",
+            259.0
+          ],
+          [
+            "trend_slope_30",
+            256.0
+          ],
+          [
+            "cos_365d_k3",
+            240.0
+          ],
+          [
+            "roll_cv_90",
+            213.0
+          ],
+          [
+            "sin_365d_k2",
+            212.0
+          ],
+          [
+            "momentum_30_90",
+            209.0
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.744,
+          "xgboost": 1.78,
+          "catboost": 1.925
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.2,
+        "ensemble_weights": {
+          "lightgbm": 0.346,
+          "xgboost": 0.34,
+          "catboost": 0.314
+        }
+      },
+      "30": {
+        "horizon_days": 30,
+        "horizon_label": "30-Day",
+        "target_date": "2026-07-25",
+        "predicted_price": 6705.7,
+        "lower_bound": 6627.51,
+        "upper_bound": 6783.89,
+        "change_pct": -4.19,
+        "direction": "down",
+        "metrics": {
+          "ensemble_mape": 1.958,
+          "ensemble_mae": 58.18,
+          "ensemble_r2": 0.9965,
+          "baseline_mape": 1.925
+        },
+        "top_features": [
+          [
+            "roll_range_60",
+            0.0009663284290581942
+          ],
+          [
+            "msp_gap_ratio",
+            0.0008439976954832673
+          ],
+          [
+            "msp_pct_diff",
+            0.0008439975790679455
+          ],
+          [
+            "cos_7d_k2",
+            0.0007577851647511125
+          ],
+          [
+            "cross_wheat",
+            0.0007529457798227668
+          ],
+          [
+            "sin_7d_k1",
+            0.0007277896511368454
+          ],
+          [
+            "vol_log_ret_30",
+            0.0006949734524823725
+          ],
+          [
+            "roll_min_30",
+            0.0006935112760402262
+          ],
+          [
+            "sin_30d_k2",
+            0.0006620393833145499
+          ],
+          [
+            "vol_log_ret_14",
+            0.000661304744426161
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.984,
+          "xgboost": 1.925,
+          "catboost": 2.3
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.0,
+        "ensemble_weights": {
+          "lightgbm": 0.346,
+          "xgboost": 0.356,
+          "catboost": 0.298
+        }
+      },
+      "90": {
+        "horizon_days": 90,
+        "horizon_label": "90-Day",
+        "target_date": "2026-09-23",
+        "predicted_price": 7946.07,
+        "lower_bound": 7822.7,
+        "upper_bound": 8069.45,
+        "change_pct": 13.53,
+        "direction": "up",
+        "metrics": {
+          "ensemble_mape": 1.755,
+          "ensemble_mae": 52.44,
+          "ensemble_r2": 0.9973,
+          "baseline_mape": 1.663
+        },
+        "top_features": [
+          [
+            "roll_cv_90",
+            5.127527290953148
+          ],
+          [
+            "cos_365d_k1",
+            4.953306905791481
+          ],
+          [
+            "months_to_harvest",
+            4.4514773539936
+          ],
+          [
+            "msp_pct_diff",
+            4.013687337117692
+          ],
+          [
+            "roll_range_60",
+            3.3449058628763897
+          ],
+          [
+            "msp_gap_ratio",
+            2.981336329624721
+          ],
+          [
+            "trend_slope_365",
+            1.9548721021750202
+          ],
+          [
+            "roll_cv_60",
+            1.5881049450040188
+          ],
+          [
+            "day_of_year",
+            0.8452531169521653
+          ],
+          [
+            "week_of_year",
+            0.7981554612090918
+          ]
+        ],
+        "individual_model_mapes": {
+          "lightgbm": 1.823,
+          "xgboost": 1.663,
+          "catboost": 2.226
+        },
+        "confidence_level": "High",
+        "confidence_percentage": 98.2,
+        "ensemble_weights": {
+          "lightgbm": 0.343,
+          "xgboost": 0.376,
+          "catboost": 0.281
+        }
+      }
+    }
+  }
+}

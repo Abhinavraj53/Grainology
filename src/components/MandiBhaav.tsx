@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AlertCircle, Download, Printer, RefreshCw, TrendingUp } from 'lucide-react';
+import AIPredictions from './AIPredictions';
 
 interface AgmarknetFilterData {
   state_data?: Array<{ state_id: number; state_name: string }>;
@@ -257,6 +258,7 @@ export default function MandiBhaav() {
 
   return (
     <section data-testid="agmarknet-dashboard" className="rounded-xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 md:p-7">
+      <AIPredictions />
       <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <h1 className="text-3xl font-semibold text-slate-800">Market Wise Price & Arrival</h1>
@@ -297,7 +299,7 @@ export default function MandiBhaav() {
                 );
               })}
             </LabeledSelect>
-            <LabeledSelect testId="agmarknet-district" label="District" value={draftFilters.district[0] || ''} disabled={draftFilters.state === 100006}
+            <LabeledSelect testId="agmarknet-district" label="District" value={draftFilters.district[0] || ''} disabled={draftFilters.state === 100006} 
               onChange={(value) => setDraftFilters({ ...draftFilters, district: value ? [Number(value)] : [], market: [100009] })}>
               <option value="">All Districts</option>
               {districts.filter((district) => (district.id ?? district.district_id) !== 100007).map((district) => (

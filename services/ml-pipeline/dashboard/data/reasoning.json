@@ -1,0 +1,466 @@
+{
+  "Wheat": {
+    "7": {
+      "text": "Based on the latest data, Wheat prices are projected to rise by 0.2% to reach Rs.2,508/quintal over the next week (historical error margin: ±1.5%). This movement is primarily driven by short-term momentum and recent market activity. With 3 months until the next wheat harvest, the market is in a lean-supply inter-seasonal phase where prices typically firm up as old-crop stocks diminish and fresh arrivals are limited. With prices near or below the MSP of Rs.2,600/quintal, government procurement is expected to intensify, providing strong price support and limiting further downside in the coming weeks. Our AI analysis highlights that price-to-MSP ratio (floor support), combined with price premium/discount vs. government MSP, are the strongest predictors behind this forecast. Furthermore, Month are confirming the overall bullish sentiment seen across historical patterns in mandi data. Please note that short-term projections (7-day) can be volatile and are easily swayed by day-to-day fluctuations in local mandi arrivals and regional weather.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 0.0002
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 0.0002
+        },
+        {
+          "feature": "Month",
+          "score": 0.0002
+        },
+        {
+          "feature": "proximity to next harvest season",
+          "score": 0.0002
+        },
+        {
+          "feature": "correlated Maize price movement",
+          "score": 0.0001
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 0.0001
+        },
+        {
+          "feature": "Roll Range 7",
+          "score": 0.0001
+        },
+        {
+          "feature": "7-day short-term price volatility",
+          "score": 0.0001
+        }
+      ]
+    },
+    "30": {
+      "text": "Based on the latest data, Wheat prices are projected to rise by 1.7% to reach Rs.2,545/quintal over the next month (historical error margin: ±1.7%). This movement is primarily driven by medium-term supply-demand balance and seasonal patterns. With 3 months until the next wheat harvest, the market is in a lean-supply inter-seasonal phase where prices typically firm up as old-crop stocks diminish and fresh arrivals are limited. With prices near or below the MSP of Rs.2,600/quintal, government procurement is expected to intensify, providing strong price support and limiting further downside in the coming weeks. Our AI analysis highlights that price-to-MSP ratio (floor support), combined with price premium/discount vs. government MSP, are the strongest predictors behind this forecast. Furthermore, seasonal/cyclical price pattern are confirming the overall bullish sentiment seen across historical patterns in mandi data. The 30-day outlook is shaped by the pre-kharif procurement cycle and government release of buffer stocks - both factors have been incorporated in the LightGBM model's feature set.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 8.91
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 8.7215
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 7.6439
+        },
+        {
+          "feature": "annual seasonality (time of year)",
+          "score": 6.0716
+        },
+        {
+          "feature": "weekly trading patterns (day of week)",
+          "score": 4.535
+        },
+        {
+          "feature": "Month",
+          "score": 3.6007
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 3.1334
+        },
+        {
+          "feature": "Arr Roll Mean 60",
+          "score": 3.0304
+        }
+      ]
+    },
+    "90": {
+      "text": "Based on the latest data, Wheat prices are projected to fall by 3.6% to reach Rs.2,411/quintal over the next three months (historical error margin: ±1.6%). This movement is primarily driven by seasonal harvest cycle, MSP floor support, and structural demand trends. With 3 months until the next wheat harvest, the market is in a lean-supply inter-seasonal phase where prices typically remain under pressure as old-crop stocks diminish and fresh arrivals are limited. With prices near or below the MSP of Rs.2,600/quintal, government procurement is expected to intensify, providing strong price support and limiting further downside in the coming weeks. Our AI analysis highlights that price-to-MSP ratio (floor support), combined with price premium/discount vs. government MSP, are the strongest predictors behind this forecast. Furthermore, Ewma Ratio 7 are confirming the overall bearish sentiment seen across historical patterns in mandi data. The 90-day seasonal forecast incorporates annual price cycles, monsoon-linked Kharif sowing sentiment, and the year-on-year MSP increase of Rs.175/quintal (+7.2%) which anchors longer-term price expectations.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 0.0021
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 0.0021
+        },
+        {
+          "feature": "Ewma Ratio 7",
+          "score": 0.0009
+        },
+        {
+          "feature": "medium-term price trend (30-day momentum)",
+          "score": 0.0009
+        },
+        {
+          "feature": "Ewma Ratio 14",
+          "score": 0.0008
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 0.0008
+        },
+        {
+          "feature": "long-term annual price trend",
+          "score": 0.0008
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 0.0008
+        }
+      ]
+    }
+  },
+  "Paddy": {
+    "7": {
+      "text": "Based on the latest data, Paddy prices are projected to rise by 5.2% to reach Rs.2,930/quintal over the next week (historical error margin: ±1.4%). This movement is primarily driven by short-term momentum and recent market activity. Currently in the paddy sowing window (June, July), market supply is thinning as the previous harvest stock depletes - this seasonal tightening supports the upward price trajectory. The current price of Rs.2,787 sits only 9.3% above the government's MSP of Rs.2,550/quintal for 2026, acting as a structural price floor - the market is unlikely to fall significantly below MSP as government procurement agencies step in. Our AI analysis highlights that Arr Roll Std 14, combined with Roll Max 90, are the strongest predictors behind this forecast. Furthermore, Arr Roll Mean 14 are confirming the overall bullish sentiment seen across historical patterns in mandi data. Please note that short-term projections (7-day) can be volatile and are easily swayed by day-to-day fluctuations in local mandi arrivals and regional weather.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "Arr Roll Std 14",
+          "score": 0.0108
+        },
+        {
+          "feature": "Roll Max 90",
+          "score": 0.0088
+        },
+        {
+          "feature": "Arr Roll Mean 14",
+          "score": 0.0081
+        },
+        {
+          "feature": "2-month historical supply arrivals",
+          "score": 0.0073
+        },
+        {
+          "feature": "Roll Range 14",
+          "score": 0.0071
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 0.007
+        },
+        {
+          "feature": "2-month historical supply arrivals",
+          "score": 0.007
+        },
+        {
+          "feature": "Roll Std 30",
+          "score": 0.007
+        }
+      ]
+    },
+    "30": {
+      "text": "Based on the latest data, Paddy prices are projected to rise by 2.0% to reach Rs.2,844/quintal over the next month (historical error margin: ±1.4%). This movement is primarily driven by medium-term supply-demand balance and seasonal patterns. Currently in the paddy sowing window (June, July), market supply is thinning as the previous harvest stock depletes - this seasonal tightening supports the upward price trajectory. The current price of Rs.2,787 sits only 9.3% above the government's MSP of Rs.2,550/quintal for 2026, acting as a structural price floor - the market is unlikely to fall significantly below MSP as government procurement agencies step in. Our AI analysis highlights that Arr Roll Std 14, combined with Arr Roll Std 30, are the strongest predictors behind this forecast. Furthermore, Arr Lag 7 are confirming the overall bullish sentiment seen across historical patterns in mandi data. The 30-day outlook is shaped by the pre-kharif procurement cycle and government release of buffer stocks - both factors have been incorporated in the LightGBM model's feature set.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "Arr Roll Std 14",
+          "score": 0.0426
+        },
+        {
+          "feature": "Arr Roll Std 30",
+          "score": 0.0374
+        },
+        {
+          "feature": "Arr Lag 7",
+          "score": 0.0298
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 0.0248
+        },
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 0.0225
+        },
+        {
+          "feature": "Price Pct Range 60",
+          "score": 0.0221
+        },
+        {
+          "feature": "Log Arr Lag 7",
+          "score": 0.0215
+        },
+        {
+          "feature": "Ewma Ratio 90",
+          "score": 0.0213
+        }
+      ]
+    },
+    "90": {
+      "text": "Based on the latest data, Paddy prices are projected to rise by 7.6% to reach Rs.2,998/quintal over the next three months (historical error margin: ±1.4%). This movement is primarily driven by seasonal harvest cycle, MSP floor support, and structural demand trends. Currently in the paddy sowing window (June, July), market supply is thinning as the previous harvest stock depletes - this seasonal tightening supports the upward price trajectory. The current price of Rs.2,787 sits only 9.3% above the government's MSP of Rs.2,550/quintal for 2026, acting as a structural price floor - the market is unlikely to fall significantly below MSP as government procurement agencies step in. Our AI analysis highlights that price-to-MSP ratio (floor support), combined with price premium/discount vs. government MSP, are the strongest predictors behind this forecast. Furthermore, long-term annual price trend are confirming the overall bullish sentiment seen across historical patterns in mandi data. The 90-day seasonal forecast incorporates annual price cycles, monsoon-linked Kharif sowing sentiment, and the year-on-year MSP increase of Rs.125/quintal (+5.2%) which anchors longer-term price expectations.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 1772.0
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 475.0
+        },
+        {
+          "feature": "long-term annual price trend",
+          "score": 466.0
+        },
+        {
+          "feature": "90-day rolling average price",
+          "score": 383.0
+        },
+        {
+          "feature": "price difference vs. Paddy Wheat",
+          "score": 331.0
+        },
+        {
+          "feature": "recent active trading markets (7-day)",
+          "score": 323.0
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 319.0
+        },
+        {
+          "feature": "Arr Roll Std 90",
+          "score": 241.0
+        }
+      ]
+    }
+  },
+  "Maize": {
+    "7": {
+      "text": "Based on the latest data, Maize prices are projected to rise by 2.0% to reach Rs.1,955/quintal over the next week (historical error margin: ±1.8%). This movement is primarily driven by short-term momentum and recent market activity. Currently in the maize sowing window (June, July), market supply is thinning as the previous harvest stock depletes - this seasonal tightening supports the upward price trajectory. With prices near or below the MSP of Rs.2,465/quintal, government procurement is expected to intensify, providing strong price support and limiting further downside in the coming weeks. Our AI analysis highlights that price premium/discount vs. government MSP, combined with price-to-MSP ratio (floor support), are the strongest predictors behind this forecast. Furthermore, seasonal/cyclical price pattern are confirming the overall bullish sentiment seen across historical patterns in mandi data. Please note that short-term projections (7-day) can be volatile and are easily swayed by day-to-day fluctuations in local mandi arrivals and regional weather.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 6.3656
+        },
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 5.8841
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 2.7939
+        },
+        {
+          "feature": "30-day rolling average price",
+          "score": 2.0455
+        },
+        {
+          "feature": "recent active trading markets (7-day)",
+          "score": 1.8734
+        },
+        {
+          "feature": "Roll Std 30",
+          "score": 1.7537
+        },
+        {
+          "feature": "Roll Min 90",
+          "score": 1.2435
+        },
+        {
+          "feature": "Arrival Stale",
+          "score": 1.2148
+        }
+      ]
+    },
+    "30": {
+      "text": "Based on the latest data, Maize prices are projected to rise by 2.9% to reach Rs.1,974/quintal over the next month (historical error margin: ±1.9%). This movement is primarily driven by medium-term supply-demand balance and seasonal patterns. Currently in the maize sowing window (June, July), market supply is thinning as the previous harvest stock depletes - this seasonal tightening supports the upward price trajectory. With prices near or below the MSP of Rs.2,465/quintal, government procurement is expected to intensify, providing strong price support and limiting further downside in the coming weeks. Our AI analysis highlights that price-to-MSP ratio (floor support), combined with long-term annual price trend, are the strongest predictors behind this forecast. Furthermore, price premium/discount vs. government MSP are confirming the overall bullish sentiment seen across historical patterns in mandi data. The 30-day outlook is shaped by the pre-kharif procurement cycle and government release of buffer stocks - both factors have been incorporated in the LightGBM model's feature set.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 126.0823
+        },
+        {
+          "feature": "long-term annual price trend",
+          "score": 107.1022
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 89.0267
+        },
+        {
+          "feature": "weekly trading patterns (day of week)",
+          "score": 66.436
+        },
+        {
+          "feature": "price difference vs. Maize Paddy",
+          "score": 56.4914
+        },
+        {
+          "feature": "Roll Cv 90",
+          "score": 56.0332
+        },
+        {
+          "feature": "Roll Range 90",
+          "score": 49.255
+        },
+        {
+          "feature": "60-day price volatility",
+          "score": 46.0918
+        }
+      ]
+    },
+    "90": {
+      "text": "Based on the latest data, Maize prices are projected to rise by 4.5% to reach Rs.2,004/quintal over the next three months (historical error margin: ±1.8%). This movement is primarily driven by seasonal harvest cycle, MSP floor support, and structural demand trends. Currently in the maize sowing window (June, July), market supply is thinning as the previous harvest stock depletes - this seasonal tightening supports the upward price trajectory. With prices near or below the MSP of Rs.2,465/quintal, government procurement is expected to intensify, providing strong price support and limiting further downside in the coming weeks. Our AI analysis highlights that proximity to next harvest season, combined with Ewma 180, are the strongest predictors behind this forecast. Furthermore, sowing season indicator are confirming the overall bullish sentiment seen across historical patterns in mandi data. The 90-day seasonal forecast incorporates annual price cycles, monsoon-linked Kharif sowing sentiment, and the year-on-year MSP increase of Rs.115/quintal (+4.9%) which anchors longer-term price expectations.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "proximity to next harvest season",
+          "score": 0.2206
+        },
+        {
+          "feature": "Ewma 180",
+          "score": 0.0608
+        },
+        {
+          "feature": "sowing season indicator",
+          "score": 0.0377
+        },
+        {
+          "feature": "Log Price Lag 90",
+          "score": 0.0341
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 0.027
+        },
+        {
+          "feature": "Price Lag 90",
+          "score": 0.0184
+        },
+        {
+          "feature": "long-term annual price trend",
+          "score": 0.0178
+        },
+        {
+          "feature": "harvest season indicator",
+          "score": 0.0168
+        }
+      ]
+    }
+  },
+  "Mustard": {
+    "7": {
+      "text": "Based on the latest data, Mustard prices are projected to rise by 2.2% to reach Rs.7,151/quintal over the next week (historical error margin: ±1.9%). This movement is primarily driven by short-term momentum and recent market activity. With 3 months until the next mustard harvest, the market is in a lean-supply inter-seasonal phase where prices typically firm up as old-crop stocks diminish and fresh arrivals are limited. Trading at a 13% premium to the 2026 MSP of Rs.6,200/quintal, prices reflect strong private demand and limited export competition while the MSP provides a comfortable downside buffer. Our AI analysis highlights that price premium/discount vs. government MSP, combined with annual seasonality (time of year), are the strongest predictors behind this forecast. Furthermore, short-term inter-mandi price spread are confirming the overall bullish sentiment seen across historical patterns in mandi data. Please note that short-term projections (7-day) can be volatile and are easily swayed by day-to-day fluctuations in local mandi arrivals and regional weather.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 10.4333
+        },
+        {
+          "feature": "annual seasonality (time of year)",
+          "score": 9.9554
+        },
+        {
+          "feature": "short-term inter-mandi price spread",
+          "score": 9.0908
+        },
+        {
+          "feature": "yesterday's market arrivals (supply signal)",
+          "score": 8.7815
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 6.8795
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 6.1652
+        },
+        {
+          "feature": "7-day price fluctuation",
+          "score": 5.9944
+        },
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 5.1868
+        }
+      ]
+    },
+    "30": {
+      "text": "Based on the latest data, Mustard prices are projected to fall by 4.2% to reach Rs.6,706/quintal over the next month (historical error margin: ±2.0%). This movement is primarily driven by medium-term supply-demand balance and seasonal patterns. With 3 months until the next mustard harvest, the market is in a lean-supply inter-seasonal phase where prices typically remain under pressure as old-crop stocks diminish and fresh arrivals are limited. Trading at a 13% premium to the 2026 MSP of Rs.6,200/quintal, prices reflect normalizing open-market sentiment while the MSP provides a comfortable downside buffer. Our AI analysis highlights that Roll Range 60, combined with price-to-MSP ratio (floor support), are the strongest predictors behind this forecast. Furthermore, price premium/discount vs. government MSP are confirming the overall bearish sentiment seen across historical patterns in mandi data. The 30-day outlook is shaped by the pre-kharif procurement cycle and government release of buffer stocks - both factors have been incorporated in the LightGBM model's feature set.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "Roll Range 60",
+          "score": 0.001
+        },
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 0.0008
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 0.0008
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 0.0008
+        },
+        {
+          "feature": "correlated Wheat price movement",
+          "score": 0.0008
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 0.0007
+        },
+        {
+          "feature": "30-day price volatility",
+          "score": 0.0007
+        },
+        {
+          "feature": "Roll Min 30",
+          "score": 0.0007
+        }
+      ]
+    },
+    "90": {
+      "text": "Based on the latest data, Mustard prices are projected to rise by 13.5% to reach Rs.7,946/quintal over the next three months (historical error margin: ±1.8%). This movement is primarily driven by seasonal harvest cycle, MSP floor support, and structural demand trends. With 3 months until the next mustard harvest, the market is in a lean-supply inter-seasonal phase where prices typically firm up as old-crop stocks diminish and fresh arrivals are limited. Trading at a 13% premium to the 2026 MSP of Rs.6,200/quintal, prices reflect strong private demand and limited export competition while the MSP provides a comfortable downside buffer. Our AI analysis highlights that Roll Cv 90, combined with seasonal/cyclical price pattern, are the strongest predictors behind this forecast. Furthermore, proximity to next harvest season are confirming the overall bullish sentiment seen across historical patterns in mandi data. The 90-day seasonal forecast incorporates annual price cycles, monsoon-linked Kharif sowing sentiment, and the year-on-year MSP increase of Rs.250/quintal (+4.2%) which anchors longer-term price expectations.",
+      "source": "rule_based",
+      "key_drivers": [
+        {
+          "feature": "Roll Cv 90",
+          "score": 5.1275
+        },
+        {
+          "feature": "seasonal/cyclical price pattern",
+          "score": 4.9533
+        },
+        {
+          "feature": "proximity to next harvest season",
+          "score": 4.4515
+        },
+        {
+          "feature": "price premium/discount vs. government MSP",
+          "score": 4.0137
+        },
+        {
+          "feature": "Roll Range 60",
+          "score": 3.3449
+        },
+        {
+          "feature": "price-to-MSP ratio (floor support)",
+          "score": 2.9813
+        },
+        {
+          "feature": "long-term annual price trend",
+          "score": 1.9549
+        },
+        {
+          "feature": "Roll Cv 60",
+          "score": 1.5881
+        }
+      ]
+    }
+  }
+}

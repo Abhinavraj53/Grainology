@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgmarknetTable } from './AgmarknetTable';
 import { AgmarknetFilters } from './AgmarknetFilters';
+import AIPredictions from '../AIPredictions';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
+const API_URL = 'http://localhost:3001/api';
 export const AgmarknetDashboard: React.FC = () => {
   const [filters, setFilters] = useState({
-    state: 100006, // All States
+    state: 5, // Bihar (Default)
     district: [] as number[],
     market: [100009], // All Markets
     group: [] as number[], // All Groups
@@ -44,8 +44,8 @@ export const AgmarknetDashboard: React.FC = () => {
   // Predictive Caching (Pre-fetching) for popular states
   useEffect(() => {
     if (filterData?.state_data && date) {
-      // Pre-fetch for common states: Bihar (100006), UP (100028), MP (100018)
-      const popularStateIds = [100006, 100028, 100018];
+      // Pre-fetch for common states: Bihar (5)
+      const popularStateIds = [5, 100028, 100018];
       popularStateIds.forEach(stateId => {
         const payload = {
           dashboard: 'marketwise_price_arrival',
@@ -124,7 +124,7 @@ export const AgmarknetDashboard: React.FC = () => {
 
   const handleReset = () => {
     setFilters({
-      state: 100006,
+      state: 5,
       district: [],
       market: [100009],
       group: [],
@@ -184,6 +184,11 @@ export const AgmarknetDashboard: React.FC = () => {
     <div className="main-layout py-8" style={{ background: 'var(--bg-color)' }}>
       
       <div className="max-w-[1600px] mx-auto w-full px-6">
+        {/* AI Predictions */}
+        <div className="mb-10">
+          <AIPredictions />
+        </div>
+
         {/* Header section */}
         <div className="flex justify-between items-start mb-6">
           <div>

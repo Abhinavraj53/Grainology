@@ -29,7 +29,7 @@ services:
     staticPublishPath: ./dist
     envVars:
       - key: VITE_API_URL
-        value: https://grainology-project.onrender.com/api
+        value: https://grainology-xcg8.onrender.com/api
     headers:
       - path: /*
         name: X-Frame-Options

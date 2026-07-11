@@ -35,6 +35,7 @@ UPDATE_MONGODB_URL.md
 .env.backup.*
 .env.didit.example
 !.env.example
+docs/MANAGER_PRODUCTION_ENV_FILLED.local.env
 kaggle.json
 access_token
 

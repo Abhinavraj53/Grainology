@@ -1,0 +1,72 @@
+name: AI Auto Refresh
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 08:00 IST daily, after the backend's 06:30 IST Agmarknet sync window.
+    - cron: '30 2 * * *'
+
+concurrency:
+  group: grainology-ai-auto-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install --upgrade pip
+          pip install kaggle==2.2.3 supabase==2.31.0 jsonschema==4.25.1
+
+      - name: Download current latest-data dataset as merge base
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_LATEST_DATASET_ID: ${{ secrets.KAGGLE_LATEST_DATASET_ID }}
+        run: |
+          mkdir -p staging/kaggle-latest-data-base
+          kaggle datasets download "$KAGGLE_LATEST_DATASET_ID" -p staging/kaggle-latest-data-base --unzip --force
+          test -f staging/kaggle-latest-data-base/latest_data.csv
+
+      - name: Check, merge, publish, train, and release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AI_PREDICTION_BUCKET: ${{ secrets.AI_PREDICTION_BUCKET }}
+          AI_PREDICTIONS_SOURCE: supabase_release
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
+          KAGGLE_DATASET_SOURCES: ${{ secrets.KAGGLE_DATASET_SOURCES }}
+          KAGGLE_LATEST_DATASET_ID: ${{ secrets.KAGGLE_LATEST_DATASET_ID }}
+          LATEST_DATA_BASE_CSV: staging/kaggle-latest-data-base/latest_data.csv
+          LATEST_DATA_EXPORT_DIR: staging/kaggle-latest-data
+          LATEST_DATA_MIN_BYTES: 10485760
+          LATEST_DATA_MIN_ROWS: 100000
+          AI_AUTO_CHECK_MINUTES: 1440
+          AI_AUTO_MIN_STATE_CACHE_COVERAGE: 0.85
+          AI_AUTO_PUBLISH_SUPABASE_RELEASE: true
+        run: npm run ai:auto:once
+
+      - name: Upload auto-refresh status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-auto-refresh-status
+          path: staging/ai-auto-refresh/
+          if-no-files-found: ignore

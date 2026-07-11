@@ -36,7 +36,6 @@ import siteSettingsRoutes from './routes/siteSettings.js';
 import contactInquiryRoutes from './routes/contactInquiries.js';
 import agmarknetRoutes from './routes/agmarknet.js';
 import { startAgmarknetCron } from './jobs/agmarknetCron.js';
-import { startAIPredictionCron } from './jobs/aiPredictionCron.js';
 
 dotenv.config();
 
@@ -44,6 +43,48 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 const DB_RETRY_INTERVAL_MS = Number(process.env.DB_RETRY_INTERVAL_MS || 10000);
 let dbRetryTimer = null;
+
+const getMongoConnectionAttempts = () => {
+  const primaryUri = process.env.MONGODB_URI;
+  const directUri = process.env.MONGODB_DIRECT_URI;
+  const preferDirect = String(process.env.MONGODB_PREFER_DIRECT || '').trim().toLowerCase() === 'true';
+  const attempts = [];
+
+  if (directUri && preferDirect) {
+    attempts.push({ label: 'MONGODB_DIRECT_URI', uri: directUri });
+  }
+
+  if (primaryUri) {
+    attempts.push({ label: 'MONGODB_URI', uri: primaryUri });
+  }
+
+  if (directUri && !preferDirect) {
+    attempts.push({ label: 'MONGODB_DIRECT_URI', uri: directUri });
+  }
+
+  // Some local Windows/ISP DNS setups refuse MongoDB SRV lookups even when
+  // the Atlas hosts themselves are reachable. Keep the public Atlas SRV URI as
+  // the default, but retry with the equivalent seed-list URI for this cluster.
+  try {
+    const parsed = primaryUri ? new URL(primaryUri) : null;
+    if (parsed?.protocol === 'mongodb+srv:' && parsed.host === 'grainology.we2saem.mongodb.net') {
+      const directUri = [
+        `mongodb://${parsed.username}:${parsed.password}@`,
+        'ac-ixzgchw-shard-00-00.we2saem.mongodb.net:27017,',
+        'ac-ixzgchw-shard-00-01.we2saem.mongodb.net:27017,',
+        'ac-ixzgchw-shard-00-02.we2saem.mongodb.net:27017',
+        parsed.pathname || '/grainology',
+        '?ssl=true&authSource=admin&replicaSet=atlas-xmu1w9-shard-0&retryWrites=true&w=majority'
+      ].join('');
+
+      attempts.push({ label: 'resolved Atlas seed-list fallback', uri: directUri });
+    }
+  } catch (error) {
+    console.warn('Unable to prepare MongoDB fallback URI:', error.message);
+  }
+
+  return attempts;
+};
 
 // -----------------------------
 // CORS CONFIG
@@ -192,10 +233,31 @@ const connectDB = async () => {
       return false;
     }
 
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
-      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-    });
+    const attempts = getMongoConnectionAttempts();
+    let conn = null;
+    let lastError = null;
+
+    for (const attempt of attempts) {
+      try {
+        conn = await mongoose.connect(attempt.uri, {
+          serverSelectionTimeoutMS: 5000, // Timeout after 5s instead of 30s
+          socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+        });
+
+        if (attempt.label !== 'MONGODB_URI') {
+          console.warn(`MongoDB connected using ${attempt.label}.`);
+        }
+        break;
+      } catch (error) {
+        lastError = error;
+        console.error(`MongoDB connection attempt failed (${attempt.label}):`, error.message);
+        await mongoose.disconnect().catch(() => {});
+      }
+    }
+
+    if (!conn) {
+      throw lastError || new Error('No MongoDB connection attempts were available');
+    }
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
     console.log(`📊 Database: ${conn.connection.name}`);
@@ -326,7 +388,7 @@ app.use((req, res) => {
 // ----
 const server = app.listen(PORT, '0.0.0.0', () => {
   startAgmarknetCron();
-  startAIPredictionCron();
+  console.log(`AI predictions source: ${process.env.AI_PREDICTIONS_SOURCE || 'local_files'}`);
   console.log(`✅ API running on http://0.0.0.0:${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
 });

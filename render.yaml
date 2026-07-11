@@ -17,7 +17,16 @@ services:
         value: https://grainologyagri.com
       - key: CORS_ORIGINS
         value: https://grainologyagri.com,https://www.grainologyagri.com
-      # Set secrets in Render Dashboard: MONGODB_URI, JWT_SECRET, BREVO_SMTP_USER, BREVO_SMTP_KEY, etc.
+      - key: AI_PREDICTIONS_SOURCE
+        value: supabase_release
+      - key: AI_PREDICTION_BUCKET
+        value: ai-predictions
+      - key: AI_RELEASE_CACHE_TTL_SECONDS
+        value: "300"
+      - key: GEMINI_ENABLE_GOOGLE_SEARCH
+        value: "true"
+      # Set secrets in Render Dashboard: MONGODB_URI, JWT_SECRET, SUPABASE_URL,
+      # SUPABASE_SECRET_KEY/SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, BREVO keys, etc.
 
   # Frontend (static site from Vite build)
   - type: web

@@ -34,6 +34,9 @@ UPDATE_MONGODB_URL.md
 .env.bak*
 .env.backup.*
 .env.didit.example
+!.env.example
+kaggle.json
+access_token
 
 # Node modules
 node_modules/
@@ -63,6 +66,9 @@ logs/
 # Test results
 test-results/
 artifacts/
+kaggle-output/
+staging/
+releases/
 
 # Documentation files (keep only frontend related)
 API_*.md
@@ -106,11 +112,15 @@ API_*.md
 !utils/**
 !data/
 !data/**
+!scripts/
+!scripts/**
 !lib/
 !lib/cashfree.js
 
 # ML Pipeline Excludes
 services/ml-pipeline/output/*.joblib
+*.joblib
+*.cbm
 services/ml-pipeline/output/*.csv
 services/ml-pipeline/__pycache__/
 services/ml-pipeline/**/*.pyc
@@ -119,6 +129,9 @@ catboost_info/
 **/*.tfevents
 **/*.tmp
 services/ml-pipeline/*.txt
+services/ml-pipeline/dashboard/data/*.json
+canonical_daily.csv
+canonical_daily.parquet
 *.txt
 *.pyc
 __pycache__/

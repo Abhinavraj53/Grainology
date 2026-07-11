@@ -227,6 +227,7 @@ export async function applyFallbackMsp(records) {
 }
 
 export async function refreshMarketwiseData(cacheKey, payload) {
+  const fetchedAt = new Date().toISOString();
   const apiData = await fetchDashboardData(payload);
   if (apiData.data && apiData.data.records) {
     await applyFallbackMsp(apiData.data.records);
@@ -238,7 +239,8 @@ export async function refreshMarketwiseData(cacheKey, payload) {
   return {
     columns: apiData.data?.columns,
     normalized,
-    reportedDates
+    reportedDates,
+    fetchedAt
   };
 }
 
@@ -299,9 +301,14 @@ export const getMarketwiseData = async (payload, { forceRefresh = false } = {}) 
           stale: false,
           source: 'cache',
           cached: true,
+          cacheKey,
+          requestPayload: finalPayload,
+          fetchedAt: cache.fetched_at,
+          stateId: finalPayload.state,
           columns: cache.response_columns,
           records: cache.records,
-          reportedDates: cache.reported_dates
+          reportedDates: cache.reported_dates,
+          count: Array.isArray(cache.records) ? cache.records.length : 0
         };
       }
       // Return stale cache immediately, refresh in background
@@ -311,9 +318,14 @@ export const getMarketwiseData = async (payload, { forceRefresh = false } = {}) 
         stale: true,
         source: 'agmarknet-direct-cache',
         cached: true,
+        cacheKey,
+        requestPayload: finalPayload,
+        fetchedAt: cache.fetched_at,
+        stateId: finalPayload.state,
         columns: cache.response_columns,
         records: cache.records,
-        reportedDates: cache.reported_dates
+        reportedDates: cache.reported_dates,
+        count: Array.isArray(cache.records) ? cache.records.length : 0
       };
     }
 
@@ -324,9 +336,14 @@ export const getMarketwiseData = async (payload, { forceRefresh = false } = {}) 
       stale: false,
       source: 'agmarknet-live',
       cached: false,
+      cacheKey,
+      requestPayload: finalPayload,
+      fetchedAt: data.fetchedAt,
+      stateId: finalPayload.state,
       columns: data.columns,
       records: data.normalized,
-      reportedDates: data.reportedDates
+      reportedDates: data.reportedDates,
+      count: Array.isArray(data.normalized) ? data.normalized.length : 0
     };
   } catch (err) {
     console.error('Error fetching marketwise data:', err);

@@ -6,17 +6,20 @@ import { authenticate, isAdminRole } from '../middleware/auth.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { fetchCedaAgmarknet } from '../utils/cedaAgmarknet.js';
+import {
+  getPredictionMeta,
+  getPredictionForState,
+  getEfficiencyForState,
+  getPredictionStatus,
+  getReasoningForState,
+} from '../services/aiPredictionService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
-// CEDA API (first priority) - https://api.ceda.ashoka.edu.in/
-const CEDA_API_KEY = process.env.CEDA_API_KEY || '';
-
-// Environment for data.gov.in Mandi API (fallback)
+// Environment for data.gov.in Mandi API
 const MANDI_API_BASE = (process.env.MANDI_API_BASE || 'https://api.data.gov.in').replace(/\/$/, '');
 const MANDI_API_KEY = process.env.MANDI_API_KEY || '';
 // Default to variety-wise daily market prices resource if env not provided
@@ -106,7 +109,7 @@ const extractArrival = (record) => {
 };
 
 // AgMarkNet-style endpoint: Grouped data by commodity with date columns
-// 1st priority: CEDA API (Bihar, Maize, Wheat, Paddy as default). Fallback: data.gov.in
+// Primary source: data.gov.in
 router.get('/agmarknet', async (req, res) => {
   try {
     const {
@@ -123,33 +126,11 @@ router.get('/agmarknet', async (req, res) => {
 
     // Default to Bihar and Cereals (Paddy, Maize, Wheat) when not specified
     const state = (qState && qState !== 'all') ? qState : DEFAULT_STATE;
-    const queryForCeda = {
-      state: qState && qState !== 'all' ? qState : DEFAULT_STATE,
-      district,
-      market,
-      commodity_group: commodity_group || 'Cereals',
-      commodity,
-      variety,
-      grade,
-    };
 
-    // 1st priority: try CEDA API
-    if (CEDA_API_KEY) {
-      try {
-        const cedaResult = await fetchCedaAgmarknet(queryForCeda);
-        if (cedaResult && cedaResult.success && cedaResult.data && cedaResult.data.length > 0) {
-          return res.json(cedaResult);
-        }
-      } catch (cedaErr) {
-        console.warn('CEDA Agmarknet failed, using fallback:', cedaErr.message);
-      }
-    }
-
-    // Fallback: existing data.gov.in API
     if (!MANDI_API_KEY) {
       return res.status(500).json({
         success: false,
-        error: 'MANDI_API_KEY is not configured on the server. CEDA API did not return data.'
+        error: 'MANDI_API_KEY is not configured on the server.'
       });
     }
 
@@ -616,11 +597,65 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// Get AI predictions
+// Release-backed AI prediction API v2.
+router.get('/predictions/v2/meta', async (req, res) => {
+  try {
+    const meta = await getPredictionMeta();
+    res.json({ success: true, data: meta });
+  } catch (error) {
+    console.error('AI prediction meta error:', error);
+    res.status(503).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/predictions/v2/status', async (req, res) => {
+  const status = await getPredictionStatus();
+  res.status(status.available ? 200 : 503).json({ success: status.available, data: status });
+});
+
+router.get('/predictions/v2/efficiency', async (req, res) => {
+  try {
+    const grain = String(req.query.grain || 'Wheat');
+    const state = String(req.query.state || 'All States');
+    const horizon = Number(req.query.horizon || 7);
+    const data = await getEfficiencyForState(grain, state, horizon);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('AI prediction efficiency error:', error);
+    res.status(404).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/predictions/v2/reasoning', async (req, res) => {
+  try {
+    const grain = String(req.query.grain || 'Wheat');
+    const state = String(req.query.state || 'All States');
+    const horizon = Number(req.query.horizon || 7);
+    const data = await getReasoningForState(grain, state, horizon);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('AI prediction reasoning error:', error);
+    res.status(404).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/predictions/v2', async (req, res) => {
+  try {
+    const grain = String(req.query.grain || 'Wheat');
+    const state = String(req.query.state || 'All States');
+    const data = await getPredictionForState(grain, state);
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('AI prediction v2 error:', error);
+    res.status(404).json({ success: false, error: error.message });
+  }
+});
+
+// Legacy full local-file AI predictions route.
 router.get('/predictions', async (req, res) => {
   try {
     const dataPath = path.join(__dirname, '..', 'services', 'ml-pipeline', 'dashboard', 'data');
-    
+
     // Read JSON files
     const readJson = async (filename) => {
       try {
@@ -636,6 +671,7 @@ router.get('/predictions', async (req, res) => {
     const forecastSeries = await readJson('forecast_series.json');
     const reasoning = await readJson('reasoning.json');
     const backtest = await readJson('backtest.json');
+    const historicalEfficiency = await readJson('historical_efficiency.json');
 
     if (!predictions) {
       return res.status(404).json({ success: false, error: 'Prediction data not found' });
@@ -648,7 +684,8 @@ router.get('/predictions', async (req, res) => {
         actuals,
         forecastSeries,
         reasoning,
-        backtest
+        backtest,
+        historicalEfficiency
       }
     });
   } catch (error) {

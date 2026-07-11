@@ -1,158 +1,1494 @@
 {
   "Wheat": {
-    "backtestDate": "2026-06-25",
-    "validationPeriod": "July 1-4",
-    "comparisons": [
-      {
-        "date": "2026-07-01",
-        "actualPrice": 2405.91,
-        "predictedPrice": 2451.12,
-        "difference": 45.22,
-        "errorPct": 1.88,
-        "direction": "over"
+    "All States": {
+      "7": {
+        "backtestDate": "2026-07-03",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 31.03,
+          "rmse": 52.34,
+          "mape": 1.51,
+          "wape": 1.5,
+          "mase": 0.3324,
+          "interval_coverage": 0.926,
+          "mean_interval_width": 177.97,
+          "pinball_p10": 11.1907,
+          "pinball_p90": 10.9275
+        },
+        "comparisons": [
+          {
+            "date": "2026-01-26",
+            "actualPrice": 2500.0,
+            "predictedPrice": 2499.7,
+            "difference": -0.3,
+            "errorPct": 0.01
+          },
+          {
+            "date": "2026-01-31",
+            "actualPrice": 2509.0,
+            "predictedPrice": 2508.09,
+            "difference": -0.91,
+            "errorPct": 0.04
+          },
+          {
+            "date": "2026-02-09",
+            "actualPrice": 2460.0,
+            "predictedPrice": 2499.17,
+            "difference": 39.17,
+            "errorPct": 1.59
+          },
+          {
+            "date": "2026-02-12",
+            "actualPrice": 2425.0,
+            "predictedPrice": 2501.29,
+            "difference": 76.29,
+            "errorPct": 3.15
+          },
+          {
+            "date": "2026-04-01",
+            "actualPrice": 2300.0,
+            "predictedPrice": 2310.74,
+            "difference": 10.74,
+            "errorPct": 0.47
+          },
+          {
+            "date": "2026-04-08",
+            "actualPrice": 2301.0,
+            "predictedPrice": 2332.64,
+            "difference": 31.64,
+            "errorPct": 1.37
+          },
+          {
+            "date": "2026-04-11",
+            "actualPrice": 2360.0,
+            "predictedPrice": 2345.42,
+            "difference": -14.58,
+            "errorPct": 0.62
+          },
+          {
+            "date": "2026-04-16",
+            "actualPrice": 2365.84,
+            "predictedPrice": 2407.88,
+            "difference": 42.04,
+            "errorPct": 1.78
+          },
+          {
+            "date": "2026-04-25",
+            "actualPrice": 2429.52,
+            "predictedPrice": 2385.55,
+            "difference": -43.97,
+            "errorPct": 1.81
+          },
+          {
+            "date": "2026-04-30",
+            "actualPrice": 2450.0,
+            "predictedPrice": 2476.07,
+            "difference": 26.07,
+            "errorPct": 1.06
+          },
+          {
+            "date": "2026-05-17",
+            "actualPrice": 2441.0,
+            "predictedPrice": 2434.34,
+            "difference": -6.66,
+            "errorPct": 0.27
+          },
+          {
+            "date": "2026-05-20",
+            "actualPrice": 2424.09,
+            "predictedPrice": 2436.18,
+            "difference": 12.09,
+            "errorPct": 0.5
+          },
+          {
+            "date": "2026-06-06",
+            "actualPrice": 2404.25,
+            "predictedPrice": 2421.88,
+            "difference": 17.63,
+            "errorPct": 0.73
+          },
+          {
+            "date": "2026-07-02",
+            "actualPrice": 2520.14,
+            "predictedPrice": 2505.1,
+            "difference": -15.04,
+            "errorPct": 0.6
+          },
+          {
+            "date": "2026-07-03",
+            "actualPrice": 2521.05,
+            "predictedPrice": 2474.99,
+            "difference": -46.06,
+            "errorPct": 1.83
+          }
+        ]
       },
-      {
-        "date": "2026-07-02",
-        "actualPrice": 2405.91,
-        "predictedPrice": 2445.19,
-        "difference": 39.28,
-        "errorPct": 1.63,
-        "direction": "over"
+      "30": {
+        "backtestDate": "2026-06-24",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 23.35,
+          "rmse": 38.71,
+          "mape": 1.15,
+          "wape": 1.13,
+          "mase": 0.1881,
+          "interval_coverage": 0.9397,
+          "mean_interval_width": 149.74,
+          "pinball_p10": 8.8566,
+          "pinball_p90": 9.0108
+        },
+        "comparisons": [
+          {
+            "date": "2025-12-09",
+            "actualPrice": 2575.0,
+            "predictedPrice": 2570.57,
+            "difference": -4.43,
+            "errorPct": 0.17
+          },
+          {
+            "date": "2025-12-11",
+            "actualPrice": 2500.0,
+            "predictedPrice": 2531.43,
+            "difference": 31.43,
+            "errorPct": 1.26
+          },
+          {
+            "date": "2025-12-18",
+            "actualPrice": 2485.0,
+            "predictedPrice": 2478.36,
+            "difference": -6.64,
+            "errorPct": 0.27
+          },
+          {
+            "date": "2026-01-31",
+            "actualPrice": 2509.0,
+            "predictedPrice": 2519.74,
+            "difference": 10.74,
+            "errorPct": 0.43
+          },
+          {
+            "date": "2026-02-07",
+            "actualPrice": 2480.0,
+            "predictedPrice": 2472.2,
+            "difference": -7.8,
+            "errorPct": 0.31
+          },
+          {
+            "date": "2026-02-18",
+            "actualPrice": 2410.0,
+            "predictedPrice": 2431.92,
+            "difference": 21.92,
+            "errorPct": 0.91
+          },
+          {
+            "date": "2026-04-04",
+            "actualPrice": 2300.0,
+            "predictedPrice": 2293.96,
+            "difference": -6.04,
+            "errorPct": 0.26
+          },
+          {
+            "date": "2026-04-06",
+            "actualPrice": 2300.0,
+            "predictedPrice": 2447.99,
+            "difference": 147.99,
+            "errorPct": 6.43
+          },
+          {
+            "date": "2026-04-23",
+            "actualPrice": 2425.0,
+            "predictedPrice": 2355.04,
+            "difference": -69.96,
+            "errorPct": 2.88
+          },
+          {
+            "date": "2026-05-22",
+            "actualPrice": 2427.28,
+            "predictedPrice": 2402.09,
+            "difference": -25.19,
+            "errorPct": 1.04
+          },
+          {
+            "date": "2026-05-29",
+            "actualPrice": 2420.0,
+            "predictedPrice": 2436.56,
+            "difference": 16.56,
+            "errorPct": 0.68
+          },
+          {
+            "date": "2026-06-02",
+            "actualPrice": 2404.72,
+            "predictedPrice": 2452.05,
+            "difference": 47.33,
+            "errorPct": 1.97
+          },
+          {
+            "date": "2026-06-16",
+            "actualPrice": 2400.0,
+            "predictedPrice": 2445.04,
+            "difference": 45.04,
+            "errorPct": 1.88
+          },
+          {
+            "date": "2026-06-21",
+            "actualPrice": 2343.9,
+            "predictedPrice": 2443.17,
+            "difference": 99.27,
+            "errorPct": 4.24
+          },
+          {
+            "date": "2026-06-24",
+            "actualPrice": 2471.96,
+            "predictedPrice": 2447.72,
+            "difference": -24.24,
+            "errorPct": 0.98
+          }
+        ]
       },
-      {
-        "date": "2026-07-03",
-        "actualPrice": 2405.91,
-        "predictedPrice": 2451.33,
-        "difference": 45.43,
-        "errorPct": 1.89,
-        "direction": "over"
-      },
-      {
-        "date": "2026-07-04",
-        "actualPrice": 2405.91,
-        "predictedPrice": 2446.85,
-        "difference": 40.95,
-        "errorPct": 1.7,
-        "direction": "over"
+      "90": {
+        "backtestDate": "2026-07-06",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 21.07,
+          "rmse": 35.34,
+          "mape": 1.05,
+          "wape": 1.04,
+          "mase": 0.1963,
+          "interval_coverage": 0.9452,
+          "mean_interval_width": 152.84,
+          "pinball_p10": 8.2732,
+          "pinball_p90": 8.896
+        },
+        "comparisons": [
+          {
+            "date": "2026-02-21",
+            "actualPrice": 2431.0,
+            "predictedPrice": 2408.4,
+            "difference": -22.6,
+            "errorPct": 0.93
+          },
+          {
+            "date": "2026-02-23",
+            "actualPrice": 2380.5,
+            "predictedPrice": 2394.49,
+            "difference": 13.99,
+            "errorPct": 0.59
+          },
+          {
+            "date": "2026-03-11",
+            "actualPrice": 2270.5,
+            "predictedPrice": 2336.95,
+            "difference": 66.45,
+            "errorPct": 2.93
+          },
+          {
+            "date": "2026-03-13",
+            "actualPrice": 2275.0,
+            "predictedPrice": 2322.96,
+            "difference": 47.96,
+            "errorPct": 2.11
+          },
+          {
+            "date": "2026-03-26",
+            "actualPrice": 2260.0,
+            "predictedPrice": 2309.2,
+            "difference": 49.2,
+            "errorPct": 2.18
+          },
+          {
+            "date": "2026-04-04",
+            "actualPrice": 2300.0,
+            "predictedPrice": 2330.87,
+            "difference": 30.87,
+            "errorPct": 1.34
+          },
+          {
+            "date": "2026-04-24",
+            "actualPrice": 2425.0,
+            "predictedPrice": 2407.59,
+            "difference": -17.41,
+            "errorPct": 0.72
+          },
+          {
+            "date": "2026-05-04",
+            "actualPrice": 2445.5,
+            "predictedPrice": 2447.66,
+            "difference": 2.16,
+            "errorPct": 0.09
+          },
+          {
+            "date": "2026-05-26",
+            "actualPrice": 2425.0,
+            "predictedPrice": 2424.13,
+            "difference": -0.87,
+            "errorPct": 0.04
+          },
+          {
+            "date": "2026-06-09",
+            "actualPrice": 2390.0,
+            "predictedPrice": 2431.58,
+            "difference": 41.58,
+            "errorPct": 1.74
+          },
+          {
+            "date": "2026-06-18",
+            "actualPrice": 2400.0,
+            "predictedPrice": 2405.72,
+            "difference": 5.72,
+            "errorPct": 0.24
+          },
+          {
+            "date": "2026-06-22",
+            "actualPrice": 2475.25,
+            "predictedPrice": 2424.63,
+            "difference": -50.62,
+            "errorPct": 2.04
+          },
+          {
+            "date": "2026-07-02",
+            "actualPrice": 2520.14,
+            "predictedPrice": 2477.3,
+            "difference": -42.84,
+            "errorPct": 1.7
+          },
+          {
+            "date": "2026-07-03",
+            "actualPrice": 2521.05,
+            "predictedPrice": 2458.15,
+            "difference": -62.9,
+            "errorPct": 2.49
+          },
+          {
+            "date": "2026-07-06",
+            "actualPrice": 2517.22,
+            "predictedPrice": 2467.06,
+            "difference": -50.16,
+            "errorPct": 1.99
+          }
+        ]
       }
-    ],
-    "meanAbsoluteErrorPct": 1.77
+    }
   },
   "Paddy": {
-    "backtestDate": "2026-06-25",
-    "validationPeriod": "July 1-4",
-    "comparisons": [
-      {
-        "date": "2026-07-01",
-        "actualPrice": 2912.73,
-        "predictedPrice": 2856.95,
-        "difference": -55.78,
-        "errorPct": 1.91,
-        "direction": "under"
+    "All States": {
+      "7": {
+        "backtestDate": "2026-07-03",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 23.41,
+          "rmse": 65.18,
+          "mape": 1.12,
+          "wape": 1.24,
+          "mase": 0.361,
+          "interval_coverage": 0.9205,
+          "mean_interval_width": 109.65,
+          "pinball_p10": 9.8381,
+          "pinball_p90": 9.3771
+        },
+        "comparisons": [
+          {
+            "date": "2026-02-12",
+            "actualPrice": 2390.0,
+            "predictedPrice": 2366.58,
+            "difference": -23.42,
+            "errorPct": 0.98
+          },
+          {
+            "date": "2026-02-21",
+            "actualPrice": 2123.42,
+            "predictedPrice": 2253.19,
+            "difference": 129.77,
+            "errorPct": 6.11
+          },
+          {
+            "date": "2026-03-23",
+            "actualPrice": 2050.0,
+            "predictedPrice": 2268.08,
+            "difference": 218.08,
+            "errorPct": 10.64
+          },
+          {
+            "date": "2026-03-24",
+            "actualPrice": 2250.0,
+            "predictedPrice": 2299.86,
+            "difference": 49.86,
+            "errorPct": 2.22
+          },
+          {
+            "date": "2026-03-25",
+            "actualPrice": 2062.0,
+            "predictedPrice": 2188.43,
+            "difference": 126.43,
+            "errorPct": 6.13
+          },
+          {
+            "date": "2026-04-08",
+            "actualPrice": 2225.0,
+            "predictedPrice": 2197.33,
+            "difference": -27.67,
+            "errorPct": 1.24
+          },
+          {
+            "date": "2026-04-18",
+            "actualPrice": 2359.5,
+            "predictedPrice": 2217.53,
+            "difference": -141.97,
+            "errorPct": 6.02
+          },
+          {
+            "date": "2026-04-30",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2203.26,
+            "difference": 3.26,
+            "errorPct": 0.15
+          },
+          {
+            "date": "2026-05-01",
+            "actualPrice": 2250.0,
+            "predictedPrice": 2184.98,
+            "difference": -65.02,
+            "errorPct": 2.89
+          },
+          {
+            "date": "2026-05-17",
+            "actualPrice": 2250.0,
+            "predictedPrice": 2221.56,
+            "difference": -28.44,
+            "errorPct": 1.26
+          },
+          {
+            "date": "2026-05-22",
+            "actualPrice": 2255.5,
+            "predictedPrice": 2231.5,
+            "difference": -24.0,
+            "errorPct": 1.06
+          },
+          {
+            "date": "2026-05-24",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2266.47,
+            "difference": 66.47,
+            "errorPct": 3.02
+          },
+          {
+            "date": "2026-05-29",
+            "actualPrice": 2146.05,
+            "predictedPrice": 2261.18,
+            "difference": 115.13,
+            "errorPct": 5.36
+          },
+          {
+            "date": "2026-06-27",
+            "actualPrice": 2861.91,
+            "predictedPrice": 2749.35,
+            "difference": -112.56,
+            "errorPct": 3.93
+          },
+          {
+            "date": "2026-07-03",
+            "actualPrice": 2623.66,
+            "predictedPrice": 2682.74,
+            "difference": 59.08,
+            "errorPct": 2.25
+          }
+        ]
       },
-      {
-        "date": "2026-07-02",
-        "actualPrice": 2890.78,
-        "predictedPrice": 2930.22,
-        "difference": 39.44,
-        "errorPct": 1.36,
-        "direction": "over"
+      "30": {
+        "backtestDate": "2026-07-09",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 20.59,
+          "rmse": 45.56,
+          "mape": 1.07,
+          "wape": 1.09,
+          "mase": 0.2835,
+          "interval_coverage": 0.9178,
+          "mean_interval_width": 131.22,
+          "pinball_p10": 9.3407,
+          "pinball_p90": 8.6775
+        },
+        "comparisons": [
+          {
+            "date": "2026-04-26",
+            "actualPrice": 2209.91,
+            "predictedPrice": 2126.38,
+            "difference": -83.53,
+            "errorPct": 3.78
+          },
+          {
+            "date": "2026-05-01",
+            "actualPrice": 2250.0,
+            "predictedPrice": 2212.38,
+            "difference": -37.62,
+            "errorPct": 1.67
+          },
+          {
+            "date": "2026-05-17",
+            "actualPrice": 2250.0,
+            "predictedPrice": 2235.19,
+            "difference": -14.81,
+            "errorPct": 0.66
+          },
+          {
+            "date": "2026-05-19",
+            "actualPrice": 2275.0,
+            "predictedPrice": 2233.19,
+            "difference": -41.81,
+            "errorPct": 1.84
+          },
+          {
+            "date": "2026-05-22",
+            "actualPrice": 2255.5,
+            "predictedPrice": 2177.47,
+            "difference": -78.03,
+            "errorPct": 3.46
+          },
+          {
+            "date": "2026-06-02",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2264.41,
+            "difference": 64.41,
+            "errorPct": 2.93
+          },
+          {
+            "date": "2026-06-05",
+            "actualPrice": 2250.5,
+            "predictedPrice": 2246.51,
+            "difference": -3.99,
+            "errorPct": 0.18
+          },
+          {
+            "date": "2026-06-11",
+            "actualPrice": 2348.72,
+            "predictedPrice": 2297.64,
+            "difference": -51.08,
+            "errorPct": 2.18
+          },
+          {
+            "date": "2026-06-16",
+            "actualPrice": 2292.25,
+            "predictedPrice": 2342.16,
+            "difference": 49.91,
+            "errorPct": 2.18
+          },
+          {
+            "date": "2026-06-17",
+            "actualPrice": 2275.0,
+            "predictedPrice": 2294.97,
+            "difference": 19.97,
+            "errorPct": 0.88
+          },
+          {
+            "date": "2026-06-19",
+            "actualPrice": 2320.0,
+            "predictedPrice": 2390.91,
+            "difference": 70.91,
+            "errorPct": 3.06
+          },
+          {
+            "date": "2026-07-01",
+            "actualPrice": 2468.63,
+            "predictedPrice": 2627.08,
+            "difference": 158.45,
+            "errorPct": 6.42
+          },
+          {
+            "date": "2026-07-03",
+            "actualPrice": 2623.66,
+            "predictedPrice": 2641.79,
+            "difference": 18.13,
+            "errorPct": 0.69
+          },
+          {
+            "date": "2026-07-09",
+            "actualPrice": 2454.56,
+            "predictedPrice": 2426.06,
+            "difference": -28.5,
+            "errorPct": 1.16
+          },
+          {
+            "date": "2026-07-09",
+            "actualPrice": 2454.56,
+            "predictedPrice": 2414.66,
+            "difference": -39.9,
+            "errorPct": 1.63
+          }
+        ]
       },
-      {
-        "date": "2026-07-03",
-        "actualPrice": 2914.29,
-        "predictedPrice": 2865.66,
-        "difference": -48.63,
-        "errorPct": 1.67,
-        "direction": "under"
-      },
-      {
-        "date": "2026-07-04",
-        "actualPrice": 2892.89,
-        "predictedPrice": 2930.89,
-        "difference": 38.0,
-        "errorPct": 1.31,
-        "direction": "over"
+      "90": {
+        "backtestDate": "2026-07-09",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 23.34,
+          "rmse": 47.66,
+          "mape": 1.21,
+          "wape": 1.25,
+          "mase": 0.2971,
+          "interval_coverage": 0.8986,
+          "mean_interval_width": 118.62,
+          "pinball_p10": 8.2989,
+          "pinball_p90": 10.0994
+        },
+        "comparisons": [
+          {
+            "date": "2026-01-06",
+            "actualPrice": 2369.0,
+            "predictedPrice": 2384.08,
+            "difference": 15.08,
+            "errorPct": 0.64
+          },
+          {
+            "date": "2026-01-20",
+            "actualPrice": 2389.0,
+            "predictedPrice": 2398.11,
+            "difference": 9.11,
+            "errorPct": 0.38
+          },
+          {
+            "date": "2026-01-23",
+            "actualPrice": 2370.0,
+            "predictedPrice": 2400.41,
+            "difference": 30.41,
+            "errorPct": 1.28
+          },
+          {
+            "date": "2026-02-23",
+            "actualPrice": 2369.0,
+            "predictedPrice": 2295.58,
+            "difference": -73.42,
+            "errorPct": 3.1
+          },
+          {
+            "date": "2026-03-11",
+            "actualPrice": 2361.75,
+            "predictedPrice": 2292.68,
+            "difference": -69.07,
+            "errorPct": 2.92
+          },
+          {
+            "date": "2026-04-27",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2198.57,
+            "difference": -1.43,
+            "errorPct": 0.07
+          },
+          {
+            "date": "2026-05-06",
+            "actualPrice": 2203.5,
+            "predictedPrice": 2187.45,
+            "difference": -16.05,
+            "errorPct": 0.73
+          },
+          {
+            "date": "2026-05-12",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2228.78,
+            "difference": 28.78,
+            "errorPct": 1.31
+          },
+          {
+            "date": "2026-05-26",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2311.93,
+            "difference": 111.93,
+            "errorPct": 5.09
+          },
+          {
+            "date": "2026-05-27",
+            "actualPrice": 2205.0,
+            "predictedPrice": 2276.25,
+            "difference": 71.25,
+            "errorPct": 3.23
+          },
+          {
+            "date": "2026-05-30",
+            "actualPrice": 2200.0,
+            "predictedPrice": 2280.52,
+            "difference": 80.52,
+            "errorPct": 3.66
+          },
+          {
+            "date": "2026-06-22",
+            "actualPrice": 2771.15,
+            "predictedPrice": 2441.35,
+            "difference": -329.8,
+            "errorPct": 11.9
+          },
+          {
+            "date": "2026-07-02",
+            "actualPrice": 2600.01,
+            "predictedPrice": 2565.81,
+            "difference": -34.2,
+            "errorPct": 1.32
+          },
+          {
+            "date": "2026-07-09",
+            "actualPrice": 2454.56,
+            "predictedPrice": 2522.65,
+            "difference": 68.09,
+            "errorPct": 2.77
+          },
+          {
+            "date": "2026-07-09",
+            "actualPrice": 2454.56,
+            "predictedPrice": 2522.4,
+            "difference": 67.84,
+            "errorPct": 2.76
+          }
+        ]
       }
-    ],
-    "meanAbsoluteErrorPct": 1.56
+    }
   },
   "Maize": {
-    "backtestDate": "2026-06-25",
-    "validationPeriod": "July 1-4",
-    "comparisons": [
-      {
-        "date": "2026-07-01",
-        "actualPrice": 1980.53,
-        "predictedPrice": 1948.45,
-        "difference": -32.08,
-        "errorPct": 1.62,
-        "direction": "under"
+    "All States": {
+      "7": {
+        "backtestDate": "2026-06-10",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 32.7,
+          "rmse": 53.78,
+          "mape": 2.02,
+          "wape": 1.99,
+          "mase": 0.349,
+          "interval_coverage": 0.9096,
+          "mean_interval_width": 163.95,
+          "pinball_p10": 10.8359,
+          "pinball_p90": 10.6421
+        },
+        "comparisons": [
+          {
+            "date": "2026-03-06",
+            "actualPrice": 2243.0,
+            "predictedPrice": 1953.81,
+            "difference": -289.19,
+            "errorPct": 12.89
+          },
+          {
+            "date": "2026-03-23",
+            "actualPrice": 1680.0,
+            "predictedPrice": 1691.08,
+            "difference": 11.08,
+            "errorPct": 0.66
+          },
+          {
+            "date": "2026-03-24",
+            "actualPrice": 1671.0,
+            "predictedPrice": 1650.63,
+            "difference": -20.37,
+            "errorPct": 1.22
+          },
+          {
+            "date": "2026-03-27",
+            "actualPrice": 1673.5,
+            "predictedPrice": 1670.82,
+            "difference": -2.68,
+            "errorPct": 0.16
+          },
+          {
+            "date": "2026-04-01",
+            "actualPrice": 1707.0,
+            "predictedPrice": 1738.77,
+            "difference": 31.77,
+            "errorPct": 1.86
+          },
+          {
+            "date": "2026-04-11",
+            "actualPrice": 1700.0,
+            "predictedPrice": 1714.03,
+            "difference": 14.03,
+            "errorPct": 0.83
+          },
+          {
+            "date": "2026-04-12",
+            "actualPrice": 1750.75,
+            "predictedPrice": 1682.05,
+            "difference": -68.7,
+            "errorPct": 3.92
+          },
+          {
+            "date": "2026-04-14",
+            "actualPrice": 1680.0,
+            "predictedPrice": 1655.75,
+            "difference": -24.25,
+            "errorPct": 1.44
+          },
+          {
+            "date": "2026-04-20",
+            "actualPrice": 1700.0,
+            "predictedPrice": 1760.47,
+            "difference": 60.47,
+            "errorPct": 3.56
+          },
+          {
+            "date": "2026-04-24",
+            "actualPrice": 1790.0,
+            "predictedPrice": 1745.39,
+            "difference": -44.61,
+            "errorPct": 2.49
+          },
+          {
+            "date": "2026-04-25",
+            "actualPrice": 1750.0,
+            "predictedPrice": 1751.67,
+            "difference": 1.67,
+            "errorPct": 0.1
+          },
+          {
+            "date": "2026-04-28",
+            "actualPrice": 1800.0,
+            "predictedPrice": 1749.33,
+            "difference": -50.67,
+            "errorPct": 2.82
+          },
+          {
+            "date": "2026-05-10",
+            "actualPrice": 1890.0,
+            "predictedPrice": 1852.98,
+            "difference": -37.02,
+            "errorPct": 1.96
+          },
+          {
+            "date": "2026-05-18",
+            "actualPrice": 1895.0,
+            "predictedPrice": 1858.56,
+            "difference": -36.44,
+            "errorPct": 1.92
+          },
+          {
+            "date": "2026-06-10",
+            "actualPrice": 1925.0,
+            "predictedPrice": 1932.75,
+            "difference": 7.75,
+            "errorPct": 0.4
+          }
+        ]
       },
-      {
-        "date": "2026-07-02",
-        "actualPrice": 1921.38,
-        "predictedPrice": 1955.41,
-        "difference": 34.03,
-        "errorPct": 1.77,
-        "direction": "over"
+      "30": {
+        "backtestDate": "2026-06-22",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 27.69,
+          "rmse": 51.3,
+          "mape": 1.67,
+          "wape": 1.7,
+          "mase": 0.2744,
+          "interval_coverage": 0.9041,
+          "mean_interval_width": 133.46,
+          "pinball_p10": 9.622,
+          "pinball_p90": 9.2374
+        },
+        "comparisons": [
+          {
+            "date": "2025-11-07",
+            "actualPrice": 2150.0,
+            "predictedPrice": 2168.48,
+            "difference": 18.48,
+            "errorPct": 0.86
+          },
+          {
+            "date": "2025-11-16",
+            "actualPrice": 1674.5,
+            "predictedPrice": 1676.69,
+            "difference": 2.19,
+            "errorPct": 0.13
+          },
+          {
+            "date": "2025-11-21",
+            "actualPrice": 1674.5,
+            "predictedPrice": 1674.8,
+            "difference": 0.3,
+            "errorPct": 0.02
+          },
+          {
+            "date": "2025-11-22",
+            "actualPrice": 1674.5,
+            "predictedPrice": 1676.76,
+            "difference": 2.26,
+            "errorPct": 0.14
+          },
+          {
+            "date": "2025-12-26",
+            "actualPrice": 1650.0,
+            "predictedPrice": 1647.92,
+            "difference": -2.08,
+            "errorPct": 0.13
+          },
+          {
+            "date": "2026-01-15",
+            "actualPrice": 1650.0,
+            "predictedPrice": 1635.68,
+            "difference": -14.32,
+            "errorPct": 0.87
+          },
+          {
+            "date": "2026-02-02",
+            "actualPrice": 1589.0,
+            "predictedPrice": 1629.24,
+            "difference": 40.24,
+            "errorPct": 2.53
+          },
+          {
+            "date": "2026-03-25",
+            "actualPrice": 1680.0,
+            "predictedPrice": 1673.09,
+            "difference": -6.91,
+            "errorPct": 0.41
+          },
+          {
+            "date": "2026-04-24",
+            "actualPrice": 1790.0,
+            "predictedPrice": 1774.48,
+            "difference": -15.52,
+            "errorPct": 0.87
+          },
+          {
+            "date": "2026-05-02",
+            "actualPrice": 1863.0,
+            "predictedPrice": 1829.87,
+            "difference": -33.13,
+            "errorPct": 1.78
+          },
+          {
+            "date": "2026-05-09",
+            "actualPrice": 1850.0,
+            "predictedPrice": 1853.38,
+            "difference": 3.38,
+            "errorPct": 0.18
+          },
+          {
+            "date": "2026-05-25",
+            "actualPrice": 1925.0,
+            "predictedPrice": 1853.21,
+            "difference": -71.79,
+            "errorPct": 3.73
+          },
+          {
+            "date": "2026-06-03",
+            "actualPrice": 1925.0,
+            "predictedPrice": 1910.09,
+            "difference": -14.91,
+            "errorPct": 0.77
+          },
+          {
+            "date": "2026-06-15",
+            "actualPrice": 1925.0,
+            "predictedPrice": 1907.39,
+            "difference": -17.61,
+            "errorPct": 0.91
+          },
+          {
+            "date": "2026-06-22",
+            "actualPrice": 1895.21,
+            "predictedPrice": 1910.33,
+            "difference": 15.12,
+            "errorPct": 0.8
+          }
+        ]
       },
-      {
-        "date": "2026-07-03",
-        "actualPrice": 1969.25,
-        "predictedPrice": 1942.01,
-        "difference": -27.24,
-        "errorPct": 1.38,
-        "direction": "under"
-      },
-      {
-        "date": "2026-07-04",
-        "actualPrice": 1898.39,
-        "predictedPrice": 1932.16,
-        "difference": 33.77,
-        "errorPct": 1.78,
-        "direction": "over"
+      "90": {
+        "backtestDate": "2026-07-09",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 30.48,
+          "rmse": 56.66,
+          "mape": 1.77,
+          "wape": 1.78,
+          "mase": 0.3117,
+          "interval_coverage": 0.9041,
+          "mean_interval_width": 165.52,
+          "pinball_p10": 10.0514,
+          "pinball_p90": 12.1769
+        },
+        "comparisons": [
+          {
+            "date": "2026-02-18",
+            "actualPrice": 1566.0,
+            "predictedPrice": 1582.86,
+            "difference": 16.86,
+            "errorPct": 1.08
+          },
+          {
+            "date": "2026-02-23",
+            "actualPrice": 1558.5,
+            "predictedPrice": 1575.35,
+            "difference": 16.85,
+            "errorPct": 1.08
+          },
+          {
+            "date": "2026-03-06",
+            "actualPrice": 2243.0,
+            "predictedPrice": 1846.69,
+            "difference": -396.31,
+            "errorPct": 17.67
+          },
+          {
+            "date": "2026-03-11",
+            "actualPrice": 1600.0,
+            "predictedPrice": 1762.67,
+            "difference": 162.67,
+            "errorPct": 10.17
+          },
+          {
+            "date": "2026-04-14",
+            "actualPrice": 1680.0,
+            "predictedPrice": 1713.61,
+            "difference": 33.61,
+            "errorPct": 2.0
+          },
+          {
+            "date": "2026-04-19",
+            "actualPrice": 1732.5,
+            "predictedPrice": 1739.46,
+            "difference": 6.96,
+            "errorPct": 0.4
+          },
+          {
+            "date": "2026-04-27",
+            "actualPrice": 1790.5,
+            "predictedPrice": 1796.63,
+            "difference": 6.13,
+            "errorPct": 0.34
+          },
+          {
+            "date": "2026-05-04",
+            "actualPrice": 1871.0,
+            "predictedPrice": 1851.4,
+            "difference": -19.6,
+            "errorPct": 1.05
+          },
+          {
+            "date": "2026-05-26",
+            "actualPrice": 1925.0,
+            "predictedPrice": 1862.12,
+            "difference": -62.88,
+            "errorPct": 3.27
+          },
+          {
+            "date": "2026-05-27",
+            "actualPrice": 1921.0,
+            "predictedPrice": 1880.69,
+            "difference": -40.31,
+            "errorPct": 2.1
+          },
+          {
+            "date": "2026-06-09",
+            "actualPrice": 1900.0,
+            "predictedPrice": 1980.17,
+            "difference": 80.17,
+            "errorPct": 4.22
+          },
+          {
+            "date": "2026-06-12",
+            "actualPrice": 1902.22,
+            "predictedPrice": 1883.41,
+            "difference": -18.81,
+            "errorPct": 0.99
+          },
+          {
+            "date": "2026-06-22",
+            "actualPrice": 1895.21,
+            "predictedPrice": 1921.68,
+            "difference": 26.47,
+            "errorPct": 1.4
+          },
+          {
+            "date": "2026-07-05",
+            "actualPrice": 1940.07,
+            "predictedPrice": 1892.14,
+            "difference": -47.93,
+            "errorPct": 2.47
+          },
+          {
+            "date": "2026-07-09",
+            "actualPrice": 1988.31,
+            "predictedPrice": 1954.43,
+            "difference": -33.88,
+            "errorPct": 1.7
+          }
+        ]
       }
-    ],
-    "meanAbsoluteErrorPct": 1.64
+    }
   },
   "Mustard": {
-    "backtestDate": "2026-06-25",
-    "validationPeriod": "July 1-4",
-    "comparisons": [
-      {
-        "date": "2026-07-01",
-        "actualPrice": 7105.13,
-        "predictedPrice": 7003.48,
-        "difference": -101.65,
-        "errorPct": 1.43,
-        "direction": "under"
+    "All States": {
+      "7": {
+        "backtestDate": "2026-06-27",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 98.39,
+          "rmse": 184.87,
+          "mape": 1.86,
+          "wape": 1.9,
+          "mase": 0.4106,
+          "interval_coverage": 0.9233,
+          "mean_interval_width": 522.36,
+          "pinball_p10": 33.5531,
+          "pinball_p90": 35.9778
+        },
+        "comparisons": [
+          {
+            "date": "2026-02-05",
+            "actualPrice": 6100.0,
+            "predictedPrice": 6200.99,
+            "difference": 100.99,
+            "errorPct": 1.66
+          },
+          {
+            "date": "2026-02-08",
+            "actualPrice": 6300.0,
+            "predictedPrice": 6242.94,
+            "difference": -57.06,
+            "errorPct": 0.91
+          },
+          {
+            "date": "2026-02-17",
+            "actualPrice": 5925.0,
+            "predictedPrice": 5923.31,
+            "difference": -1.69,
+            "errorPct": 0.03
+          },
+          {
+            "date": "2026-02-19",
+            "actualPrice": 5956.5,
+            "predictedPrice": 5971.04,
+            "difference": 14.54,
+            "errorPct": 0.24
+          },
+          {
+            "date": "2026-02-25",
+            "actualPrice": 5800.5,
+            "predictedPrice": 5800.59,
+            "difference": 0.09,
+            "errorPct": 0.0
+          },
+          {
+            "date": "2026-03-23",
+            "actualPrice": 6259.0,
+            "predictedPrice": 6092.41,
+            "difference": -166.59,
+            "errorPct": 2.66
+          },
+          {
+            "date": "2026-04-01",
+            "actualPrice": 6463.0,
+            "predictedPrice": 6355.11,
+            "difference": -107.89,
+            "errorPct": 1.67
+          },
+          {
+            "date": "2026-04-04",
+            "actualPrice": 6420.5,
+            "predictedPrice": 6175.62,
+            "difference": -244.88,
+            "errorPct": 3.81
+          },
+          {
+            "date": "2026-04-09",
+            "actualPrice": 6311.0,
+            "predictedPrice": 6136.07,
+            "difference": -174.93,
+            "errorPct": 2.77
+          },
+          {
+            "date": "2026-04-16",
+            "actualPrice": 6300.0,
+            "predictedPrice": 6337.21,
+            "difference": 37.21,
+            "errorPct": 0.59
+          },
+          {
+            "date": "2026-04-20",
+            "actualPrice": 6400.0,
+            "predictedPrice": 6338.36,
+            "difference": -61.64,
+            "errorPct": 0.96
+          },
+          {
+            "date": "2026-04-21",
+            "actualPrice": 6400.0,
+            "predictedPrice": 6320.08,
+            "difference": -79.92,
+            "errorPct": 1.25
+          },
+          {
+            "date": "2026-05-30",
+            "actualPrice": 7125.0,
+            "predictedPrice": 7063.88,
+            "difference": -61.12,
+            "errorPct": 0.86
+          },
+          {
+            "date": "2026-06-23",
+            "actualPrice": 7155.0,
+            "predictedPrice": 7086.32,
+            "difference": -68.68,
+            "errorPct": 0.96
+          },
+          {
+            "date": "2026-06-27",
+            "actualPrice": 6972.5,
+            "predictedPrice": 7284.22,
+            "difference": 311.72,
+            "errorPct": 4.47
+          }
+        ]
       },
-      {
-        "date": "2026-07-02",
-        "actualPrice": 7031.35,
-        "predictedPrice": 7151.04,
-        "difference": 119.69,
-        "errorPct": 1.7,
-        "direction": "over"
+      "30": {
+        "backtestDate": "2026-07-05",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 74.03,
+          "rmse": 124.59,
+          "mape": 1.42,
+          "wape": 1.49,
+          "mase": 0.2363,
+          "interval_coverage": 0.926,
+          "mean_interval_width": 393.81,
+          "pinball_p10": 22.9927,
+          "pinball_p90": 25.4707
+        },
+        "comparisons": [
+          {
+            "date": "2025-12-15",
+            "actualPrice": 6517.5,
+            "predictedPrice": 6455.22,
+            "difference": -62.28,
+            "errorPct": 0.96
+          },
+          {
+            "date": "2026-01-12",
+            "actualPrice": 6375.0,
+            "predictedPrice": 6532.26,
+            "difference": 157.26,
+            "errorPct": 2.47
+          },
+          {
+            "date": "2026-01-15",
+            "actualPrice": 6385.0,
+            "predictedPrice": 6466.51,
+            "difference": 81.51,
+            "errorPct": 1.28
+          },
+          {
+            "date": "2026-01-19",
+            "actualPrice": 6350.0,
+            "predictedPrice": 6411.52,
+            "difference": 61.52,
+            "errorPct": 0.97
+          },
+          {
+            "date": "2026-01-21",
+            "actualPrice": 6200.0,
+            "predictedPrice": 6406.51,
+            "difference": 206.51,
+            "errorPct": 3.33
+          },
+          {
+            "date": "2026-01-29",
+            "actualPrice": 6305.0,
+            "predictedPrice": 6445.4,
+            "difference": 140.4,
+            "errorPct": 2.23
+          },
+          {
+            "date": "2026-02-15",
+            "actualPrice": 6350.0,
+            "predictedPrice": 5997.86,
+            "difference": -352.14,
+            "errorPct": 5.55
+          },
+          {
+            "date": "2026-03-26",
+            "actualPrice": 6355.0,
+            "predictedPrice": 5975.39,
+            "difference": -379.61,
+            "errorPct": 5.97
+          },
+          {
+            "date": "2026-04-20",
+            "actualPrice": 6400.0,
+            "predictedPrice": 6162.05,
+            "difference": -237.95,
+            "errorPct": 3.72
+          },
+          {
+            "date": "2026-05-04",
+            "actualPrice": 6500.0,
+            "predictedPrice": 6568.99,
+            "difference": 68.99,
+            "errorPct": 1.06
+          },
+          {
+            "date": "2026-05-07",
+            "actualPrice": 6475.0,
+            "predictedPrice": 6521.48,
+            "difference": 46.48,
+            "errorPct": 0.72
+          },
+          {
+            "date": "2026-05-20",
+            "actualPrice": 7000.0,
+            "predictedPrice": 6698.81,
+            "difference": -301.19,
+            "errorPct": 4.3
+          },
+          {
+            "date": "2026-06-04",
+            "actualPrice": 7200.0,
+            "predictedPrice": 6977.28,
+            "difference": -222.72,
+            "errorPct": 3.09
+          },
+          {
+            "date": "2026-06-13",
+            "actualPrice": 7100.0,
+            "predictedPrice": 6976.06,
+            "difference": -123.94,
+            "errorPct": 1.75
+          },
+          {
+            "date": "2026-07-05",
+            "actualPrice": 7471.44,
+            "predictedPrice": 7173.96,
+            "difference": -297.48,
+            "errorPct": 3.98
+          }
+        ]
       },
-      {
-        "date": "2026-07-03",
-        "actualPrice": 7081.83,
-        "predictedPrice": 6985.79,
-        "difference": -96.04,
-        "errorPct": 1.36,
-        "direction": "under"
-      },
-      {
-        "date": "2026-07-04",
-        "actualPrice": 6885.06,
-        "predictedPrice": 6974.87,
-        "difference": 89.81,
-        "errorPct": 1.3,
-        "direction": "over"
+      "90": {
+        "backtestDate": "2026-07-05",
+        "evaluationScope": "embargoed_holdout_selected_method",
+        "metrics": {
+          "sample_count": 365,
+          "mae": 59.04,
+          "rmse": 98.49,
+          "mape": 1.19,
+          "wape": 1.18,
+          "mase": 0.184,
+          "interval_coverage": 0.9315,
+          "mean_interval_width": 369.02,
+          "pinball_p10": 21.4731,
+          "pinball_p90": 23.1481
+        },
+        "comparisons": [
+          {
+            "date": "2025-12-07",
+            "actualPrice": 6395.0,
+            "predictedPrice": 6398.12,
+            "difference": 3.12,
+            "errorPct": 0.05
+          },
+          {
+            "date": "2025-12-24",
+            "actualPrice": 6517.5,
+            "predictedPrice": 6462.51,
+            "difference": -54.99,
+            "errorPct": 0.84
+          },
+          {
+            "date": "2026-01-08",
+            "actualPrice": 6470.0,
+            "predictedPrice": 6049.83,
+            "difference": -420.17,
+            "errorPct": 6.49
+          },
+          {
+            "date": "2026-01-22",
+            "actualPrice": 6375.0,
+            "predictedPrice": 6331.15,
+            "difference": -43.85,
+            "errorPct": 0.69
+          },
+          {
+            "date": "2026-02-20",
+            "actualPrice": 5988.5,
+            "predictedPrice": 5926.31,
+            "difference": -62.19,
+            "errorPct": 1.04
+          },
+          {
+            "date": "2026-03-08",
+            "actualPrice": 6350.0,
+            "predictedPrice": 6099.55,
+            "difference": -250.45,
+            "errorPct": 3.94
+          },
+          {
+            "date": "2026-03-13",
+            "actualPrice": 5995.5,
+            "predictedPrice": 6098.23,
+            "difference": 102.73,
+            "errorPct": 1.71
+          },
+          {
+            "date": "2026-03-20",
+            "actualPrice": 5911.0,
+            "predictedPrice": 6061.34,
+            "difference": 150.34,
+            "errorPct": 2.54
+          },
+          {
+            "date": "2026-04-23",
+            "actualPrice": 6300.0,
+            "predictedPrice": 6396.82,
+            "difference": 96.82,
+            "errorPct": 1.54
+          },
+          {
+            "date": "2026-05-05",
+            "actualPrice": 6548.0,
+            "predictedPrice": 6339.28,
+            "difference": -208.72,
+            "errorPct": 3.19
+          },
+          {
+            "date": "2026-05-23",
+            "actualPrice": 7000.0,
+            "predictedPrice": 6881.4,
+            "difference": -118.6,
+            "errorPct": 1.69
+          },
+          {
+            "date": "2026-06-05",
+            "actualPrice": 7108.0,
+            "predictedPrice": 6943.73,
+            "difference": -164.27,
+            "errorPct": 2.31
+          },
+          {
+            "date": "2026-06-10",
+            "actualPrice": 7170.0,
+            "predictedPrice": 7061.82,
+            "difference": -108.18,
+            "errorPct": 1.51
+          },
+          {
+            "date": "2026-06-18",
+            "actualPrice": 7100.0,
+            "predictedPrice": 7043.68,
+            "difference": -56.32,
+            "errorPct": 0.79
+          },
+          {
+            "date": "2026-07-05",
+            "actualPrice": 7471.44,
+            "predictedPrice": 7270.43,
+            "difference": -201.01,
+            "errorPct": 2.69
+          }
+        ]
       }
-    ],
-    "meanAbsoluteErrorPct": 1.45
+    }
   }
 }

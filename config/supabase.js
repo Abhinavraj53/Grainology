@@ -9,7 +9,7 @@ export const getSupabaseAdmin = () => {
   const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !secretKey) {
-    throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY are required for Agmarknet caching');
+    throw new Error('SUPABASE_URL and SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY are required for backend Supabase operations');
   }
 
   client = createClient(url, secretKey, {

@@ -1,0 +1,14 @@
+{
+  "id": "sanjayj23iitk/graninology",
+  "title": "Graninology",
+  "code_file": "grainology_state_forecaster.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": [
+    "khandelwalmanas/daily-commodity-prices-india",
+    "sanjayj23iitk/jkailgrainology-latest-data"
+  ]
+}

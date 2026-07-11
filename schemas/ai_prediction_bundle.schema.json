@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Prediction Release Bundle Manifest",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failed", "partial"]
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data_latest_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "model_mode": {
+      "type": "string"
+    },
+    "grains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "horizons": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "states": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "files": {
+      "type": "object",
+      "properties": {
+        "predictions.json": { "type": "string" },
+        "forecast_series.json": { "type": "string" },
+        "historical_efficiency.json": { "type": "string" },
+        "backtest.json": { "type": "string" },
+        "reasoning.json": { "type": "string" },
+        "actuals.json": { "type": "string" },
+        "canonical_daily.parquet": { "type": "string" }
+      },
+      "required": [
+        "predictions.json",
+        "forecast_series.json",
+        "historical_efficiency.json",
+        "backtest.json",
+        "reasoning.json",
+        "actuals.json",
+        "canonical_daily.parquet"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "status",
+    "generated_at",
+    "data_latest_date",
+    "grains",
+    "horizons",
+    "states",
+    "files"
+  ]
+}

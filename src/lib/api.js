@@ -54,16 +54,7 @@ class ApiClient {
   async request(endpoint, options = {}) {
     const { authToken, _retryCount = 0, ...fetchOptions } = options;
     
-    // Default to production or configured VITE_API_URL
-    let baseUrl = API_BASE_URL;
-    
-    // In dev mode, route specific endpoints we are testing to the local backend
-    // since the local backend cannot connect to MongoDB Atlas (IP whitelist/DNS issues)
-    // but we still need to test the local ML predictions and Agmarknet fallback fixes
-    if (isDev && (endpoint.startsWith('/mandi/predictions') || endpoint.startsWith('/agmarknet/'))) {
-      baseUrl = 'http://localhost:3001/api';
-    }
-    
+    const baseUrl = API_BASE_URL;
     const url = `${baseUrl}${endpoint}`;
     const isSessionCheck = endpoint === '/auth/session';
     const method = String(fetchOptions.method || 'GET').toUpperCase();
@@ -783,6 +774,39 @@ class ApiClient {
     } catch (error) {
       return { data: null, error };
     }
+  }
+
+  async getAiPredictionMeta() {
+    const response = await this.request('/mandi/predictions/v2/meta');
+    return response.data;
+  }
+
+  async getAiPrediction(grain = 'Wheat', state = 'All States') {
+    const params = new URLSearchParams({ grain, state });
+    const response = await this.request(`/mandi/predictions/v2?${params.toString()}`);
+    return response.data;
+  }
+
+  async getAiEfficiency(grain = 'Wheat', state = 'All States', horizon = 7) {
+    const params = new URLSearchParams({ grain, state, horizon: String(horizon) });
+    const response = await this.request(`/mandi/predictions/v2/efficiency?${params.toString()}`);
+    return response.data;
+  }
+
+  async getAiReasoning(grain = 'Wheat', state = 'All States', horizon = 7) {
+    const params = new URLSearchParams({ grain, state, horizon: String(horizon) });
+    const response = await this.request(`/mandi/predictions/v2/reasoning?${params.toString()}`);
+    return response.data;
+  }
+
+  async getAiPredictionStatus() {
+    const response = await this.request('/mandi/predictions/v2/status');
+    return response.data;
+  }
+
+  async getLiveDashboardPrices() {
+    const response = await this.request('/agmarknet/dashboard-prices');
+    return response;
   }
 
   getTableEndpoint(table) {

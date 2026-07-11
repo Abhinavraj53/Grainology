@@ -11,6 +11,7 @@ This is the deployment handoff for the Grainology AI price pipeline.
 5. If no new date is available, the job exits cleanly and the website keeps showing the last active release.
 6. If new data is available, the job syncs Agmarknet state data, updates `latest_data.csv`, publishes the Kaggle dataset, runs the Kaggle notebook, validates the release bundle, and activates the new Supabase release.
 7. The website keeps using the previous active release until the new release is fully uploaded and activated.
+8. The first merge to `main` also triggers a one-time forced AI refresh immediately, so a same-day production deploy does not have to wait for the next 08:00 IST schedule.
 
 ## Render Environment Variables
 
@@ -137,6 +138,14 @@ Check GitHub Actions:
 ```text
 Actions -> AI Auto Refresh -> Run workflow
 ```
+
+For an urgent demo or same-day launch, run it with:
+
+```text
+force=true
+```
+
+The workflow also runs with forced retraining automatically when this PR is merged to `main`.
 
 The successful status path should reach:
 

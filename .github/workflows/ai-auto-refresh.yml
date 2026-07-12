@@ -49,9 +49,19 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
           KAGGLE_LATEST_DATASET_ID: ${{ secrets.KAGGLE_LATEST_DATASET_ID }}
+          KAGGLE_DATASET_SOURCES: ${{ secrets.KAGGLE_DATASET_SOURCES }}
         run: |
+          DATASET_ID="$KAGGLE_LATEST_DATASET_ID"
+          if [ -z "$DATASET_ID" ]; then
+            DATASET_ID="$(printf '%s' "$KAGGLE_DATASET_SOURCES" | tr ',' '\n' | grep -i 'latest-data' | head -n 1 | xargs || true)"
+          fi
+          if [ -z "$DATASET_ID" ]; then
+            echo "Missing KAGGLE_LATEST_DATASET_ID secret and no latest-data entry found in KAGGLE_DATASET_SOURCES." >&2
+            exit 1
+          fi
+          echo "Using latest-data dataset: $DATASET_ID"
           mkdir -p staging/kaggle-latest-data-base
-          kaggle datasets download "$KAGGLE_LATEST_DATASET_ID" -p staging/kaggle-latest-data-base --unzip --force
+          kaggle datasets download "$DATASET_ID" -p staging/kaggle-latest-data-base --unzip --force
           test -f staging/kaggle-latest-data-base/latest_data.csv
 
       - name: Check, merge, publish, train, and release

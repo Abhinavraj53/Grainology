@@ -11,9 +11,6 @@ on:
         options:
           - 'false'
           - 'true'
-  push:
-    branches:
-      - main
   schedule:
     # 08:00 IST daily, after the backend's 06:30 IST Agmarknet sync window.
     - cron: '30 2 * * *'
@@ -83,7 +80,7 @@ jobs:
           AI_AUTO_CHECK_MINUTES: 1440
           AI_AUTO_MIN_STATE_CACHE_COVERAGE: 0.85
           AI_AUTO_PUBLISH_SUPABASE_RELEASE: true
-          AI_AUTO_FORCE: ${{ github.event_name == 'push' || inputs.force == 'true' }}
+          AI_AUTO_FORCE: ${{ inputs.force == 'true' }}
         run: npm run ai:auto:once
 
       - name: Upload auto-refresh status

@@ -62,7 +62,7 @@ interface DashboardFilters {
   grades: number[];
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
 const DEFAULT_FILTERS: DashboardFilters = {
   state: 100006,
   district: [],

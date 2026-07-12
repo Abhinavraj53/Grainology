@@ -4,7 +4,7 @@ import { Search, Filter, Shield, XCircle, User, Building, Eye, EyeOff, FileText,
 import * as XLSX from 'xlsx';
 import { usePopupContext } from '../../contexts/PopupContext';
 
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
 
 function getDocumentTypeLabel(docType: string, documentTypeLabel?: string): string {
   if (docType === 'other' && documentTypeLabel && documentTypeLabel.trim()) {

@@ -301,7 +301,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
       try {
         if (!silent) setLoading(true);
         setError('');
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
         const token = localStorage.getItem('auth_token');
 
         if (!token) {
@@ -917,7 +917,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     status: 'approved' | 'declined',
     reason = ''
   ) => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
     const token = localStorage.getItem('auth_token');
     if (!token) {
       throw new Error('Authentication required');
@@ -945,7 +945,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
   const handleDelete = async (orderId: string, orderType: 'sales' | 'purchase') => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
@@ -1139,7 +1139,7 @@ export default function AllConfirmedOrders({ currentUserRole, dataVersion }: All
     try {
       setEditSaving(true);
       setError('');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         throw new Error('Authentication required');

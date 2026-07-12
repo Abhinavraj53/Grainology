@@ -56,7 +56,7 @@ export default function AllSaleOrders({ currentUserRole }: AllSaleOrdersProps) {
   const fetchAllSaleOrders = async () => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
@@ -109,7 +109,7 @@ export default function AllSaleOrders({ currentUserRole }: AllSaleOrdersProps) {
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     setUpdatingStatus(orderId);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
@@ -162,7 +162,7 @@ export default function AllSaleOrders({ currentUserRole }: AllSaleOrdersProps) {
 
     try {
       setSavingOrder(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {

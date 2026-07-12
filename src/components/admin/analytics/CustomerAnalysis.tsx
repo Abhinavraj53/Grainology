@@ -51,7 +51,7 @@ export default function CustomerAnalysis({ period, type, filters }: Props) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       const headers = {
         'Authorization': `Bearer ${token}`,

@@ -1,8 +1,7 @@
-# Render Blueprint - Backend + Frontend
-# Deploy both from Render Dashboard → New → Blueprint → Connect repo and select this file
+# Render Blueprint - Backend only
+# Frontend is hosted separately on Hostinger.
 
 services:
-  # Backend API (Node)
   - type: web
     name: grainology-backend
     runtime: node
@@ -27,30 +26,3 @@ services:
         value: "true"
       # Set secrets in Render Dashboard: MONGODB_URI, JWT_SECRET, SUPABASE_URL,
       # SUPABASE_SECRET_KEY/SUPABASE_SERVICE_ROLE_KEY, GEMINI_API_KEY, BREVO keys, etc.
-
-  # Frontend (static site from Vite build)
-  - type: web
-    name: grainology-frontend
-    runtime: static
-    region: oregon
-    plan: free
-    buildCommand: npm ci && npm run build
-    staticPublishPath: ./dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://grainology-xcg8.onrender.com/api
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: sameorigin
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /assets/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    # After first deploy, set FRONTEND_URL on the backend service to this frontend URL (e.g. https://grainology-frontend.onrender.com)

@@ -60,7 +60,7 @@ export default function ConfirmedPurchaseOrderHistory({ userId, userName }: Conf
     try {
       setLoading(true);
       setError('');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {

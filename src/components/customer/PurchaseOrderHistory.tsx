@@ -33,7 +33,7 @@ export default function PurchaseOrderHistory({ userId, userName }: PurchaseOrder
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {

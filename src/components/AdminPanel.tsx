@@ -101,7 +101,7 @@ export default function AdminPanel({ profile, onSignOut, signingOut }: AdminPane
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [stats, setStats] = useState(DEFAULT_ADMIN_STATS);
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
   const toVersionNumber = (value: unknown) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;

@@ -115,7 +115,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
 
   const loadCommodities = useCallback(async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -140,7 +140,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
 
   const loadVarieties = useCallback(async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -168,7 +168,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -230,7 +230,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -280,7 +280,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -337,7 +337,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -400,7 +400,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -449,7 +449,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
         return;
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const response = await fetch(`${apiUrl}/commodity-master/${commodityId}/approval`, {
         method: 'PATCH',
         headers: {
@@ -484,7 +484,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -519,7 +519,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required');
@@ -568,7 +568,7 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
         return;
       }
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const response = await fetch(`${apiUrl}/variety-master/${varietyId}/approval`, {
         method: 'PATCH',
         headers: {

@@ -175,7 +175,7 @@ export default function ConfirmSalesOrderForm() {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
@@ -208,7 +208,7 @@ export default function ConfirmSalesOrderForm() {
 
   const fetchLocationsByState = async (stateName: string) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) return;
       const response = await fetch(`${apiUrl}/location-master?is_active=true&approval_status=approved&state=${encodeURIComponent(stateName)}`, {
@@ -232,7 +232,7 @@ export default function ConfirmSalesOrderForm() {
 
   const fetchWarehousesByLocation = async (locId: string) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) return;
       const response = await fetch(`${apiUrl}/warehouse-master?is_active=true&approval_status=approved&location_id=${encodeURIComponent(locId)}`, {
@@ -257,7 +257,7 @@ export default function ConfirmSalesOrderForm() {
     setSubmitting(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
@@ -398,7 +398,7 @@ export default function ConfirmSalesOrderForm() {
     setUploadErrors([]);
     setUploading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
       if (!token) {
         showError('Authentication required. Please sign in again.');
@@ -600,7 +600,7 @@ export default function ConfirmSalesOrderForm() {
                   type="button"
                   onClick={async () => {
                     try {
-                      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+                      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
                       const token = localStorage.getItem('auth_token');
                       if (!token) {
                         showError('Authentication required');
@@ -846,7 +846,7 @@ export default function ConfirmSalesOrderForm() {
                   type="button"
                   onClick={async () => {
                     try {
-                      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+                      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
                       const token = localStorage.getItem('auth_token');
                       if (!token) {
                         showError('Authentication required');
@@ -1019,7 +1019,7 @@ export default function ConfirmSalesOrderForm() {
                     }
 
                     try {
-                      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+                      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
                       const token = localStorage.getItem('auth_token');
 
                       if (!token) {

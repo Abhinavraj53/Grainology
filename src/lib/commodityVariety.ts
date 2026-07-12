@@ -32,7 +32,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
  */
 export async function fetchCommodities(): Promise<string[]> {
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
     const token = localStorage.getItem('auth_token');
     
     if (!token) {
@@ -72,7 +72,7 @@ export async function fetchCommodities(): Promise<string[]> {
  */
 export async function fetchVarieties(commodity: string): Promise<string[]> {
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
     const token = localStorage.getItem('auth_token');
     
     if (!token) {
@@ -138,7 +138,7 @@ export async function fetchVarieties(commodity: string): Promise<string[]> {
  */
 export async function fetchAllVarieties(): Promise<Variety[]> {
   try {
-    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
     const token = localStorage.getItem('auth_token');
     
     if (!token) {

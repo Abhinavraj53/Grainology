@@ -36,7 +36,7 @@ export default function PublicLogisticsDirectory() {
     async function load() {
       try {
         setLoading(true);
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
         const [providersResult, optionsResult] = await Promise.allSettled([
           fetch(`${apiUrl}/logistics?is_active=true`),
           fetch(`${apiUrl}/logistics/filter-options`)

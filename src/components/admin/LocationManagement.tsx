@@ -56,7 +56,7 @@ export default function LocationManagement({ currentUserRole, dataVersion }: Loc
   const [declineReason, setDeclineReason] = useState('');
   const [approvalSubmitting, setApprovalSubmitting] = useState(false);
 
-  const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
   const token = localStorage.getItem('auth_token');
 
   const loadLocations = useCallback(async () => {

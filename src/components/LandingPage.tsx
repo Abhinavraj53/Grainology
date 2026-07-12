@@ -140,7 +140,7 @@ export default function LandingPage() {
 
         try {
           const response = await fetch(
-            `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/mandi/agmarknet?${params.toString()}`,
+            `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/mandi/agmarknet?${params.toString()}`,
             { signal: AbortSignal.timeout(15000) }
           );
 

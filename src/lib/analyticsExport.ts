@@ -37,7 +37,7 @@ export const analyticsReportTypes: { key: AnalyticsReportType; label: string }[]
 ];
 
 const ANALYTICS_START_YEAR = 2020;
-const ANALYTICS_API_URL = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+const ANALYTICS_API_URL = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
 const monthFormatter = new Intl.DateTimeFormat('en', { month: 'long' });
 
 export function getAnalyticsYearOptions() {

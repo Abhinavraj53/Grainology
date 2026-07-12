@@ -3,7 +3,7 @@ import { AgmarknetTable } from './AgmarknetTable';
 import { AgmarknetFilters } from './AgmarknetFilters';
 import AIPredictions from '../AIPredictions';
 
-const API_URL = 'https://grainology-project.onrender.com/api';
+const API_URL = 'https://grainology.onrender.com/api';
 export const AgmarknetDashboard: React.FC = () => {
   const [filters, setFilters] = useState({
     state: 5, // Bihar (Default)

@@ -68,7 +68,7 @@ export default function MandiSeasonWise() {
         return;
       }
 
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/mandi/filters`;
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/mandi/filters`;
       const response = await fetch(apiUrl, {
         headers: { 'Content-Type': 'application/json' },
       });
@@ -123,7 +123,7 @@ export default function MandiSeasonWise() {
         }
       });
 
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/mandi/season-wise?${params.toString()}`;
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/mandi/season-wise?${params.toString()}`;
       console.log('Fetching season-wise data from:', apiUrl);
       const response = await fetch(apiUrl, {
         headers: { 'Content-Type': 'application/json' },

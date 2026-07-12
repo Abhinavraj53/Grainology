@@ -50,7 +50,7 @@ export default function TimeBasedCharts({ period, groupBy, orderType, filters }:
   const fetchData = async () => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       const query = new URLSearchParams(

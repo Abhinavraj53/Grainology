@@ -624,7 +624,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                         try {
                           // First check if user already exists with this PAN
                           const checkResponse = await fetch(
-                            `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/auth/check-verification-document`,
+                            `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/auth/check-verification-document`,
                             {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
@@ -644,7 +644,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           }
 
                           // If account doesn't exist, proceed with verification
-                          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/cashfree/kyc/verify-pan`, {
+                          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/cashfree/kyc/verify-pan`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ pan: panNumber.trim().toUpperCase(), name: panName.trim() }),
@@ -729,7 +729,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                             try {
                               // First check if user already exists with this Aadhaar
                               const checkResponse = await fetch(
-                                `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/auth/check-verification-document`,
+                                `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/auth/check-verification-document`,
                                 {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
@@ -750,7 +750,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
 
                               // If account doesn't exist, proceed with OTP generation
                               const response = await fetch(
-                                `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/sandbox/kyc/aadhaar/generate-otp`,
+                                `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/sandbox/kyc/aadhaar/generate-otp`,
                                 {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
@@ -836,7 +836,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                               }
 
                               const response = await fetch(
-                                `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/sandbox/kyc/aadhaar/verify-otp`,
+                                `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/sandbox/kyc/aadhaar/verify-otp`,
                                 {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
@@ -981,7 +981,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                             }
                           }, 60000);
                           
-                          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/cashfree/kyc/verify-aadhaar-number`, {
+                          const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/cashfree/kyc/verify-aadhaar-number`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ aadhaar_number: aadhaarNumber }),
@@ -1077,7 +1077,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                                   
                                   // Use verification_id in query parameter (required by Cashfree)
                                   const statusResponse = await fetch(
-                                    `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/cashfree/kyc/digilocker-status/${storedVerificationId}?aadhaar=${aadhaarNumber}&verification_id=${storedVerificationId}`
+                                    `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/cashfree/kyc/digilocker-status/${storedVerificationId}?aadhaar=${aadhaarNumber}&verification_id=${storedVerificationId}`
                                   );
                                   
                                   if (!statusResponse.ok) {
@@ -1387,7 +1387,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           const response = await fetch(
                             `${
                               import.meta.env.VITE_API_URL ||
-                              'https://grainology-project.onrender.com/api'
+                              'https://grainology.onrender.com/api'
                             }/cashfree/kyc/verify-gstin`,
                             {
                               method: 'POST',
@@ -1488,7 +1488,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                           const response = await fetch(
                             `${
                               import.meta.env.VITE_API_URL ||
-                              'https://grainology-project.onrender.com/api'
+                              'https://grainology.onrender.com/api'
                             }/cashfree/kyc/verify-cin`,
                             {
                               method: 'POST',
@@ -1696,7 +1696,7 @@ export default function AuthPage({ initialMode = 'login' }: AuthPageProps = {}) 
                       if (newMobile.length === 10) {
                         try {
                           const checkResponse = await fetch(
-                            `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/auth/check-user`,
+                            `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/auth/check-user`,
                             {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },

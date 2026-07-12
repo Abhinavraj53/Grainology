@@ -33,7 +33,7 @@ export default function KYCVerification({ profile, onVerificationComplete }: KYC
         throw new Error('Not authenticated');
       }
 
-      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api'}/kyc/verify`;
+      const apiUrl = `${import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api'}/kyc/verify`;
       const headers = {
         'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json',

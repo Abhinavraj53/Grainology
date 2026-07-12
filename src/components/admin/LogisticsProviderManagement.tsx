@@ -92,7 +92,7 @@ export default function LogisticsProviderManagement() {
     const fallbackCombinations = deriveLocationCombinationsFromProviders(providerList);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const response = await fetch(`${apiUrl}/logistics/filter-options`);
 
       if (!response.ok) {

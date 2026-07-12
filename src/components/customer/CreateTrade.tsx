@@ -184,7 +184,7 @@ export default function CreateTrade({ userId }: CreateTradeProps) {
     setLoading(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {

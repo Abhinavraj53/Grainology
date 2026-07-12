@@ -35,7 +35,7 @@ export default function AllConfirmedSalesOrders() {
   const fetchAllOrders = async () => {
     try {
       setLoading(true);
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {
@@ -89,7 +89,7 @@ export default function AllConfirmedSalesOrders() {
   const fetchOrderDetails = async (orderId: string) => {
     setLoadingDetails(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       const response = await fetch(`${apiUrl}/confirmed-sales-orders/${orderId}`, {

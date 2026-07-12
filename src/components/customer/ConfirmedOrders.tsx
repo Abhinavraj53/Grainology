@@ -103,7 +103,7 @@ export default function ConfirmedOrders({ userId, userName }: ConfirmedOrdersPro
     try {
       setLoading(true);
       setError('');
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology-project.onrender.com/api';
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://grainology.onrender.com/api';
       const token = localStorage.getItem('auth_token');
 
       if (!token) {

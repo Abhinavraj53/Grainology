@@ -121,6 +121,43 @@ export const loadReleaseJson = async (fileName) => {
 
 const pickStatePayload = (payload, grain, state) => payload?.[grain]?.[state] || null;
 
+const downloadReleaseJson = async (release, relativePath) => {
+  const cacheKey = `${release.release_id}:${relativePath}`;
+  if (releaseCache.files.has(cacheKey)) return releaseCache.files.get(cacheKey);
+
+  const objectPath = `${release.artifact_prefix}/${relativePath}`;
+  const { data, error } = await getSupabaseAdmin()
+    .storage
+    .from(process.env.AI_PREDICTION_BUCKET || 'ai-predictions')
+    .download(objectPath);
+
+  if (error) throw new Error(`Failed to download ${objectPath}: ${error.message}`);
+
+  const parsed = JSON.parse(await data.text());
+  releaseCache.files.set(cacheKey, parsed);
+  lastGoodReleaseCache = releaseCache;
+  return parsed;
+};
+
+const getChunkedEfficiencyPayload = async (grain, state, horizon) => {
+  if (sourceMode() === 'local_files') return null;
+
+  const release = await getActiveReleaseMetadata();
+  let index = null;
+  try {
+    index = await downloadReleaseJson(release, 'historical_efficiency.index.json');
+  } catch {
+    return null;
+  }
+
+  const byState = index?.chunks?.[grain];
+  const selected = byState?.[state] || null;
+  const chunkPath = selected?.[String(horizon)] || selected?.[Number(horizon)] || selected?.all;
+  if (!chunkPath) return null;
+
+  return downloadReleaseJson(release, chunkPath);
+};
+
 const daysBetween = (leftDate, rightDate) => {
   const left = new Date(leftDate).getTime();
   const right = new Date(rightDate).getTime();
@@ -254,20 +291,32 @@ export const getEfficiencyForState = async (grain, state, horizon) => {
   const selectedState = state || 'All States';
   const selectedHorizon = String(horizon || 7);
   const meta = await getPredictionMeta();
-  const efficiency = await loadReleaseJson('historical_efficiency.json');
   let effectiveState = selectedState;
-  let statePayload = pickStatePayload(efficiency, grain, selectedState);
+  let payload = await getChunkedEfficiencyPayload(grain, selectedState, selectedHorizon);
   let fallback_reason = null;
 
-  if (!statePayload && selectedState !== 'All States') {
-    statePayload = pickStatePayload(efficiency, grain, 'All States');
-    if (statePayload) {
+  if (!payload && selectedState !== 'All States') {
+    payload = await getChunkedEfficiencyPayload(grain, 'All States', selectedHorizon);
+    if (payload) {
       effectiveState = 'All States';
       fallback_reason = `${selectedState} efficiency series is not available; showing All States validation.`;
     }
   }
 
-  const payload = statePayload?.[selectedHorizon] || statePayload?.[Number(selectedHorizon)] || statePayload;
+  if (!payload) {
+    const efficiency = await loadReleaseJson('historical_efficiency.json');
+    let statePayload = pickStatePayload(efficiency, grain, selectedState);
+
+    if (!statePayload && selectedState !== 'All States') {
+      statePayload = pickStatePayload(efficiency, grain, 'All States');
+      if (statePayload) {
+        effectiveState = 'All States';
+        fallback_reason = `${selectedState} efficiency series is not available; showing All States validation.`;
+      }
+    }
+
+    payload = statePayload?.[selectedHorizon] || statePayload?.[Number(selectedHorizon)] || statePayload;
+  }
 
   if (!payload) {
     throw new Error(`No efficiency series found for ${grain} / ${selectedState} / ${selectedHorizon}`);

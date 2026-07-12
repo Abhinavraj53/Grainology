@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -33,6 +34,61 @@ def upload_file(storage, bucket: str, source: Path, destination: str) -> None:
             handle,
             file_options={"upsert": "true"},
         )
+
+
+def upload_json(storage, bucket: str, payload, destination: str) -> None:
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    storage.from_(bucket).upload(
+        destination,
+        encoded,
+        file_options={"upsert": "true", "content-type": "application/json"},
+    )
+
+
+def safe_chunk_name(*parts: str) -> str:
+    raw = "::".join(str(part) for part in parts)
+    slug = "".join(ch.lower() if ch.isalnum() else "-" for ch in raw).strip("-")
+    slug = "-".join(part for part in slug.split("-") if part)[:90] or "chunk"
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]
+    return f"{slug}-{digest}.json"
+
+
+def upload_historical_efficiency_chunks(storage, bucket: str, source: Path, artifact_prefix: str) -> None:
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    chunks: dict[str, dict[str, dict[str, str]]] = {}
+    base_prefix = f"{artifact_prefix}/historical_efficiency"
+
+    for grain, by_state in (payload or {}).items():
+        chunks.setdefault(grain, {})
+        for state, by_horizon in (by_state or {}).items():
+            chunks[grain].setdefault(state, {})
+            if not isinstance(by_horizon, dict):
+                chunk_name = safe_chunk_name(grain, state, "all")
+                upload_json(storage, bucket, by_horizon, f"{base_prefix}/{chunk_name}")
+                chunks[grain][state]["all"] = f"historical_efficiency/{chunk_name}"
+                continue
+
+            for horizon, horizon_payload in by_horizon.items():
+                chunk_name = safe_chunk_name(grain, state, horizon)
+                upload_json(storage, bucket, horizon_payload, f"{base_prefix}/{chunk_name}")
+                chunks[grain][state][str(horizon)] = f"historical_efficiency/{chunk_name}"
+
+    index = {
+        "kind": "chunked_historical_efficiency",
+        "schema_version": "1.0",
+        "chunks": chunks,
+    }
+    upload_json(storage, bucket, index, f"{artifact_prefix}/historical_efficiency.index.json")
+    upload_json(
+        storage,
+        bucket,
+        {
+            "chunked": True,
+            "index_file": "historical_efficiency.index.json",
+            "message": "Historical efficiency is stored in per grain/state/horizon chunks.",
+        },
+        f"{artifact_prefix}/historical_efficiency.json",
+    )
 
 
 def publish_release(bundle_dir: Path, force: bool = False) -> str:
@@ -68,6 +124,9 @@ def publish_release(bundle_dir: Path, force: bool = False) -> str:
     storage = supabase.storage
     for path in bundle_dir.iterdir():
       if path.is_file():
+          if path.name == "historical_efficiency.json":
+              upload_historical_efficiency_chunks(storage, bucket, path, artifact_prefix)
+              continue
           upload_file(storage, bucket, path, f"{artifact_prefix}/{path.name}")
 
     canonical_prefix = "canonical/latest"

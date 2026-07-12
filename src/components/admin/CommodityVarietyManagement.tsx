@@ -24,9 +24,37 @@ interface Variety {
   declined_reason?: string;
 }
 
+interface QualityParameter {
+  id: string;
+  commodity: string;
+  s_no?: number;
+  param_name?: string;
+  parameter_name?: string;
+  unit?: string;
+  unit_of_measurement?: string;
+  standard?: string;
+  standard_value?: string;
+  options?: string[];
+  remarks?: string;
+  is_active?: boolean;
+}
+
 const toUpperCaseValue = (value: string) => value.toUpperCase();
 const toUpperCaseLabel = (value?: string) => (value ? value.toUpperCase() : '');
 const normalizeTextPayload = (value: string) => toUpperCaseValue(value.trim());
+const toTitleCase = (value: string) => value
+  .toLowerCase()
+  .split(' ')
+  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+  .join(' ');
+const getQualityName = (parameter: QualityParameter) => parameter.parameter_name || parameter.param_name || '';
+const getQualityUnit = (parameter: QualityParameter) => parameter.unit_of_measurement || parameter.unit || '';
+const getQualityStandard = (parameter: QualityParameter) => parameter.standard_value || parameter.standard || '';
+const optionsToText = (options?: string[]) => (options || []).join(', ');
+const textToOptions = (value: string) => value
+  .split(',')
+  .map((option) => option.trim())
+  .filter(Boolean);
 
 interface CommodityVarietyManagementProps {
   currentUserRole?: string;
@@ -50,8 +78,9 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
   const canApprove = currentUserRole === 'super_admin';
   const [commodities, setCommodities] = useState<Commodity[]>([]);
   const [varieties, setVarieties] = useState<Variety[]>([]);
+  const [qualityParameters, setQualityParameters] = useState<QualityParameter[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'commodities' | 'varieties'>('commodities');
+  const [activeTab, setActiveTab] = useState<'commodities' | 'varieties' | 'quality'>('commodities');
 
   // Commodity form state
   const [showCommodityForm, setShowCommodityForm] = useState(false);
@@ -69,6 +98,19 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     commodity_name: '',
     variety_name: '',
     description: ''
+  });
+
+  // Quality parameter form state
+  const [selectedQualityCommodity, setSelectedQualityCommodity] = useState('');
+  const [showQualityForm, setShowQualityForm] = useState(false);
+  const [editingQualityParameter, setEditingQualityParameter] = useState<QualityParameter | null>(null);
+  const [qualityForm, setQualityForm] = useState({
+    s_no: '',
+    param_name: '',
+    unit: '',
+    standard: '',
+    optionsText: '',
+    remarks: ''
   });
 
   const loadCommodities = useCallback(async () => {
@@ -119,8 +161,60 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
   }, [showError]);
 
+  const loadQualityParameters = useCallback(async () => {
+    if (!selectedQualityCommodity) {
+      setQualityParameters([]);
+      return;
+    }
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showError('Authentication required');
+        return;
+      }
+
+      const commodity = toTitleCase(selectedQualityCommodity);
+      const params = new URLSearchParams({
+        commodity,
+        is_active: 'true'
+      });
+
+      const response = await fetch(`${apiUrl}/quality?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to load quality parameters');
+
+      const data: QualityParameter[] = await response.json();
+      setQualityParameters(
+        data.sort((a, b) => {
+          const aSNo = a.s_no || 0;
+          const bSNo = b.s_no || 0;
+          if (aSNo !== bSNo) return aSNo - bSNo;
+          return getQualityName(a).localeCompare(getQualityName(b));
+        })
+      );
+    } catch (error: any) {
+      showError(error.message || 'Failed to load quality parameters');
+    }
+  }, [selectedQualityCommodity, showError]);
+
   useLiveRefresh(loadCommodities, 10000, [loadCommodities]);
   useLiveRefresh(loadVarieties, 10000, [loadVarieties]);
+  useLiveRefresh(loadQualityParameters, 10000, [loadQualityParameters]);
+
+  useEffect(() => {
+    if (!selectedQualityCommodity && commodities.length > 0) {
+      const firstActiveCommodity = commodities.find((commodity) => commodity.is_active);
+      if (firstActiveCommodity) {
+        setSelectedQualityCommodity(toUpperCaseLabel(firstActiveCommodity.name));
+      }
+    }
+  }, [commodities, selectedQualityCommodity]);
 
   const handleCommoditySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,6 +313,77 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
       loadVarieties();
     } catch (error: any) {
       showError(error.message || 'Failed to save variety');
+    }
+  };
+
+  const handleQualitySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const options = textToOptions(qualityForm.optionsText);
+    const sNo = Number(qualityForm.s_no) || qualityParameters.length + 1;
+    const commodity = toTitleCase(selectedQualityCommodity);
+    const paramName = qualityForm.param_name.trim();
+    const unit = qualityForm.unit.trim();
+    const standard = qualityForm.standard.trim();
+
+    if (!commodity) {
+      showError('Commodity is required');
+      return;
+    }
+
+    if (!paramName || !unit || !standard || options.length === 0) {
+      showError('Parameter name, unit, standard, and at least one option are required');
+      return;
+    }
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showError('Authentication required');
+        return;
+      }
+
+      const payload = {
+        commodity,
+        s_no: sNo,
+        param_name: paramName,
+        parameter_name: paramName,
+        unit,
+        unit_of_measurement: unit,
+        standard,
+        standard_value: standard,
+        options,
+        remarks: qualityForm.remarks.trim(),
+        is_active: true
+      };
+
+      const url = editingQualityParameter
+        ? `${apiUrl}/quality/${editingQualityParameter.id}`
+        : `${apiUrl}/quality`;
+      const method = editingQualityParameter ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to save quality parameter');
+      }
+
+      showSuccess(editingQualityParameter ? 'Quality parameter updated successfully' : 'Quality parameter created successfully');
+      setShowQualityForm(false);
+      setEditingQualityParameter(null);
+      setQualityForm({ s_no: '', param_name: '', unit: '', standard: '', optionsText: '', remarks: '' });
+      loadQualityParameters();
+    } catch (error: any) {
+      showError(error.message || 'Failed to save quality parameter');
     }
   };
 
@@ -341,6 +506,41 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     }
   };
 
+  const handleDeleteQualityParameter = async (id: string) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Quality Parameter',
+      message: 'Are you sure you want to delete this quality parameter?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      tone: 'danger',
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showError('Authentication required');
+        return;
+      }
+
+      const response = await fetch(`${apiUrl}/quality/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to delete quality parameter');
+      showSuccess('Quality parameter deleted successfully');
+      loadQualityParameters();
+    } catch (error: any) {
+      showError(error.message || 'Failed to delete quality parameter');
+    }
+  };
+
   const handleVarietyApproval = async (varietyId: string, status: 'approved' | 'declined') => {
     try {
       const token = localStorage.getItem('auth_token');
@@ -410,8 +610,22 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
     setShowVarietyForm(true);
   };
 
+  const openEditQualityParameter = (parameter: QualityParameter) => {
+    setEditingQualityParameter(parameter);
+    setQualityForm({
+      s_no: String(parameter.s_no || ''),
+      param_name: getQualityName(parameter),
+      unit: getQualityUnit(parameter),
+      standard: getQualityStandard(parameter),
+      optionsText: optionsToText(parameter.options),
+      remarks: parameter.remarks || ''
+    });
+    setShowQualityForm(true);
+  };
+
   const activeCommodities = commodities.filter(c => c.is_active);
   const activeVarieties = varieties.filter(v => v.is_active);
+  const activeQualityParameters = qualityParameters.filter(p => p.is_active !== false);
 
   if (loading) {
     return (
@@ -454,6 +668,16 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
               }`}
             >
               Varieties ({activeVarieties.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('quality')}
+              className={`py-4 px-6 font-medium text-sm border-b-2 transition-colors ${
+                activeTab === 'quality'
+                  ? 'border-green-600 text-green-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Quality Parameters
             </button>
           </nav>
         </div>
@@ -827,6 +1051,247 @@ export default function CommodityVarietyManagement({ currentUserRole }: Commodit
                         </td>
                       </tr>
                     ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Quality Parameters Tab */}
+      {activeTab === 'quality' && (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-3">Quality Parameters</h2>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Commodity <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedQualityCommodity}
+                onChange={(e) => {
+                  setSelectedQualityCommodity(e.target.value);
+                  setShowQualityForm(false);
+                  setEditingQualityParameter(null);
+                  setQualityForm({ s_no: '', param_name: '', unit: '', standard: '', optionsText: '', remarks: '' });
+                }}
+                className="w-full md:w-80 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="" disabled>Select Commodity</option>
+                {activeCommodities.map((commodity) => (
+                  <option key={commodity.id} value={toUpperCaseLabel(commodity.name)}>
+                    {toUpperCaseLabel(commodity.name)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => {
+                setEditingQualityParameter(null);
+                setQualityForm({
+                  s_no: String(activeQualityParameters.length + 1),
+                  param_name: '',
+                  unit: '',
+                  standard: '',
+                  optionsText: '',
+                  remarks: ''
+                });
+                setShowQualityForm(true);
+              }}
+              disabled={!selectedQualityCommodity}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Add Quality Parameter
+            </button>
+          </div>
+
+          {!selectedQualityCommodity && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 flex items-start gap-2">
+              <AlertCircle className="w-5 h-5 mt-0.5" />
+              <span>Select a commodity to view and manage its quality parameters.</span>
+            </div>
+          )}
+
+          {showQualityForm && selectedQualityCommodity && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-semibold text-gray-800">
+                  {editingQualityParameter ? 'Edit Quality Parameter' : 'Add New Quality Parameter'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowQualityForm(false);
+                    setEditingQualityParameter(null);
+                    setQualityForm({ s_no: '', param_name: '', unit: '', standard: '', optionsText: '', remarks: '' });
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <form onSubmit={handleQualitySubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">S No.</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={qualityForm.s_no}
+                      onChange={(e) => setQualityForm({ ...qualityForm, s_no: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Parameter Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={qualityForm.param_name}
+                      onChange={(e) => setQualityForm({ ...qualityForm, param_name: e.target.value })}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="e.g., Moisture"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Unit <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={qualityForm.unit}
+                      onChange={(e) => setQualityForm({ ...qualityForm, unit: e.target.value })}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="%, Count"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Standard <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={qualityForm.standard}
+                      onChange={(e) => setQualityForm({ ...qualityForm, standard: e.target.value })}
+                      required
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      placeholder="MAX 2%"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Options <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={qualityForm.optionsText}
+                    onChange={(e) => setQualityForm({ ...qualityForm, optionsText: e.target.value })}
+                    required
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="0%, 0.5%, 1.0%, Above 2%"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Enter dropdown options separated by commas.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                  <textarea
+                    value={qualityForm.remarks}
+                    onChange={(e) => setQualityForm({ ...qualityForm, remarks: e.target.value })}
+                    rows={2}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Optional remarks"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Save className="w-4 h-4" />
+                    {editingQualityParameter ? 'Update' : 'Create'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQualityForm(false);
+                      setEditingQualityParameter(null);
+                      setQualityForm({ s_no: '', param_name: '', unit: '', standard: '', optionsText: '', remarks: '' });
+                    }}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S No.</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parameter</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Standard</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Options</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Remarks</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {!selectedQualityCommodity ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      Select a commodity to view quality parameters.
+                    </td>
+                  </tr>
+                ) : activeQualityParameters.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      No quality parameters found for {selectedQualityCommodity}. Add the first one above.
+                    </td>
+                  </tr>
+                ) : (
+                  activeQualityParameters.map((parameter, index) => (
+                    <tr key={parameter.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{parameter.s_no || index + 1}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-900">{getQualityName(parameter)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-gray-600">{getQualityUnit(parameter)}</td>
+                      <td className="px-4 py-3 text-gray-600">{getQualityStandard(parameter)}</td>
+                      <td className="px-4 py-3 text-gray-600 max-w-md">
+                        <div className="flex flex-wrap gap-1">
+                          {(parameter.options || []).map((option) => (
+                            <span key={option} className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">
+                              {option}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{parameter.remarks || '-'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => openEditQualityParameter(parameter)}
+                          className="text-blue-600 hover:text-blue-900 mr-3"
+                          title="Edit"
+                        >
+                          <Edit2 className="w-4 h-4 inline" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteQualityParameter(parameter.id)}
+                          className="text-red-600 hover:text-red-900"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4 inline" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>

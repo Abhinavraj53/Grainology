@@ -93,6 +93,7 @@ export type QualityParameter = {
   param_name: string;
   unit: string;
   standard: string;
+  options: string[];
   remarks: string;
 };
 

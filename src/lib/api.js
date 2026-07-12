@@ -1,5 +1,5 @@
 // JWT-based API client for backend auth and data
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://grainology-xcg8.onrender.com/api';
 const AUTH_SYNC_STORAGE_KEY = 'grainology_auth_sync';
 const AUTH_SYNC_EVENT = 'grainology-auth-changed';
 const SESSION_RETRY_COOLDOWN_MS = 60000;
@@ -815,6 +815,7 @@ class ApiClient {
       'offers': '/offers',
       'orders': '/orders',
       'quality_parameters': '/quality',
+      'quality_parameters_master': '/quality',
       'mandi_prices': '/mandi',
       'weather_data': '/weather',
       'logistics_providers': '/logistics',

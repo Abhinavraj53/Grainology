@@ -96,36 +96,52 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
         return (1 if is_marketwise else 0, 1 if is_all_states else 0, grain_count, str(row.get("fetched_at") or ""))
 
     rows = sorted(rows, key=_row_score, reverse=True)
+    selected_row = rows[0] if rows else None
+    if not selected_row:
+        print("No marketwise cache rows were available for live dashboard price overrides")
+        return {}
+
+    selected_records = _coerce_json(selected_row.get("records"), []) or []
+    print(
+        "Selected live dashboard cache row:",
+        {
+            "cache_key": selected_row.get("cache_key"),
+            "reported_dates": selected_row.get("reported_dates"),
+            "fetched_at": selected_row.get("fetched_at"),
+            "record_count": len(selected_records),
+        },
+    )
 
     prices = {}
-    for row in rows:
-        records = _coerce_json(row.get("records"), []) or []
-        for record in records:
-            grain = normalize_live_dashboard_grain(
-                record.get("commodity")
-                or (record.get("raw") or {}).get("cmdt_name")
-            )
-            if not grain or grain in prices:
-                continue
-            price_block = record.get("price") or {}
-            as_on = price_block.get("as_on") if isinstance(price_block, dict) else {}
-            raw = record.get("raw") or {}
-            price = as_on.get("value") if isinstance(as_on, dict) else None
-            if price is None:
-                price = raw.get("as_on_price")
-            try:
-                price = float(price)
-            except Exception:
-                continue
-            if not np.isfinite(price) or price <= 0:
-                continue
-            prices[grain] = {
-                "price": round(price, 2),
-                "reported_dates": row.get("reported_dates") or [],
-                "fetched_at": row.get("fetched_at"),
-                "source": "supabase_agmarknet_marketwise_cache",
-                "cache_key": row.get("cache_key"),
-            }
+    for record in selected_records:
+        grain = normalize_live_dashboard_grain(
+            record.get("commodity")
+            or (record.get("raw") or {}).get("cmdt_name")
+        )
+        if not grain or grain in prices:
+            continue
+        price_block = record.get("price") or {}
+        as_on = price_block.get("as_on") if isinstance(price_block, dict) else {}
+        raw = record.get("raw") or {}
+        price = as_on.get("value") if isinstance(as_on, dict) else None
+        if price is None:
+            price = raw.get("as_on_price")
+        try:
+            price = float(price)
+        except Exception:
+            continue
+        if not np.isfinite(price) or price <= 0:
+            continue
+        prices[grain] = {
+            "price": round(price, 2),
+            "reported_dates": selected_row.get("reported_dates") or [],
+            "fetched_at": selected_row.get("fetched_at"),
+            "source": "supabase_agmarknet_marketwise_cache",
+            "cache_key": selected_row.get("cache_key"),
+        }
+    missing_grains = [grain for grain in TARGET_GRAINS if grain not in prices]
+    if missing_grains:
+        print("Selected live dashboard cache row did not contain:", missing_grains)
     if prices:
         print("Live dashboard price overrides:", {k: v["price"] for k, v in sorted(prices.items())})
     else:

@@ -18,7 +18,17 @@ let releaseCache = {
 
 let lastGoodReleaseCache = null;
 
-const sourceMode = () => process.env.AI_PREDICTIONS_SOURCE || 'local_files';
+const sourceMode = () => {
+  const configured = process.env.AI_PREDICTIONS_SOURCE || '';
+  if (
+    process.env.NODE_ENV === 'production'
+    && configured === 'local_files'
+    && process.env.AI_ALLOW_LOCAL_FILES_IN_PRODUCTION !== 'true'
+  ) {
+    return 'supabase_release';
+  }
+  return configured || (process.env.NODE_ENV === 'production' ? 'supabase_release' : 'local_files');
+};
 const MAX_STATE_FORECAST_STALE_DAYS = Number(process.env.AI_STATE_FORECAST_MAX_STALE_DAYS || 30);
 
 export const invalidateReleaseCache = () => {

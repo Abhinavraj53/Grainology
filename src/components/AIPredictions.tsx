@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -52,6 +52,49 @@ const formatPercent = (value: any, maximumFractionDigits = 2) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 'N/A';
   return `${numeric.toFixed(maximumFractionDigits)}%`;
+};
+
+const toFiniteNumber = (value: any) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const useAnimatedPrice = (targetValue: number | null, resetKey: string, durationMs = 650) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const frameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (frameRef.current != null) {
+      window.cancelAnimationFrame(frameRef.current);
+    }
+
+    const target = toFiniteNumber(targetValue);
+    if (target == null || target <= 0) {
+      setDisplayValue(0);
+      return undefined;
+    }
+
+    setDisplayValue(0);
+    const startedAt = window.performance.now();
+
+    const tick = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayValue(target * eased);
+      if (progress < 1) {
+        frameRef.current = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameRef.current = window.requestAnimationFrame(tick);
+    return () => {
+      if (frameRef.current != null) {
+        window.cancelAnimationFrame(frameRef.current);
+      }
+    };
+  }, [targetValue, resetKey, durationMs]);
+
+  return displayValue;
 };
 
 function AIPredictionsLocked() {
@@ -168,6 +211,7 @@ export default function AIPredictions() {
   const [currentHorizon, setCurrentHorizon] = useState<number>(7);
   const [efficiencyPage, setEfficiencyPage] = useState(0);
   const [efficiencyYear, setEfficiencyYear] = useState<string>('all');
+  const [efficiencyBrushSelection, setEfficiencyBrushSelection] = useState<{ startIndex: number; endIndex: number } | null>(null);
   const [livePrices, setLivePrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -447,7 +491,7 @@ export default function AIPredictions() {
     return reduced;
   }, [efficiencyRows]);
 
-  const efficiencyBrushRange = useMemo(() => {
+  const efficiencyDefaultBrushRange = useMemo(() => {
     if (!efficiencyChartData.length) return { startIndex: 0, endIndex: 0 };
     const firstTimestamp = efficiencyChartData[0].timestamp;
     const lastTimestamp = efficiencyChartData[efficiencyChartData.length - 1].timestamp;
@@ -460,6 +504,18 @@ export default function AIPredictions() {
     const endIndex = endMatch === -1 ? efficiencyChartData.length - 1 : Math.max(startIndex, endMatch);
     return { startIndex, endIndex };
   }, [efficiencyChartData]);
+
+  useEffect(() => {
+    setEfficiencyBrushSelection(efficiencyDefaultBrushRange);
+  }, [
+    currentGrain,
+    currentState,
+    currentHorizon,
+    efficiencyDefaultBrushRange.startIndex,
+    efficiencyDefaultBrushRange.endIndex,
+  ]);
+
+  const activeEfficiencyBrushRange = efficiencyBrushSelection || efficiencyDefaultBrushRange;
 
   const efficiencyYearOptions = useMemo(() => {
     return Array.from(
@@ -493,6 +549,16 @@ export default function AIPredictions() {
   const efficiencyDateRange = efficiencyRows.length
     ? `${new Date(efficiencyRows[0].date).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })} - ${new Date(efficiencyRows[efficiencyRows.length - 1].date).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}`
     : 'N/A';
+  const selectedPredictionData = data?.predictions?.[currentGrain]?.[currentState] || data?.predictions?.[currentGrain]?.["All States"];
+  const latestActualPrice = toFiniteNumber(chartData.slice().reverse().find(item => item.actualPrice !== undefined)?.actualPrice);
+  const modelCurrentPrice = toFiniteNumber(selectedPredictionData?.current_price) ?? latestActualPrice;
+  const liveCurrentPrice = toFiniteNumber(livePrices[currentGrain]);
+  const currentActualPrice = liveCurrentPrice ?? modelCurrentPrice;
+  const animatedCurrentPrice = useAnimatedPrice(
+    currentActualPrice,
+    `${currentGrain}|${currentState}|${currentActualPrice ?? 'pending'}`
+  );
+  const hasCurrentPrice = currentActualPrice != null && currentActualPrice > 0;
 
 
   if (!isAiUnlocked) return <AIPredictionsLocked />;
@@ -502,7 +568,7 @@ export default function AIPredictions() {
   if (error || !data) return <AIPredictionsSoftError error={error} />;
 
   const grains = meta?.grains?.length ? meta.grains : Object.keys(data.predictions);
-  const predictionData = data.predictions[currentGrain]?.[currentState] || data.predictions[currentGrain]?.["All States"];
+  const predictionData = selectedPredictionData;
   const stateReasoning = data.reasoning?.[currentGrain]?.[currentState] || data.reasoning?.[currentGrain]?.["All States"];
   const reasoningData = stateReasoning?.[currentHorizon] || stateReasoning?.[String(currentHorizon)] || stateReasoning;
   const backtestData = data.backtest?.[currentGrain]?.[currentState] || data.backtest?.[currentGrain]?.["All States"];
@@ -526,9 +592,6 @@ export default function AIPredictions() {
   };
 
   const anchorPoints = chartData.filter(item => item.isAnchor);
-  const modelCurrentPrice = predictionData?.current_price || chartData.slice().reverse().find(item => item.actualPrice !== undefined)?.actualPrice || 1;
-  const liveCurrentPrice = livePrices[currentGrain];
-  const currentActualPrice = Number.isFinite(Number(liveCurrentPrice)) ? Number(liveCurrentPrice) : modelCurrentPrice;
 
   const availableStates = meta?.states?.length
     ? [...meta.states].sort((left, right) => left === 'All States' ? -1 : right === 'All States' ? 1 : left.localeCompare(right))
@@ -577,7 +640,9 @@ export default function AIPredictions() {
           <div>
             <div className="text-slate-400 text-sm mb-1">Current {currentGrain} Price</div>
             <div className="text-3xl font-bold flex items-baseline gap-1" style={{ color: currentColor }}>
-              {formatCurrency(currentActualPrice)}
+              <span className={hasCurrentPrice ? 'tabular-nums' : 'tabular-nums animate-pulse'}>
+                {formatCurrency(animatedCurrentPrice)}
+              </span>
               <span className="text-sm font-normal text-slate-400">/Quintal</span>
             </div>
           </div>
@@ -598,12 +663,25 @@ export default function AIPredictions() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           {[7, 30, 90].map((horizon, index) => {
             const hData = predictionData?.horizons?.[horizon];
-            if (!hData) return null;
+            if (!hData) {
+              return (
+                <div key={horizon} className="border border-slate-200 rounded-xl p-4 animate-pulse">
+                  <div className="mb-3 h-4 w-28 rounded bg-slate-200" />
+                  <div className="mb-3 h-8 w-24 rounded bg-slate-200" />
+                  <div className="mb-4 h-6 w-20 rounded bg-slate-100" />
+                  <div className="grid grid-cols-3 gap-3 border-t border-slate-100 pt-3">
+                    <div className="h-8 rounded bg-slate-100" />
+                    <div className="h-8 rounded bg-slate-100" />
+                    <div className="h-8 rounded bg-slate-100" />
+                  </div>
+                </div>
+              );
+            }
 
             const anchorPoint = anchorPoints[index];
             const dynamicPrice = hData.predicted_price;
-            const changePct = ((dynamicPrice - currentActualPrice) / currentActualPrice) * 100;
-            const isUp = changePct >= 0;
+            const changePct = hasCurrentPrice ? ((dynamicPrice - Number(currentActualPrice)) / Number(currentActualPrice)) * 100 : null;
+            const isUp = changePct == null ? true : changePct >= 0;
             const mape = getMetric(hData.metrics, 'mape', 'ensemble_mape');
             const mae = getMetric(hData.metrics, 'mae', 'ensemble_mae', 'ml_mae');
             const confidence = mape == null ? null : Math.max(0, 100 - mape);
@@ -628,7 +706,7 @@ export default function AIPredictions() {
                 </div>
                 <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium mb-3 ${trendBg} ${trendColor}`}>
                   <TrendIcon size={14} />
-                  {Math.abs(changePct).toFixed(2)}% {isUp ? 'Rise' : 'Fall'}
+                  {changePct == null ? 'Updating...' : `${Math.abs(changePct).toFixed(2)}% ${isUp ? 'Rise' : 'Fall'}`}
                 </div>
                 <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-y-2 text-xs">
                   <div>
@@ -652,6 +730,7 @@ export default function AIPredictions() {
         </div>
 
         <div className="h-[300px] w-full mb-8">
+          {chartData.length ? (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
@@ -721,6 +800,11 @@ export default function AIPredictions() {
               />
             </ComposedChart>
           </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-xl bg-slate-50">
+              <div className="h-28 w-full max-w-4xl animate-pulse rounded-lg bg-white shadow-sm" />
+            </div>
+          )}
         </div>
 
         {reasoningData && (
@@ -868,9 +952,19 @@ export default function AIPredictions() {
                     dataKey="displayDate"
                     height={30}
                     stroke="#A78BFA"
-                    travellerWidth={8}
-                    startIndex={efficiencyBrushRange.startIndex}
-                    endIndex={efficiencyBrushRange.endIndex}
+                    travellerWidth={12}
+                    startIndex={activeEfficiencyBrushRange.startIndex}
+                    endIndex={activeEfficiencyBrushRange.endIndex}
+                    onChange={(range) => {
+                      const startIndex = Number(range?.startIndex);
+                      const endIndex = Number(range?.endIndex);
+                      if (Number.isFinite(startIndex) && Number.isFinite(endIndex)) {
+                        setEfficiencyBrushSelection({
+                          startIndex: Math.max(0, Math.min(startIndex, endIndex)),
+                          endIndex: Math.min(efficiencyChartData.length - 1, Math.max(startIndex, endIndex)),
+                        });
+                      }
+                    }}
                   />
 
                   <Line

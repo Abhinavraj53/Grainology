@@ -67,17 +67,17 @@ def _extract_live_dashboard_prices(records: list, metadata: dict) -> dict:
 def fetch_live_dashboard_prices_from_website_api() -> dict:
     """Read the same backend endpoint that powers the visible website table."""
     import requests
-    from datetime import datetime
+    from datetime import datetime, timedelta
     from zoneinfo import ZoneInfo
 
     url = os.environ.get(
         "GRAINOLOGY_MARKETWISE_API_URL",
         "https://grainology.onrender.com/api/agmarknet/marketwise-price-arrival",
     )
-    today = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).date()
     base_payload = {
         "dashboard": "marketwise_price_arrival",
-        "date": today,
+        "date": today.isoformat(),
         "state": 100006,
         "district": [],
         "market": [100009],
@@ -90,7 +90,13 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
         "format": "json",
     }
 
-    def request_prices(payload: dict, label: str) -> dict:
+    def _parse_reported_date(value: object):
+        try:
+            return datetime.strptime(str(value), "%d-%m-%Y").date()
+        except Exception:
+            return None
+
+    def request_prices(payload: dict, label: str) -> tuple[dict, dict]:
         print(f"Website API live dashboard request payload ({label}):", payload)
         try:
             response = requests.post(url, json=payload, timeout=45)
@@ -98,14 +104,16 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
             data = response.json()
         except Exception as exc:
             print(f"Website API live price fetch skipped for {label}: {exc}")
-            return {}
+            return {}, {}
 
         records = data.get("records") or []
         metadata = {
             "reported_dates": data.get("reported_dates") or [],
             "fetched_at": data.get("fetched_at"),
             "source": f"grainology_backend:{data.get('source') or 'unknown'}",
-            "cache_key": f"website_api_marketwise_price_arrival:{label}",
+            "cache_key": f"website_api_marketwise_price_arrival:{label}:date={payload.get('date')}",
+            "request_date": payload.get("date"),
+            "record_count": len(records),
         }
         print(
             f"Website API live dashboard row ({label}):",
@@ -116,16 +124,49 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
                 "record_count": len(records),
             },
         )
-        return _extract_live_dashboard_prices(records, metadata)
+        return _extract_live_dashboard_prices(records, metadata), metadata
 
-    prices = request_prices(base_payload, "default_faq")
-    if "Mustard" not in prices:
-        mustard_payload = {**base_payload, "commodity": [12]}
-        mustard_prices = request_prices(mustard_payload, "mustard_faq")
+    candidates = []
+    for offset in range(0, 4):
+        request_date = (today - timedelta(days=offset)).isoformat()
+        dated_payload = {**base_payload, "date": request_date}
+        prices, metadata = request_prices(dated_payload, f"default_faq_d{offset}")
+        mustard_payload = {**dated_payload, "commodity": [12]}
+        mustard_prices, mustard_meta = request_prices(mustard_payload, f"mustard_faq_d{offset}")
         if "Mustard" not in mustard_prices:
-            mustard_prices = request_prices({**mustard_payload, "grades": []}, "mustard_all_grades")
+            mustard_prices, mustard_meta = request_prices({**mustard_payload, "grades": []}, f"mustard_all_grades_d{offset}")
         if "Mustard" in mustard_prices:
             prices["Mustard"] = mustard_prices["Mustard"]
+        reported = (metadata or mustard_meta or {}).get("reported_dates") or []
+        reported_max = max([d for d in (_parse_reported_date(x) for x in reported) if d is not None], default=None)
+        candidates.append({
+            "request_date": request_date,
+            "reported_max": reported_max,
+            "count": len(prices),
+            "prices": prices,
+        })
+
+    usable = [c for c in candidates if c["prices"]]
+    if not usable:
+        print("Website API returned no usable live dashboard prices")
+        return {}
+
+    complete = [c for c in usable if all(grain in c["prices"] for grain in TARGET_GRAINS)]
+    pool = complete or usable
+    newest_reported = max([c["reported_max"] for c in pool if c["reported_max"] is not None], default=None)
+    if newest_reported is not None:
+        pool = [c for c in pool if c["reported_max"] == newest_reported]
+    pool = sorted(pool, key=lambda c: (-c["count"], c["request_date"]))
+    chosen = pool[0]
+    prices = chosen["prices"]
+    print(
+        "Selected live dashboard request date:",
+        chosen["request_date"],
+        "reported date:",
+        chosen["reported_max"],
+        "price count:",
+        chosen["count"],
+    )
 
     if prices:
         print("Website API live dashboard prices:", {k: v["price"] for k, v in sorted(prices.items())})

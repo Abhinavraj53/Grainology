@@ -14,6 +14,8 @@ const pollSeconds = Number(process.env.LOCAL_KAGGLE_RUN_POLL_SECONDS || 60);
 const timeoutMinutes = Number(process.env.LOCAL_KAGGLE_RUN_TIMEOUT_MINUTES || 360);
 const skipBuild = process.argv.includes('--no-build');
 const skipSync = process.argv.includes('--no-sync');
+const useRemoteNotebook = process.argv.includes('--use-remote-notebook')
+  || process.env.KAGGLE_USE_REMOTE_NOTEBOOK === 'true';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -150,11 +152,19 @@ const waitForCompletion = async () => {
 
 const main = async () => {
   await assertEnv();
+
+  if (useRemoteNotebook) {
+    console.log(`Pulling latest Kaggle notebook source for ${process.env.KAGGLE_KERNEL_ID}...`);
+    await runCommand('kaggle', ['kernels', 'pull', process.env.KAGGLE_KERNEL_ID, '-p', kaggleDir, '-m'], { live: true });
+  }
+
   await ensureKernelMetadata();
 
-  if (!skipBuild) {
+  if (!skipBuild && !useRemoteNotebook) {
     console.log('Regenerating Kaggle notebook from local source...');
     await runCommand('node', ['automation/build_kaggle_notebook.mjs'], { live: true });
+  } else if (useRemoteNotebook) {
+    console.log('Using Kaggle notebook source as-is; local notebook regeneration is skipped.');
   }
 
   console.log(`Pushing and running Kaggle notebook ${process.env.KAGGLE_KERNEL_ID}...`);

@@ -30,8 +30,96 @@ def normalize_live_dashboard_grain(value: object) -> str | None:
     return None
 
 
-def fetch_live_dashboard_prices_from_supabase() -> dict:
-    """Read the same Market Wise cache used by the website table.
+def _extract_live_dashboard_prices(records: list, metadata: dict) -> dict:
+    prices = {}
+    for record in records or []:
+        grain = normalize_live_dashboard_grain(
+            record.get("commodity")
+            or (record.get("raw") or {}).get("cmdt_name")
+        )
+        if not grain or grain in prices:
+            continue
+        price_block = record.get("price") or {}
+        as_on = price_block.get("as_on") if isinstance(price_block, dict) else {}
+        raw = record.get("raw") or {}
+        price = as_on.get("value") if isinstance(as_on, dict) else None
+        if price is None:
+            price = raw.get("as_on_price")
+        try:
+            price = float(price)
+        except Exception:
+            continue
+        if not np.isfinite(price) or price <= 0:
+            continue
+        prices[grain] = {
+            "price": round(price, 2),
+            "reported_dates": metadata.get("reported_dates") or [],
+            "fetched_at": metadata.get("fetched_at"),
+            "source": metadata.get("source"),
+            "cache_key": metadata.get("cache_key"),
+        }
+    return prices
+
+
+def fetch_live_dashboard_prices_from_website_api() -> dict:
+    """Read the same backend endpoint that powers the visible website table."""
+    import requests
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    url = os.environ.get(
+        "GRAINOLOGY_MARKETWISE_API_URL",
+        "https://grainology.onrender.com/api/agmarknet/marketwise-price-arrival",
+    )
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    payload = {
+        "dashboard": "marketwise_price_arrival",
+        "date": today,
+        "state": 100006,
+        "district": [],
+        "market": [100009],
+        "group": [],
+        "commodity": [1, 2, 4],
+        "variety": 100021,
+        "grades": [],
+        "limit": 150,
+        "force": False,
+        "format": "json",
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=45)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as exc:
+        print(f"Website API live price fetch skipped: {exc}")
+        return {}
+
+    records = data.get("records") or []
+    metadata = {
+        "reported_dates": data.get("reported_dates") or [],
+        "fetched_at": data.get("fetched_at"),
+        "source": f"grainology_backend:{data.get('source') or 'unknown'}",
+        "cache_key": "website_api_marketwise_price_arrival",
+    }
+    print(
+        "Website API live dashboard row:",
+        {
+            "reported_dates": metadata["reported_dates"],
+            "fetched_at": metadata["fetched_at"],
+            "source": metadata["source"],
+            "record_count": len(records),
+        },
+    )
+    prices = _extract_live_dashboard_prices(records, metadata)
+    if prices:
+        print("Website API live dashboard prices:", {k: v["price"] for k, v in sorted(prices.items())})
+    else:
+        print("Website API returned no usable live dashboard prices")
+    return prices
+
+
+def fetch_live_dashboard_prices_from_supabase_cache() -> dict:
+    """Read the Market Wise cache as a fallback when the website API is unavailable.
 
     The model trains from canonical/agmarknet_ai_actuals, but the website's visible
     current All States prices come from agmarknet_marketwise_cache. This function
@@ -112,33 +200,15 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
         },
     )
 
-    prices = {}
-    for record in selected_records:
-        grain = normalize_live_dashboard_grain(
-            record.get("commodity")
-            or (record.get("raw") or {}).get("cmdt_name")
-        )
-        if not grain or grain in prices:
-            continue
-        price_block = record.get("price") or {}
-        as_on = price_block.get("as_on") if isinstance(price_block, dict) else {}
-        raw = record.get("raw") or {}
-        price = as_on.get("value") if isinstance(as_on, dict) else None
-        if price is None:
-            price = raw.get("as_on_price")
-        try:
-            price = float(price)
-        except Exception:
-            continue
-        if not np.isfinite(price) or price <= 0:
-            continue
-        prices[grain] = {
-            "price": round(price, 2),
+    prices = _extract_live_dashboard_prices(
+        selected_records,
+        {
             "reported_dates": selected_row.get("reported_dates") or [],
             "fetched_at": selected_row.get("fetched_at"),
             "source": "supabase_agmarknet_marketwise_cache",
             "cache_key": selected_row.get("cache_key"),
-        }
+        },
+    )
     missing_grains = [grain for grain in TARGET_GRAINS if grain not in prices]
     if missing_grains:
         print("Selected live dashboard cache row did not contain:", missing_grains)
@@ -147,6 +217,14 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
     else:
         print("No live dashboard price overrides found in agmarknet_marketwise_cache")
     return prices
+
+
+def fetch_live_dashboard_prices_from_supabase() -> dict:
+    prices = fetch_live_dashboard_prices_from_website_api()
+    if prices:
+        return prices
+    print("Falling back to Supabase agmarknet_marketwise_cache for live dashboard prices")
+    return fetch_live_dashboard_prices_from_supabase_cache()
 
 
 def apply_live_dashboard_price_overrides(predictions: dict, forecast_series: dict, actuals: dict) -> None:

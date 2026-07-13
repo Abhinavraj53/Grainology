@@ -223,11 +223,7 @@ const interpolateForecastMape = (daysIntoFuture: number, horizons: any) => {
   return anchors[anchors.length - 1].mape;
 };
 
-interface AIPredictionsProps {
-  livePriceOverrides?: Record<string, number>;
-}
-
-export default function AIPredictions({ livePriceOverrides = {} }: AIPredictionsProps) {
+export default function AIPredictions() {
   const [isAiUnlocked, setIsAiUnlocked] = useState(hasAiAccess);
   const [data, setData] = useState<any>(null);
   const [meta, setMeta] = useState<PredictionMeta | null>(null);
@@ -241,7 +237,6 @@ export default function AIPredictions({ livePriceOverrides = {} }: AIPredictions
   const [efficiencyPage, setEfficiencyPage] = useState(0);
   const [efficiencyYear, setEfficiencyYear] = useState<string>('all');
   const [efficiencyBrushSelection, setEfficiencyBrushSelection] = useState<{ startIndex: number; endIndex: number } | null>(null);
-  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const syncAiAccess = () => setIsAiUnlocked(hasAiAccess());
@@ -312,11 +307,10 @@ export default function AIPredictions({ livePriceOverrides = {} }: AIPredictions
     const fetchSelectedData = async () => {
       setRefreshing(true);
       try {
-        const [predictionPayload, efficiencyPayload, reasoningPayload, livePricePayload] = await Promise.all([
+        const [predictionPayload, efficiencyPayload, reasoningPayload] = await Promise.all([
           api.getAiPrediction(currentGrain, currentState),
           api.getAiEfficiency(currentGrain, currentState, currentHorizon).catch(() => null),
           api.getAiReasoning(currentGrain, currentState, currentHorizon).catch(() => null),
-          api.getLiveDashboardPrices().catch(() => null),
         ]);
         const selectedReasoning = reasoningPayload?.reasoning || predictionPayload.reasoning;
         const reasoningEntry = selectedReasoning && (selectedReasoning.bullets || selectedReasoning.text || selectedReasoning.headline)
@@ -337,9 +331,6 @@ export default function AIPredictions({ livePriceOverrides = {} }: AIPredictions
           fallbackReason: predictionPayload.fallback_reason || efficiencyPayload?.fallback_reason || null,
           effectiveState: predictionPayload.state || currentState,
         });
-        if (livePricePayload?.success && livePricePayload?.prices) {
-          setLivePrices(livePricePayload.prices);
-        }
         setError('');
       } catch (err) {
         if (cancelled) return;
@@ -595,8 +586,7 @@ export default function AIPredictions({ livePriceOverrides = {} }: AIPredictions
   const selectedPredictionData = data?.predictions?.[currentGrain]?.[currentState] || data?.predictions?.[currentGrain]?.["All States"];
   const latestActualPrice = toFiniteNumber(chartData.slice().reverse().find(item => item.actualPrice !== undefined)?.actualPrice);
   const modelCurrentPrice = toFiniteNumber(selectedPredictionData?.current_price) ?? latestActualPrice;
-  const liveCurrentPrice = toFiniteNumber(livePriceOverrides[currentGrain] ?? livePrices[currentGrain]);
-  const currentActualPrice = liveCurrentPrice ?? modelCurrentPrice;
+  const currentActualPrice = modelCurrentPrice;
   const animatedCurrentPrice = useAnimatedPrice(
     currentActualPrice,
     `${currentGrain}|${currentState}|${currentActualPrice ?? 'pending'}`

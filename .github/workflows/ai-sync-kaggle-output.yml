@@ -1,0 +1,70 @@
+name: AI Sync Kaggle Output
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Publish even if this Kaggle run is already active'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+concurrency:
+  group: grainology-ai-sync-kaggle-output
+  cancel-in-progress: false
+
+jobs:
+  sync-output:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install --upgrade pip
+          pip install kaggle==2.2.3 supabase==2.31.0 jsonschema==4.25.1
+
+      - name: Download latest Kaggle output
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+          KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
+          LOCAL_KAGGLE_OUTPUT_RETRIES: 10
+          LOCAL_KAGGLE_OUTPUT_RETRY_SECONDS: 30
+        run: npm run ai:sync-local:once
+
+      - name: Publish Supabase AI release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AI_PREDICTION_BUCKET: ${{ secrets.AI_PREDICTION_BUCKET }}
+          KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python automation/publish_kaggle_release.py --bundle-dir staging/kaggle-local-sync/release --force
+          else
+            python automation/publish_kaggle_release.py --bundle-dir staging/kaggle-local-sync/release
+          fi
+
+      - name: Upload synced release artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: synced-kaggle-release
+          path: staging/kaggle-local-sync/release/
+          if-no-files-found: ignore

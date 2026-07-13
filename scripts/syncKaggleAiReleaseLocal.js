@@ -80,6 +80,26 @@ const extractZip = async (zipPath, destinationDir) => {
   }
 };
 
+const listFilesForDebug = async (rootDir, maxFiles = 80) => {
+  const files = [];
+  const walk = async (dir, prefix = '') => {
+    if (files.length >= maxFiles) return;
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (files.length >= maxFiles) break;
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const absolutePath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(absolutePath, relativePath);
+      } else {
+        files.push(relativePath);
+      }
+    }
+  };
+  await walk(rootDir);
+  return files;
+};
+
 const copyReleaseFilesFromDirectory = async (sourceDir) => {
   const nestedReleaseDir = path.join(sourceDir, 'release');
   if (await pathExists(nestedReleaseDir)) {
@@ -129,7 +149,13 @@ const copyReleaseFiles = async () => {
 
   const copied = await fs.readdir(releaseDir);
   if (!copied.length) {
-    throw new Error('Kaggle output has files, but none are release files (.json, .csv, .parquet), including inside .zip archives. Confirm the notebook writes the release bundle.');
+    const rootFiles = await listFilesForDebug(outputDir);
+    const extractedFiles = await listFilesForDebug(extractedZipDir);
+    const debugList = [
+      rootFiles.length ? `output files: ${rootFiles.join(', ')}` : 'output files: none',
+      extractedFiles.length ? `zip contents: ${extractedFiles.join(', ')}` : 'zip contents: none',
+    ].join('\n');
+    throw new Error(`Kaggle output has files, but none are release files (.json, .csv, .parquet), including inside .zip archives. Confirm the notebook writes the release bundle.\n${debugList}`);
   }
 };
 

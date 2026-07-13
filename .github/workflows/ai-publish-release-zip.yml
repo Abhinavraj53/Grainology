@@ -1,0 +1,82 @@
+name: AI Publish Release Zip
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_zip_url:
+        description: 'Direct download URL for Kaggle results/release zip. Leave empty if using release_zip_path.'
+        required: false
+        default: ''
+        type: string
+      release_zip_path:
+        description: 'Optional repo path to a zip file, e.g. staging/manual-release/results.zip.'
+        required: false
+        default: ''
+        type: string
+      force:
+        description: 'Publish even if the bundle is older than the active release'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+concurrency:
+  group: grainology-ai-publish-release-zip
+  cancel-in-progress: false
+
+jobs:
+  publish-zip:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install supabase==2.31.0 jsonschema==4.25.1
+
+      - name: Resolve release zip
+        run: |
+          mkdir -p staging/manual-release-zip
+          if [ -n "${{ inputs.release_zip_url }}" ]; then
+            curl -L --fail --retry 3 --retry-delay 5 "${{ inputs.release_zip_url }}" -o staging/manual-release-zip/input.zip
+          elif [ -n "${{ inputs.release_zip_path }}" ]; then
+            cp "${{ inputs.release_zip_path }}" staging/manual-release-zip/input.zip
+          else
+            echo "Provide either release_zip_url or release_zip_path." >&2
+            exit 1
+          fi
+          ls -lh staging/manual-release-zip/input.zip
+
+      - name: Prepare and validate release bundle
+        run: |
+          python automation/prepare_release_zip.py staging/manual-release-zip/input.zip --output staging/manual-release-zip/release
+
+      - name: Publish Supabase AI release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          AI_PREDICTION_BUCKET: ${{ secrets.AI_PREDICTION_BUCKET }}
+          KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python automation/publish_kaggle_release.py --bundle-dir staging/manual-release-zip/release --force
+          else
+            python automation/publish_kaggle_release.py --bundle-dir staging/manual-release-zip/release
+          fi
+
+      - name: Upload prepared release artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-release-zip-bundle
+          path: staging/manual-release-zip/release/
+          if-no-files-found: ignore

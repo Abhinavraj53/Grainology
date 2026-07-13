@@ -4,6 +4,16 @@ import { AgmarknetFilters } from './AgmarknetFilters';
 import AIPredictions from '../AIPredictions';
 
 const API_URL = 'https://grainology.onrender.com/api';
+
+const normalizeAiGrain = (commodityName = '') => {
+  const normalized = String(commodityName).toLowerCase();
+  if (normalized.includes('wheat')) return 'Wheat';
+  if (normalized.includes('paddy')) return 'Paddy';
+  if (normalized.includes('maize')) return 'Maize';
+  if (normalized.includes('mustard') || normalized.includes('rapeseed')) return 'Mustard';
+  return null;
+};
+
 export const AgmarknetDashboard: React.FC = () => {
   const [filters, setFilters] = useState({
     state: 5, // Bihar (Default)
@@ -180,13 +190,25 @@ export const AgmarknetDashboard: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const aiLivePriceOverrides = useMemo(() => {
+    const prices: Record<string, number> = {};
+    for (const record of tableData?.records || []) {
+      const grain = normalizeAiGrain(record.commodity);
+      const value = Number(record.price?.as_on?.value);
+      if (grain && prices[grain] === undefined && Number.isFinite(value) && value > 0) {
+        prices[grain] = value;
+      }
+    }
+    return prices;
+  }, [tableData?.records]);
+
   return (
     <div className="main-layout py-8" style={{ background: 'var(--bg-color)' }}>
       
       <div className="max-w-[1600px] mx-auto w-full px-6">
         {/* AI Predictions */}
         <div className="mb-10">
-          <AIPredictions />
+          <AIPredictions livePriceOverrides={aiLivePriceOverrides} />
         </div>
 
         {/* Header section */}

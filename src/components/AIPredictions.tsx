@@ -23,6 +23,7 @@ const GRAIN_COLORS: Record<string, string> = {
   Mustard: '#A78BFA', // Purple
 };
 const AI_REFRESH_MS = 15 * 60 * 1000;
+const AI_UNAVAILABLE_DELAY_MS = 12000;
 const FORECAST_HISTORY_DAYS = 60;
 const EFFICIENCY_DEFAULT_WINDOW_DAYS = 36500;
 const EFFICIENCY_TABLE_PAGE_SIZE = 10;
@@ -155,19 +156,42 @@ function AIPredictionsSkeleton() {
   );
 }
 
-function AIPredictionsSoftError({ error }: { error: string }) {
+function AIPredictionsLoadingNotice({ timedOut, error }: { timedOut: boolean; error: string }) {
+  const steps = ['Latest release', 'Forecast cards', 'Efficiency graph', 'AI reasoning'];
+
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="rounded-full bg-slate-100 p-2 text-slate-500">
-          <Info size={20} />
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
+          <div className={`rounded-full p-2 ${timedOut ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
+            {timedOut ? <Info size={20} /> : <Brain className="animate-pulse" size={20} />}
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">
+              {timedOut ? 'AI predictions are not available right now' : 'Loading AI Price Intelligence'}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {timedOut
+                ? 'The model output is taking longer than expected. The live market price table below is still available.'
+                : 'Fetching latest model output, state-wise forecasts, backtest metrics, and reasoning.'}
+            </p>
+            {timedOut && error && <p className="mt-1 text-xs text-slate-400">{error}</p>}
+          </div>
         </div>
-        <div>
-          <h2 className="text-base font-semibold text-slate-900">AI Price Intelligence is refreshing</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Forecast data is not ready yet. The live market price table below is still available.
-          </p>
-          {error && <p className="mt-1 text-xs text-slate-400">{error}</p>}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          {steps.map((step, index) => (
+            <div
+              key={step}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                timedOut
+                  ? 'border-slate-200 bg-slate-50 text-slate-400'
+                  : 'border-blue-100 bg-blue-50 text-blue-600 animate-pulse'
+              }`}
+              style={{ animationDelay: `${index * 140}ms` }}
+            >
+              {step}
+            </div>
+          ))}
         </div>
       </div>
     </div>
@@ -206,6 +230,7 @@ export default function AIPredictions() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [predictionWaitTimedOut, setPredictionWaitTimedOut] = useState(false);
   const [currentGrain, setCurrentGrain] = useState<string>('Wheat');
   const [currentState, setCurrentState] = useState<string>('All States');
   const [currentHorizon, setCurrentHorizon] = useState<number>(7);
@@ -230,16 +255,30 @@ export default function AIPredictions() {
     setData(null);
     setMeta(null);
     setError('');
+    setPredictionWaitTimedOut(false);
     setRefreshing(false);
     setLoading(false);
   }, [isAiUnlocked]);
+
+  useEffect(() => {
+    if (!isAiUnlocked || data) {
+      setPredictionWaitTimedOut(false);
+      return undefined;
+    }
+
+    setPredictionWaitTimedOut(false);
+    const timeout = window.setTimeout(() => {
+      setPredictionWaitTimedOut(true);
+    }, AI_UNAVAILABLE_DELAY_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [isAiUnlocked, data, currentGrain, currentState, currentHorizon]);
 
   useEffect(() => {
     if (!isAiUnlocked) return undefined;
 
     let cancelled = false;
     const fetchMeta = async () => {
-      setLoading(true);
       try {
         const nextMeta = await api.getAiPredictionMeta();
         if (cancelled) return;
@@ -565,7 +604,7 @@ export default function AIPredictions() {
 
   if (loading) return <AIPredictionsSkeleton />;
 
-  if (error || !data) return <AIPredictionsSoftError error={error} />;
+  if (error || !data) return <AIPredictionsLoadingNotice timedOut={predictionWaitTimedOut} error={error} />;
 
   const grains = meta?.grains?.length ? meta.grains : Object.keys(data.predictions);
   const predictionData = selectedPredictionData;

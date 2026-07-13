@@ -96,6 +96,12 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
         except Exception:
             return None
 
+    def _parse_fetched_at(value: object):
+        try:
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return None
+
     def request_prices(payload: dict, label: str) -> tuple[dict, dict]:
         print(f"Website API live dashboard request payload ({label}):", payload)
         try:
@@ -144,6 +150,25 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
             "reported_max": reported_max,
             "count": len(prices),
             "prices": prices,
+            "sources": [
+                source
+                for source in [
+                    (metadata or {}).get("source"),
+                    (mustard_meta or {}).get("source") if "Mustard" in prices else None,
+                ]
+                if source
+            ],
+            "latest_fetch": max(
+                [
+                    dt
+                    for dt in [
+                        _parse_fetched_at((metadata or {}).get("fetched_at")),
+                        _parse_fetched_at((mustard_meta or {}).get("fetched_at")),
+                    ]
+                    if dt is not None
+                ],
+                default=None,
+            ),
         })
 
     usable = [c for c in candidates if c["prices"]]
@@ -156,7 +181,20 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
     newest_reported = max([c["reported_max"] for c in pool if c["reported_max"] is not None], default=None)
     if newest_reported is not None:
         pool = [c for c in pool if c["reported_max"] == newest_reported]
-    pool = sorted(pool, key=lambda c: (-c["count"], c["request_date"]))
+    all_cache_pool = [
+        c for c in pool
+        if c["sources"] and all(str(source).endswith(":cache") for source in c["sources"])
+    ]
+    if all_cache_pool:
+        pool = all_cache_pool
+    pool = sorted(
+        pool,
+        key=lambda c: (
+            -c["count"],
+            c["latest_fetch"] if c["latest_fetch"] is not None else float("inf"),
+            c["request_date"],
+        ),
+    )
     chosen = pool[0]
     prices = chosen["prices"]
     print(

@@ -41,6 +41,16 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
     client = get_supabase_client()
     if not client:
         return {}
+    def _coerce_json(value, fallback):
+        if value is None:
+            return fallback
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except Exception:
+                return fallback
+        return value
+
     try:
         response = (
             client.table("agmarknet_marketwise_cache")
@@ -55,9 +65,41 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
         print(f"Live dashboard price override skipped: {exc}")
         return {}
 
+    if not rows:
+        try:
+            response = (
+                client.table("agmarknet_marketwise_cache")
+                .select("cache_key, request_payload, records, reported_dates, fetched_at, expires_at")
+                .order("fetched_at", desc=True)
+                .limit(100)
+                .execute()
+            )
+            rows = response.data or []
+            print("Exact All States cache key not found; scanning recent marketwise cache rows")
+        except Exception as exc:
+            print(f"Live dashboard price fallback scan skipped: {exc}")
+            return {}
+
+    def _row_score(row: dict) -> tuple:
+        cache_key = str(row.get("cache_key") or "")
+        payload = _coerce_json(row.get("request_payload"), {}) or {}
+        records = _coerce_json(row.get("records"), []) or []
+        is_marketwise = "marketwise_price_arrival" in cache_key or payload.get("dashboard") == "marketwise_price_arrival"
+        is_all_states = payload.get("state") == 100006 or "state=100006" in cache_key
+        grain_count = 0
+        seen = set()
+        for record in records:
+            grain = normalize_live_dashboard_grain(record.get("commodity") or (record.get("raw") or {}).get("cmdt_name"))
+            if grain:
+                seen.add(grain)
+        grain_count = len(seen)
+        return (1 if is_marketwise else 0, 1 if is_all_states else 0, grain_count, str(row.get("fetched_at") or ""))
+
+    rows = sorted(rows, key=_row_score, reverse=True)
+
     prices = {}
     for row in rows:
-        records = row.get("records") or []
+        records = _coerce_json(row.get("records"), []) or []
         for record in records:
             grain = normalize_live_dashboard_grain(
                 record.get("commodity")
@@ -82,6 +124,7 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
                 "reported_dates": row.get("reported_dates") or [],
                 "fetched_at": row.get("fetched_at"),
                 "source": "supabase_agmarknet_marketwise_cache",
+                "cache_key": row.get("cache_key"),
             }
     if prices:
         print("Live dashboard price overrides:", {k: v["price"] for k, v in sorted(prices.items())})

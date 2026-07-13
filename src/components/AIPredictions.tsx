@@ -24,7 +24,7 @@ const GRAIN_COLORS: Record<string, string> = {
 };
 const AI_REFRESH_MS = 15 * 60 * 1000;
 const FORECAST_HISTORY_DAYS = 60;
-const EFFICIENCY_DEFAULT_WINDOW_DAYS = 365;
+const EFFICIENCY_DEFAULT_WINDOW_DAYS = 36500;
 const EFFICIENCY_TABLE_PAGE_SIZE = 10;
 const MAX_EFFICIENCY_CHART_POINTS = 5000;
 
@@ -762,8 +762,8 @@ export default function AIPredictions() {
                   />
                   <Tooltip
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: any, name: string) => {
-                      return [formatCurrency(value), name === 'actualPrice' ? 'Actual Price' : 'Predicted Price'];
+                    formatter={(value: any, _name: string, props: any) => {
+                      return [formatCurrency(value), props?.dataKey === 'actualPrice' ? 'Actual Price' : 'Predicted Price'];
                     }}
                     labelStyle={{ fontWeight: 'bold', color: '#334155' }}
                   />
@@ -782,7 +782,7 @@ export default function AIPredictions() {
                   <Line
                     type="monotone"
                     dataKey="actualPrice"
-                    stroke="#64748B"
+                    stroke="#2563EB"
                     strokeWidth={2}
                     dot={false}
                     name="Actual Price"

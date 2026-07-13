@@ -598,7 +598,7 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Release-backed AI prediction API v2.
-router.get('/predictions/v2/meta', async (req, res) => {
+router.get('/predictions/v2/meta', authenticate, async (req, res) => {
   try {
     const meta = await getPredictionMeta();
     res.json({ success: true, data: meta });
@@ -608,12 +608,12 @@ router.get('/predictions/v2/meta', async (req, res) => {
   }
 });
 
-router.get('/predictions/v2/status', async (req, res) => {
+router.get('/predictions/v2/status', authenticate, async (req, res) => {
   const status = await getPredictionStatus();
   res.status(status.available ? 200 : 503).json({ success: status.available, data: status });
 });
 
-router.get('/predictions/v2/efficiency', async (req, res) => {
+router.get('/predictions/v2/efficiency', authenticate, async (req, res) => {
   try {
     const grain = String(req.query.grain || 'Wheat');
     const state = String(req.query.state || 'All States');
@@ -626,7 +626,7 @@ router.get('/predictions/v2/efficiency', async (req, res) => {
   }
 });
 
-router.get('/predictions/v2/reasoning', async (req, res) => {
+router.get('/predictions/v2/reasoning', authenticate, async (req, res) => {
   try {
     const grain = String(req.query.grain || 'Wheat');
     const state = String(req.query.state || 'All States');
@@ -639,7 +639,7 @@ router.get('/predictions/v2/reasoning', async (req, res) => {
   }
 });
 
-router.get('/predictions/v2', async (req, res) => {
+router.get('/predictions/v2', authenticate, async (req, res) => {
   try {
     const grain = String(req.query.grain || 'Wheat');
     const state = String(req.query.state || 'All States');
@@ -652,7 +652,7 @@ router.get('/predictions/v2', async (req, res) => {
 });
 
 // Legacy full local-file AI predictions route.
-router.get('/predictions', async (req, res) => {
+router.get('/predictions', authenticate, async (req, res) => {
   try {
     const dataPath = path.join(__dirname, '..', 'services', 'ml-pipeline', 'dashboard', 'data');
 

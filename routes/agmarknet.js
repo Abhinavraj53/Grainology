@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  getDefaultMarketwisePayload,
   getAgmarknetFilters,
   getCachedStateIds,
   getMarketwiseData,
@@ -77,7 +78,7 @@ router.post('/sync', async (req, res) => {
 // grain → current_price map. Used by the ML pipeline for correct current prices.
 router.get('/dashboard-prices', async (req, res) => {
   try {
-    const result = await getMarketwiseData({}, { forceRefresh: req.query.force === 'true' });
+    const result = await getMarketwiseData(getDefaultMarketwisePayload(), { forceRefresh: req.query.force === 'true' });
     const records = result.records || [];
     const normalizeCommodity = (name = '') => {
       const normalized = String(name).toLowerCase().replace(/\s+/g, ' ').trim();

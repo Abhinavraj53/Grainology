@@ -9,6 +9,32 @@ const COMMON_HEADERS = {
   "user-agent": "Mozilla/5.0"
 };
 
+export const indiaDate = (offsetDays = 0) => {
+  const date = new Date(Date.now() - offsetDays * 86400000);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${map.year}-${map.month}-${map.day}`;
+};
+
+export const getDefaultMarketwisePayload = () => ({
+  dashboard: 'marketwise_price_arrival',
+  date: indiaDate(),
+  state: 100006,
+  district: [],
+  market: [100009],
+  group: [],
+  commodity: [1, 2, 4],
+  variety: 100021,
+  grades: [],
+  limit: 150,
+  format: 'json',
+});
+
 async function fetchWithRetry(url, options, retries = 2) {
   for (let i = 0; i <= retries; i++) {
     const controller = new AbortController();

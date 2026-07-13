@@ -45,7 +45,7 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
         response = (
             client.table("agmarknet_marketwise_cache")
             .select("cache_key, request_payload, records, reported_dates, fetched_at, expires_at")
-            .like("cache_key", "marketwise_price_arrival|%state=None%")
+            .like("cache_key", "marketwise_price_arrival|%state=100006%")
             .order("fetched_at", desc=True)
             .limit(20)
             .execute()

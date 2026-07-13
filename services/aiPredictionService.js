@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getSupabaseAdmin } from '../config/supabase.js';
 import { buildAiReasoning } from './aiReasoningService.js';
-import { getMarketwiseData } from './agmarknetService.js';
+import { getDefaultMarketwisePayload, getMarketwiseData } from './agmarknetService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -133,7 +133,7 @@ const normalizeCommodityName = (name = '') => {
 
 const getLiveAllStatesDashboardPrices = async () => {
   try {
-    const result = await getMarketwiseData({}, { forceRefresh: false });
+    const result = await getMarketwiseData(getDefaultMarketwisePayload(), { forceRefresh: false });
     const prices = {};
     for (const record of result.records || []) {
       const grain = normalizeCommodityName(record.commodity || record.raw?.cmdt_name);

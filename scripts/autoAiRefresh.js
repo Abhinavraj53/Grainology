@@ -103,7 +103,25 @@ const extractStates = (filters) => {
 };
 
 const detectLatestAgmarknetDate = async () => {
-  const result = await getMarketwiseData({ state: ALL_STATES_ID }, { forceRefresh: true });
+  let result;
+  try {
+    result = await getMarketwiseData({ state: ALL_STATES_ID }, { forceRefresh: true });
+  } catch (liveError) {
+    console.warn(`Live Agmarknet latest-date check failed: ${liveError.message}`);
+    try {
+      result = await getMarketwiseData({ state: ALL_STATES_ID }, { forceRefresh: false });
+      console.warn('Continuing latest-date check with cached All States marketwise data.');
+    } catch (cacheError) {
+      const watermark = await getAiActualsWatermark();
+      return {
+        latestAgmarknetDate: watermark.latestDate || null,
+        allStatesActualRows: 0,
+        allStatesCacheKey: null,
+        warning: `Agmarknet latest-date check unavailable; using AI actuals watermark. live=${liveError.message}; cache=${cacheError.message}`,
+      };
+    }
+  }
+
   const { rows } = aggregateMarketRows({
     stateId: ALL_STATES_ID,
     stateName: 'All States',
@@ -124,6 +142,8 @@ const detectLatestAgmarknetDate = async () => {
     latestAgmarknetDate: [latestFromReported, latestFromRows].filter(Boolean).sort().at(-1) || null,
     allStatesActualRows: rows.length,
     allStatesCacheKey: result.cacheKey,
+    source: result.source,
+    stale: Boolean(result.stale),
   };
 };
 
@@ -162,7 +182,19 @@ const refreshOnce = async () => {
   try {
     const watermarkBefore = await getAiActualsWatermark();
     const freshness = await detectLatestAgmarknetDate();
-    const coverage = await needsStateSync();
+    let coverage;
+    try {
+      coverage = await needsStateSync();
+    } catch (coverageError) {
+      coverage = {
+        expectedCount: 0,
+        cachedCount: 0,
+        coverage: 1,
+        insufficientCoverage: false,
+        warning: coverageError.message,
+      };
+      console.warn(`State cache coverage check skipped: ${coverageError.message}`);
+    }
     const hasNewDate = freshness.latestAgmarknetDate
       && (!watermarkBefore.latestDate || freshness.latestAgmarknetDate > watermarkBefore.latestDate);
     const shouldRunHeavy = forceRun || hasNewDate || coverage.insufficientCoverage;
@@ -187,12 +219,22 @@ const refreshOnce = async () => {
 
     if (!shouldRunHeavy) return;
 
-    const syncResult = await syncAgmarknet();
-    await writeStatus({ status: 'synced-agmarknet', sync_result: {
-      successCount: syncResult.successes.length,
-      failureCount: syncResult.failures.length,
-      latestDate: syncResult.latestDate,
-    } });
+    let syncResult = null;
+    try {
+      syncResult = await syncAgmarknet();
+      await writeStatus({ status: 'synced-agmarknet', sync_result: {
+        successCount: syncResult.successes.length,
+        failureCount: syncResult.failures.length,
+        latestDate: syncResult.latestDate,
+      } });
+    } catch (syncError) {
+      if (!forceRun) throw syncError;
+      console.warn(`Agmarknet sync failed during forced AI refresh; continuing with existing cache/Supabase data: ${syncError.message}`);
+      await writeStatus({
+        status: 'agmarknet-sync-skipped-force',
+        sync_warning: syncError.message,
+      });
+    }
 
     await runCommand('node', ['scripts/backfillAiActualsFromCache.js', '--apply'], { live: true });
     const watermarkAfter = await getAiActualsWatermark();

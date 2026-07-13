@@ -7,8 +7,8 @@ dotenv.config();
 
 const projectRoot = process.cwd();
 const pollMinutes = Number(process.env.LOCAL_KAGGLE_SYNC_MINUTES || 15);
-const outputRetryCount = Number(process.env.LOCAL_KAGGLE_OUTPUT_RETRIES || 6);
-const outputRetrySeconds = Number(process.env.LOCAL_KAGGLE_OUTPUT_RETRY_SECONDS || 30);
+const outputRetryCount = Number(process.env.LOCAL_KAGGLE_OUTPUT_RETRIES || 30);
+const outputRetrySeconds = Number(process.env.LOCAL_KAGGLE_OUTPUT_RETRY_SECONDS || 20);
 const runOnce = process.argv.includes('--once');
 const workRoot = path.resolve(process.env.LOCAL_KAGGLE_SYNC_DIR || 'staging', 'kaggle-local-sync');
 const outputDir = path.join(workRoot, 'kaggle-output');
@@ -205,7 +205,7 @@ const syncOnce = async () => {
         throw error;
       }
 
-      console.warn(`Kaggle output is not published yet. Retrying in ${outputRetrySeconds}s (${attempt}/${outputRetryCount})...`);
+      console.warn(`Kaggle output is visible only after Kaggle publishes it through the API. Retrying in ${outputRetrySeconds}s (${attempt}/${outputRetryCount})...`);
       await sleep(Math.max(1, outputRetrySeconds) * 1000);
     }
   }

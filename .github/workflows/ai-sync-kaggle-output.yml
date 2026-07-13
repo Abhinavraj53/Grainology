@@ -19,7 +19,7 @@ concurrency:
 jobs:
   sync-output:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -43,8 +43,8 @@ jobs:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
           KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
-          LOCAL_KAGGLE_OUTPUT_RETRIES: 10
-          LOCAL_KAGGLE_OUTPUT_RETRY_SECONDS: 30
+          LOCAL_KAGGLE_OUTPUT_RETRIES: 30
+          LOCAL_KAGGLE_OUTPUT_RETRY_SECONDS: 20
         run: npm run ai:sync-local:once
 
       - name: Publish Supabase AI release

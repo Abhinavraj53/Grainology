@@ -243,7 +243,11 @@ def fetch_live_dashboard_prices_from_supabase() -> dict:
 def apply_live_dashboard_price_overrides(predictions: dict, forecast_series: dict, actuals: dict) -> None:
     live_prices = fetch_live_dashboard_prices_from_supabase()
     if not live_prices:
+        if str(os.environ.get("LIVE_DASHBOARD_PRICE_STRICT", "true")).strip().lower() in {"1", "true", "yes", "y"}:
+            raise RuntimeError("Live dashboard price strict check failed: no live prices were found")
         return
+
+    strict_live_prices = str(os.environ.get("LIVE_DASHBOARD_PRICE_STRICT", "true")).strip().lower() in {"1", "true", "yes", "y"}
 
     for grain, live in live_prices.items():
         state = "All States"
@@ -287,6 +291,39 @@ def apply_live_dashboard_price_overrides(predictions: dict, forecast_series: dic
             context[-1]["live_price_source"] = live.get("source")
 
         print(f"Aligned {grain} / {state}: current_price {old_current:.2f} -> {new_current:.2f} (ratio {ratio:.6f})")
+
+    audit_rows = []
+    audit_errors = []
+    for grain in TARGET_GRAINS:
+        live = live_prices.get(grain)
+        payload = predictions.get(grain, {}).get("All States")
+        live_price = None if not live else float(live.get("price"))
+        final_price = None if not payload else float(payload.get("current_price") or np.nan)
+        delta = None if live_price is None or final_price is None or not np.isfinite(final_price) else round(final_price - live_price, 4)
+        audit_rows.append({
+            "grain": grain,
+            "live_price": live_price,
+            "final_prediction_current_price": final_price,
+            "delta": delta,
+            "source": None if not live else live.get("source"),
+            "cache_key": None if not live else live.get("cache_key"),
+        })
+        if strict_live_prices:
+            if live_price is None:
+                audit_errors.append(f"{grain}: missing live dashboard price")
+            elif final_price is None or not np.isfinite(final_price):
+                audit_errors.append(f"{grain}: missing final prediction current_price")
+            elif abs(final_price - live_price) > 0.01:
+                audit_errors.append(f"{grain}: final current_price {final_price:.2f} != live price {live_price:.2f}")
+
+    print("Final live dashboard price audit")
+    try:
+        display(pd.DataFrame(audit_rows))
+    except Exception:
+        print(audit_rows)
+
+    if audit_errors:
+        raise RuntimeError("Live dashboard price strict check failed: " + "; ".join(audit_errors))
 `;
 
 let patched = false;

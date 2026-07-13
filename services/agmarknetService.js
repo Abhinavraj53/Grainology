@@ -30,7 +30,7 @@ export const getDefaultMarketwisePayload = () => ({
   group: [],
   commodity: [1, 2, 4],
   variety: 100021,
-  grades: [],
+  grades: [4],
   limit: 150,
   format: 'json',
 });

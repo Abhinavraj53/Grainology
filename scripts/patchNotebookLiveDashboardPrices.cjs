@@ -81,11 +81,12 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
         "group": [],
         "commodity": [1, 2, 4],
         "variety": 100021,
-        "grades": [],
+        "grades": [4],
         "limit": 150,
         "force": False,
         "format": "json",
     }
+    print("Website API live dashboard request payload:", payload)
     try:
         response = requests.post(url, json=payload, timeout=45)
         response.raise_for_status()

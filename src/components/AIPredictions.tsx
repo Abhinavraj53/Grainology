@@ -782,7 +782,7 @@ export default function AIPredictions() {
                   <Line
                     type="monotone"
                     dataKey="actualPrice"
-                    stroke="#2563EB"
+                    stroke="#64748B"
                     strokeWidth={2}
                     dot={false}
                     name="Actual Price"

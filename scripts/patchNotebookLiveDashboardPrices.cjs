@@ -72,7 +72,7 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
         "https://grainology.onrender.com/api/agmarknet/marketwise-price-arrival",
     )
     today = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
-    payload = {
+    base_payload = {
         "dashboard": "marketwise_price_arrival",
         "date": today,
         "state": 100006,
@@ -86,32 +86,44 @@ def fetch_live_dashboard_prices_from_website_api() -> dict:
         "force": False,
         "format": "json",
     }
-    print("Website API live dashboard request payload:", payload)
-    try:
-        response = requests.post(url, json=payload, timeout=45)
-        response.raise_for_status()
-        data = response.json()
-    except Exception as exc:
-        print(f"Website API live price fetch skipped: {exc}")
-        return {}
 
-    records = data.get("records") or []
-    metadata = {
-        "reported_dates": data.get("reported_dates") or [],
-        "fetched_at": data.get("fetched_at"),
-        "source": f"grainology_backend:{data.get('source') or 'unknown'}",
-        "cache_key": "website_api_marketwise_price_arrival",
-    }
-    print(
-        "Website API live dashboard row:",
-        {
-            "reported_dates": metadata["reported_dates"],
-            "fetched_at": metadata["fetched_at"],
-            "source": metadata["source"],
-            "record_count": len(records),
-        },
-    )
-    prices = _extract_live_dashboard_prices(records, metadata)
+    def request_prices(payload: dict, label: str) -> dict:
+        print(f"Website API live dashboard request payload ({label}):", payload)
+        try:
+            response = requests.post(url, json=payload, timeout=45)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as exc:
+            print(f"Website API live price fetch skipped for {label}: {exc}")
+            return {}
+
+        records = data.get("records") or []
+        metadata = {
+            "reported_dates": data.get("reported_dates") or [],
+            "fetched_at": data.get("fetched_at"),
+            "source": f"grainology_backend:{data.get('source') or 'unknown'}",
+            "cache_key": f"website_api_marketwise_price_arrival:{label}",
+        }
+        print(
+            f"Website API live dashboard row ({label}):",
+            {
+                "reported_dates": metadata["reported_dates"],
+                "fetched_at": metadata["fetched_at"],
+                "source": metadata["source"],
+                "record_count": len(records),
+            },
+        )
+        return _extract_live_dashboard_prices(records, metadata)
+
+    prices = request_prices(base_payload, "default_faq")
+    if "Mustard" not in prices:
+        mustard_payload = {**base_payload, "commodity": [12]}
+        mustard_prices = request_prices(mustard_payload, "mustard_faq")
+        if "Mustard" not in mustard_prices:
+            mustard_prices = request_prices({**mustard_payload, "grades": []}, "mustard_all_grades")
+        if "Mustard" in mustard_prices:
+            prices["Mustard"] = mustard_prices["Mustard"]
+
     if prices:
         print("Website API live dashboard prices:", {k: v["price"] for k, v in sorted(prices.items())})
     else:

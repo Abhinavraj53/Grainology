@@ -145,7 +145,12 @@ for (const cell of notebook.cells) {
   if (!source.includes('def generate_predictions(canonical: pd.DataFrame, registry: dict)')) continue;
 
   let next = source;
-  if (!next.includes('def fetch_live_dashboard_prices_from_supabase')) {
+  if (next.includes('def fetch_live_dashboard_prices_from_supabase')) {
+    next = next.replace(
+      /\n\ndef normalize_live_dashboard_grain[\s\S]*?\n\ndef generate_predictions\(canonical: pd\.DataFrame, registry: dict\)/,
+      `${helper}\ndef generate_predictions(canonical: pd.DataFrame, registry: dict)`
+    );
+  } else {
     next = next.replace('\ndef generate_predictions(canonical: pd.DataFrame, registry: dict)', `${helper}\ndef generate_predictions(canonical: pd.DataFrame, registry: dict)`);
   }
   if (!next.includes('apply_live_dashboard_price_overrides(predictions, forecast_series, actuals)')) {

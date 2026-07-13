@@ -258,6 +258,7 @@ export const buildAiReasoning = async ({
     grain,
     state,
     horizon,
+    prediction?.current_price ?? 'no-current-price',
   ].join(':');
   const cached = reasoningCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < GEMINI_REASONING_CACHE_MS) return cached.value;

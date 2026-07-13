@@ -13,6 +13,7 @@ const runOnce = process.argv.includes('--once');
 const workRoot = path.resolve(process.env.LOCAL_KAGGLE_SYNC_DIR || 'staging', 'kaggle-local-sync');
 const outputDir = path.join(workRoot, 'kaggle-output');
 const releaseDir = path.join(workRoot, 'release');
+const extractedZipDir = path.join(workRoot, 'kaggle-output-unzipped');
 
 const requiredEnv = ['KAGGLE_USERNAME', 'KAGGLE_KEY', 'KAGGLE_KERNEL_ID'];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -53,19 +54,60 @@ const runCommand = (command, args, options = {}) => new Promise((resolve, reject
   });
 });
 
+const pathExists = async (targetPath) => {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const extractZip = async (zipPath, destinationDir) => {
+  await fs.rm(destinationDir, { recursive: true, force: true });
+  await fs.mkdir(destinationDir, { recursive: true });
+
+  try {
+    await runCommand('python', ['-m', 'zipfile', '-e', zipPath, destinationDir]);
+    return;
+  } catch (pythonError) {
+    try {
+      await runCommand('py', ['-m', 'zipfile', '-e', zipPath, destinationDir]);
+      return;
+    } catch {
+      throw pythonError;
+    }
+  }
+};
+
+const copyReleaseFilesFromDirectory = async (sourceDir) => {
+  const nestedReleaseDir = path.join(sourceDir, 'release');
+  if (await pathExists(nestedReleaseDir)) {
+    const stat = await fs.stat(nestedReleaseDir);
+    if (stat.isDirectory()) {
+      await fs.cp(nestedReleaseDir, releaseDir, { recursive: true });
+      return true;
+    }
+  }
+
+  const entries = await fs.readdir(sourceDir, { withFileTypes: true }).catch(() => []);
+  const allowedExtensions = new Set(['.json', '.csv', '.parquet']);
+  let copiedAny = false;
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!allowedExtensions.has(path.extname(entry.name).toLowerCase())) continue;
+    await fs.copyFile(path.join(sourceDir, entry.name), path.join(releaseDir, entry.name));
+    copiedAny = true;
+  }
+  return copiedAny;
+};
+
 const copyReleaseFiles = async () => {
   await fs.rm(releaseDir, { recursive: true, force: true });
   await fs.mkdir(releaseDir, { recursive: true });
 
-  const kaggleReleaseDir = path.join(outputDir, 'release');
-  try {
-    const stat = await fs.stat(kaggleReleaseDir);
-    if (stat.isDirectory()) {
-      await fs.cp(kaggleReleaseDir, releaseDir, { recursive: true });
-      return;
-    }
-  } catch {
-    // Kaggle may place files directly in the output root.
+  if (await copyReleaseFilesFromDirectory(outputDir)) {
+    return;
   }
 
   const entries = await fs.readdir(outputDir, { withFileTypes: true });
@@ -74,16 +116,20 @@ const copyReleaseFiles = async () => {
     throw new Error('Kaggle output downloaded successfully, but it contains no files. Save a Kaggle version that writes release files under /kaggle/working/release/.');
   }
 
-  const allowedExtensions = new Set(['.json', '.csv', '.parquet']);
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    if (!allowedExtensions.has(path.extname(entry.name).toLowerCase())) continue;
-    await fs.copyFile(path.join(outputDir, entry.name), path.join(releaseDir, entry.name));
+  const zipFiles = allFiles.filter((entry) => path.extname(entry.name).toLowerCase() === '.zip');
+  for (const zipFile of zipFiles) {
+    const zipPath = path.join(outputDir, zipFile.name);
+    const destinationDir = path.join(extractedZipDir, path.basename(zipFile.name, '.zip'));
+    await extractZip(zipPath, destinationDir);
+    if (await copyReleaseFilesFromDirectory(destinationDir)) {
+      console.log(`Extracted AI release files from ${zipFile.name}`);
+      return;
+    }
   }
 
   const copied = await fs.readdir(releaseDir);
   if (!copied.length) {
-    throw new Error('Kaggle output has files, but none are release files (.json, .csv, .parquet). Confirm the notebook writes the release bundle.');
+    throw new Error('Kaggle output has files, but none are release files (.json, .csv, .parquet), including inside .zip archives. Confirm the notebook writes the release bundle.');
   }
 };
 

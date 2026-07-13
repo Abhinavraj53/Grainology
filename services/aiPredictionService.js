@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { getSupabaseAdmin } from '../config/supabase.js';
 import { buildAiReasoning } from './aiReasoningService.js';
+import { getMarketwiseData } from './agmarknetService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -121,6 +122,84 @@ export const loadReleaseJson = async (fileName) => {
 
 const pickStatePayload = (payload, grain, state) => payload?.[grain]?.[state] || null;
 
+const normalizeCommodityName = (name = '') => {
+  const normalized = String(name).toLowerCase().replace(/\s+/g, ' ').trim();
+  if (normalized.includes('wheat')) return 'Wheat';
+  if (normalized.includes('paddy')) return 'Paddy';
+  if (normalized.includes('maize')) return 'Maize';
+  if (normalized.includes('mustard') || normalized.includes('rapeseed')) return 'Mustard';
+  return null;
+};
+
+const getLiveAllStatesDashboardPrices = async () => {
+  try {
+    const result = await getMarketwiseData({}, { forceRefresh: false });
+    const prices = {};
+    for (const record of result.records || []) {
+      const grain = normalizeCommodityName(record.commodity || record.raw?.cmdt_name);
+      if (!grain || prices[grain]?.price != null) continue;
+      const price = Number(record.price?.as_on?.value ?? record.raw?.as_on_price);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      prices[grain] = {
+        price,
+        source: result.source,
+        reported_dates: result.reportedDates || [],
+        fetched_at: result.fetchedAt || result.updatedAt || null,
+      };
+    }
+    return prices;
+  } catch (error) {
+    console.warn('AI live dashboard price override skipped:', error.message);
+    return {};
+  }
+};
+
+const applyLiveCurrentPrice = (prediction, grain, effectiveState, livePrices) => {
+  if (!prediction || effectiveState !== 'All States') return prediction;
+  const live = livePrices?.[grain];
+  if (!live || !Number.isFinite(Number(live.price))) return prediction;
+  return {
+    ...prediction,
+    current_price: Number(live.price),
+    live_current_price: Number(live.price),
+    live_current_price_source: live.source,
+    live_current_price_dates: live.reported_dates,
+    live_current_price_fetched_at: live.fetched_at,
+  };
+};
+
+const applyLiveActualPrice = (actuals, grain, effectiveState, livePrices) => {
+  if (!actuals || effectiveState !== 'All States') return actuals;
+  const live = livePrices?.[grain];
+  if (!live || !Number.isFinite(Number(live.price))) return actuals;
+
+  if (Array.isArray(actuals)) {
+    if (!actuals.length) return actuals;
+    const next = [...actuals];
+    next[next.length - 1] = {
+      ...next[next.length - 1],
+      price: Number(live.price),
+      live_price_override: true,
+      live_price_source: live.source,
+    };
+    return next;
+  }
+
+  if (Array.isArray(actuals.context)) {
+    if (!actuals.context.length) return actuals;
+    const context = [...actuals.context];
+    context[context.length - 1] = {
+      ...context[context.length - 1],
+      price: Number(live.price),
+      live_price_override: true,
+      live_price_source: live.source,
+    };
+    return { ...actuals, context };
+  }
+
+  return actuals;
+};
+
 const downloadReleaseJson = async (release, relativePath) => {
   const cacheKey = `${release.release_id}:${relativePath}`;
   if (releaseCache.files.has(cacheKey)) return releaseCache.files.get(cacheKey);
@@ -219,11 +298,12 @@ export const getPredictionMeta = async () => {
 export const getPredictionForState = async (grain, state) => {
   const selectedState = state || 'All States';
   const meta = await getPredictionMeta();
-  const [predictions, actuals, forecastSeries, reasoning] = await Promise.all([
+  const [predictions, actuals, forecastSeries, reasoning, livePrices] = await Promise.all([
     loadReleaseJson('predictions.json'),
     loadReleaseJson('actuals.json').catch(() => ({})),
     loadReleaseJson('forecast_series.json').catch(() => ({})),
     loadReleaseJson('reasoning.json').catch(() => ({})),
+    getLiveAllStatesDashboardPrices(),
   ]);
 
   let effectiveState = selectedState;
@@ -246,6 +326,14 @@ export const getPredictionForState = async (grain, state) => {
     throw new Error(`No prediction found for ${grain} / ${selectedState}`);
   }
 
+  prediction = applyLiveCurrentPrice(prediction, grain, effectiveState, livePrices);
+  const selectedActuals = applyLiveActualPrice(
+    pickStatePayload(actuals, grain, effectiveState),
+    grain,
+    effectiveState,
+    livePrices
+  );
+
   return {
     meta,
     grain,
@@ -253,7 +341,7 @@ export const getPredictionForState = async (grain, state) => {
     state: effectiveState,
     fallback_reason,
     prediction,
-    actuals: pickStatePayload(actuals, grain, effectiveState),
+    actuals: selectedActuals,
     forecast_series: pickStatePayload(forecastSeries, grain, effectiveState),
     reasoning: reasoning?.[grain]?.[effectiveState] || reasoning?.[grain] || null,
   };

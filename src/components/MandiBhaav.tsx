@@ -90,6 +90,15 @@ const formatNumber = (value: number | null) =>
     ? '-'
     : value.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const normalizeAiGrain = (commodityName: string) => {
+  const normalized = commodityName.toLowerCase();
+  if (normalized.includes('wheat')) return 'Wheat';
+  if (normalized.includes('paddy')) return 'Paddy';
+  if (normalized.includes('maize')) return 'Maize';
+  if (normalized.includes('mustard') || normalized.includes('rapeseed')) return 'Mustard';
+  return null;
+};
+
 export default function MandiBhaav() {
   const [draftFilters, setDraftFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<DashboardFilters>(DEFAULT_FILTERS);
@@ -199,6 +208,17 @@ export default function MandiBhaav() {
 
   const stateName = states.find((state) => state.state_id === appliedFilters.state)?.state_name || 'All States';
   const latestDate = tableData.reported_dates[0] || priceTitles[0] || 'Unknown';
+  const aiLivePriceOverrides = useMemo(() => {
+    const prices: Record<string, number> = {};
+    for (const record of tableData.records) {
+      const grain = normalizeAiGrain(record.commodity);
+      const value = Number(record.price?.as_on?.value);
+      if (grain && prices[grain] === undefined && Number.isFinite(value) && value > 0) {
+        prices[grain] = value;
+      }
+    }
+    return prices;
+  }, [tableData.records]);
 
   const applyFilters = () => {
     if (!stateIsAvailable) return;
@@ -258,7 +278,7 @@ export default function MandiBhaav() {
 
   return (
     <section data-testid="agmarknet-dashboard" className="rounded-xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/5 md:p-7">
-      <AIPredictions />
+      <AIPredictions livePriceOverrides={aiLivePriceOverrides} />
       <header className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-start">
         <div>
           <h1 className="text-3xl font-semibold text-slate-800">Market Wise Price & Arrival</h1>

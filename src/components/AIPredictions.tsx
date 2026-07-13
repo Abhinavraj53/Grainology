@@ -223,7 +223,11 @@ const interpolateForecastMape = (daysIntoFuture: number, horizons: any) => {
   return anchors[anchors.length - 1].mape;
 };
 
-export default function AIPredictions() {
+interface AIPredictionsProps {
+  livePriceOverrides?: Record<string, number>;
+}
+
+export default function AIPredictions({ livePriceOverrides = {} }: AIPredictionsProps) {
   const [isAiUnlocked, setIsAiUnlocked] = useState(hasAiAccess);
   const [data, setData] = useState<any>(null);
   const [meta, setMeta] = useState<PredictionMeta | null>(null);
@@ -591,7 +595,7 @@ export default function AIPredictions() {
   const selectedPredictionData = data?.predictions?.[currentGrain]?.[currentState] || data?.predictions?.[currentGrain]?.["All States"];
   const latestActualPrice = toFiniteNumber(chartData.slice().reverse().find(item => item.actualPrice !== undefined)?.actualPrice);
   const modelCurrentPrice = toFiniteNumber(selectedPredictionData?.current_price) ?? latestActualPrice;
-  const liveCurrentPrice = toFiniteNumber(livePrices[currentGrain]);
+  const liveCurrentPrice = toFiniteNumber(livePriceOverrides[currentGrain] ?? livePrices[currentGrain]);
   const currentActualPrice = liveCurrentPrice ?? modelCurrentPrice;
   const animatedCurrentPrice = useAnimatedPrice(
     currentActualPrice,

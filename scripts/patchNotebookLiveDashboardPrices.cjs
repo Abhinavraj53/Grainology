@@ -30,6 +30,9 @@ def normalize_live_dashboard_grain(value: object) -> str | None:
     return None
 
 
+LIVE_DASHBOARD_PRICE_CACHE = None
+
+
 def _extract_live_dashboard_prices(records: list, metadata: dict) -> dict:
     prices = {}
     for record in records or []:
@@ -233,11 +236,20 @@ def fetch_live_dashboard_prices_from_supabase_cache() -> dict:
 
 
 def fetch_live_dashboard_prices_from_supabase() -> dict:
+    global LIVE_DASHBOARD_PRICE_CACHE
+    if LIVE_DASHBOARD_PRICE_CACHE:
+        print("Reusing approved live dashboard prices from notebook sanity check")
+        return LIVE_DASHBOARD_PRICE_CACHE
+
     prices = fetch_live_dashboard_prices_from_website_api()
     if prices:
+        LIVE_DASHBOARD_PRICE_CACHE = prices
         return prices
     print("Falling back to Supabase agmarknet_marketwise_cache for live dashboard prices")
-    return fetch_live_dashboard_prices_from_supabase_cache()
+    prices = fetch_live_dashboard_prices_from_supabase_cache()
+    if prices:
+        LIVE_DASHBOARD_PRICE_CACHE = prices
+    return prices
 
 
 def apply_live_dashboard_price_overrides(predictions: dict, forecast_series: dict, actuals: dict) -> None:

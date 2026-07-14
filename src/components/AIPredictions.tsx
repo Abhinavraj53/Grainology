@@ -15,6 +15,15 @@ import {
 import { Brain, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Info } from 'lucide-react';
 import { api } from '../lib/api';
 import type { PredictionMeta } from '../types/aiPrediction.types';
+// Bundled fallback keeps public AI predictions visible while the Render backend redeploys.
+// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
+import fallbackPredictions from '../../services/ml-pipeline/dashboard/data/predictions.json';
+// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
+import fallbackActuals from '../../services/ml-pipeline/dashboard/data/actuals.json';
+// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
+import fallbackForecastSeries from '../../services/ml-pipeline/dashboard/data/forecast_series.json';
+// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
+import fallbackReasoning from '../../services/ml-pipeline/dashboard/data/reasoning.json';
 
 const GRAIN_COLORS: Record<string, string> = {
   Wheat: '#F59E0B', // Amber
@@ -52,6 +61,72 @@ const formatPercent = (value: any, maximumFractionDigits = 2) => {
 const toFiniteNumber = (value: any) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+};
+
+const fallbackPredictionMap: any = fallbackPredictions;
+const fallbackActualMap: any = fallbackActuals;
+const fallbackForecastMap: any = fallbackForecastSeries;
+const fallbackReasoningMap: any = fallbackReasoning;
+
+const getFallbackStates = () => Array.from(
+  new Set(
+    Object.values(fallbackPredictionMap)
+      .flatMap((grainMap: any) => Object.keys(grainMap || {}))
+      .filter(Boolean)
+  )
+);
+
+const getFallbackMeta = (): PredictionMeta => ({
+  release_id: 'bundled-local-release',
+  generated_at: null,
+  data_latest_date: null,
+  schema_version: 'local',
+  source: 'bundled_local',
+  grains: Object.keys(fallbackPredictionMap),
+  states: getFallbackStates() as string[],
+});
+
+const pickFallbackStatePayload = (payload: any, grain: string, state: string) => (
+  payload?.[grain]?.[state] || null
+);
+
+const getFallbackPrediction = (grain: string, state: string) => {
+  const selectedState = state || 'All States';
+  const prediction = pickFallbackStatePayload(fallbackPredictionMap, grain, selectedState)
+    || pickFallbackStatePayload(fallbackPredictionMap, grain, 'All States');
+  const effectiveState = pickFallbackStatePayload(fallbackPredictionMap, grain, selectedState)
+    ? selectedState
+    : 'All States';
+
+  if (!prediction) throw new Error(`No bundled prediction found for ${grain} / ${selectedState}`);
+
+  return {
+    meta: getFallbackMeta(),
+    grain,
+    requested_state: selectedState,
+    state: effectiveState,
+    fallback_reason: effectiveState !== selectedState
+      ? `${selectedState} forecast is not bundled; showing All States forecast.`
+      : null,
+    prediction,
+    actuals: pickFallbackStatePayload(fallbackActualMap, grain, effectiveState),
+    forecast_series: pickFallbackStatePayload(fallbackForecastMap, grain, effectiveState) || [],
+    reasoning: fallbackReasoningMap?.[grain]?.[effectiveState] || fallbackReasoningMap?.[grain] || null,
+  };
+};
+
+const getFallbackReasoning = (grain: string, state: string, horizon: number) => {
+  const predictionPayload = getFallbackPrediction(grain, state);
+  const stateReasoning = predictionPayload.reasoning;
+  return {
+    meta: predictionPayload.meta,
+    grain,
+    requested_state: predictionPayload.requested_state,
+    state: predictionPayload.state,
+    fallback_reason: predictionPayload.fallback_reason,
+    horizon,
+    reasoning: stateReasoning?.[horizon] || stateReasoning?.[String(horizon)] || stateReasoning || null,
+  };
 };
 
 const useAnimatedPrice = (targetValue: number | null, resetKey: string, durationMs = 650) => {
@@ -231,7 +306,11 @@ export default function AIPredictions() {
       } catch (err) {
         if (cancelled) return;
         console.error(err);
-        setError(err instanceof Error ? err.message : 'Error loading AI prediction metadata');
+        const nextMeta = getFallbackMeta();
+        setMeta(nextMeta);
+        setError('');
+        if (nextMeta.grains?.length && !nextMeta.grains.includes(currentGrain)) setCurrentGrain(nextMeta.grains[0]);
+        if (nextMeta.states?.length && !nextMeta.states.includes(currentState)) setCurrentState('All States');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -249,11 +328,23 @@ export default function AIPredictions() {
     const fetchSelectedData = async () => {
       setRefreshing(true);
       try {
-        const [predictionPayload, efficiencyPayload, reasoningPayload] = await Promise.all([
-          api.getAiPrediction(currentGrain, currentState),
-          api.getAiEfficiency(currentGrain, currentState, currentHorizon).catch(() => null),
-          api.getAiReasoning(currentGrain, currentState, currentHorizon).catch(() => null),
-        ]);
+        let predictionPayload;
+        let efficiencyPayload;
+        let reasoningPayload;
+
+        try {
+          [predictionPayload, efficiencyPayload, reasoningPayload] = await Promise.all([
+            api.getAiPrediction(currentGrain, currentState),
+            api.getAiEfficiency(currentGrain, currentState, currentHorizon).catch(() => null),
+            api.getAiReasoning(currentGrain, currentState, currentHorizon).catch(() => null),
+          ]);
+        } catch (apiError) {
+          console.error(apiError);
+          predictionPayload = getFallbackPrediction(currentGrain, currentState);
+          efficiencyPayload = null;
+          reasoningPayload = getFallbackReasoning(currentGrain, currentState, currentHorizon);
+        }
+
         const selectedReasoning = reasoningPayload?.reasoning || predictionPayload.reasoning;
         const reasoningEntry = selectedReasoning && (selectedReasoning.bullets || selectedReasoning.text || selectedReasoning.headline)
           ? { [currentHorizon]: selectedReasoning }

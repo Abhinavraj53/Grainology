@@ -28,12 +28,6 @@ const FORECAST_HISTORY_DAYS = 60;
 const EFFICIENCY_DEFAULT_WINDOW_DAYS = 36500;
 const EFFICIENCY_TABLE_PAGE_SIZE = 10;
 const MAX_EFFICIENCY_CHART_POINTS = 5000;
-const AUTH_SYNC_EVENT = 'grainology-auth-changed';
-
-const hasAiAccess = () => (
-  typeof window !== 'undefined'
-  && Boolean(window.localStorage.getItem('auth_token'))
-);
 
 const getMetric = (metrics: any, ...keys: string[]) => {
   for (const key of keys) {
@@ -97,32 +91,6 @@ const useAnimatedPrice = (targetValue: number | null, resetKey: string, duration
 
   return displayValue;
 };
-
-function AIPredictionsLocked() {
-  return (
-    <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="rounded-full bg-blue-50 p-2 text-blue-600">
-            <Brain size={22} />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">AI Price Intelligence</h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Login to view state-wise forecasts, model efficiency, and AI reasoning. Market prices remain available below.
-            </p>
-          </div>
-        </div>
-        <a
-          href="/login"
-          className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800"
-        >
-          Login to view AI predictions
-        </a>
-      </div>
-    </div>
-  );
-}
 
 function AIPredictionsSkeleton() {
   return (
@@ -224,7 +192,6 @@ const interpolateForecastMape = (daysIntoFuture: number, horizons: any) => {
 };
 
 export default function AIPredictions() {
-  const [isAiUnlocked, setIsAiUnlocked] = useState(hasAiAccess);
   const [data, setData] = useState<any>(null);
   const [meta, setMeta] = useState<PredictionMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -239,28 +206,7 @@ export default function AIPredictions() {
   const [efficiencyBrushSelection, setEfficiencyBrushSelection] = useState<{ startIndex: number; endIndex: number } | null>(null);
 
   useEffect(() => {
-    const syncAiAccess = () => setIsAiUnlocked(hasAiAccess());
-    syncAiAccess();
-    window.addEventListener('storage', syncAiAccess);
-    window.addEventListener(AUTH_SYNC_EVENT, syncAiAccess);
-    return () => {
-      window.removeEventListener('storage', syncAiAccess);
-      window.removeEventListener(AUTH_SYNC_EVENT, syncAiAccess);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isAiUnlocked) return;
-    setData(null);
-    setMeta(null);
-    setError('');
-    setPredictionWaitTimedOut(false);
-    setRefreshing(false);
-    setLoading(false);
-  }, [isAiUnlocked]);
-
-  useEffect(() => {
-    if (!isAiUnlocked || data) {
+    if (data) {
       setPredictionWaitTimedOut(false);
       return undefined;
     }
@@ -271,11 +217,9 @@ export default function AIPredictions() {
     }, AI_UNAVAILABLE_DELAY_MS);
 
     return () => window.clearTimeout(timeout);
-  }, [isAiUnlocked, data, currentGrain, currentState, currentHorizon]);
+  }, [data, currentGrain, currentState, currentHorizon]);
 
   useEffect(() => {
-    if (!isAiUnlocked) return undefined;
-
     let cancelled = false;
     const fetchMeta = async () => {
       try {
@@ -298,11 +242,9 @@ export default function AIPredictions() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isAiUnlocked]);
+  }, []);
 
   useEffect(() => {
-    if (!isAiUnlocked) return undefined;
-
     let cancelled = false;
     const fetchSelectedData = async () => {
       setRefreshing(true);
@@ -354,7 +296,7 @@ export default function AIPredictions() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isAiUnlocked, meta, currentGrain, currentState, currentHorizon]);
+  }, [meta, currentGrain, currentState, currentHorizon]);
 
   useEffect(() => {
     setEfficiencyPage(0);
@@ -592,9 +534,6 @@ export default function AIPredictions() {
     `${currentGrain}|${currentState}|${currentActualPrice ?? 'pending'}`
   );
   const hasCurrentPrice = currentActualPrice != null && currentActualPrice > 0;
-
-
-  if (!isAiUnlocked) return <AIPredictionsLocked />;
 
   if (loading) return <AIPredictionsSkeleton />;
 

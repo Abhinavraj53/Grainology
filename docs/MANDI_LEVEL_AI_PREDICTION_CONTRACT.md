@@ -17,7 +17,7 @@ kaggle/grainology_state_forecaster.ipynb
 kaggle/grainology_mandi_forecaster.ipynb
 ```
 
-The generated training cell uses chronological train, calibration, and untouched final-holdout windows. CI regenerates both notebooks and compiles every Python code cell before allowing the automation workflow to proceed.
+The generated training cell uses chronological train, calibration, and untouched final-holdout windows. The default operational score uses the latest 365-day holdout after a separate 365-day calibration window, matching a model that is retrained regularly more closely than a five-year frozen forecast. A bounded calibration-only bias factor is reused by the serving path. CI regenerates both notebooks and compiles every Python code cell before allowing the automation workflow to proceed.
 
 ## Notebook Output
 

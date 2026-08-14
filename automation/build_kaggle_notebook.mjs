@@ -109,8 +109,9 @@ Safe model-improvement knobs can be set as Kaggle environment variables:
 - \`MAX_TRAIN_ROWS_PER_MODEL=250000\`
 - \`TEMPORAL_VALIDATION_FOLDS=3\`
 - \`MIN_TEMPORAL_FOLD_WIN_RATIO=0.50\`
-- \`EVALUATION_HOLDOUT_RATIO=0.20\`
-- \`ENSEMBLE_CALIBRATION_RATIO=0.35\`
+- \`EVALUATION_HOLDOUT_DAYS=365\`
+- \`ENSEMBLE_CALIBRATION_DAYS=365\`
+- \`MAX_BIAS_CORRECTION_PCT=8\`
 - \`CONFORMAL_ALPHA=0.10\`
 
 Reported MAPE and MAE come from an untouched chronological holdout. Do not compare them with the older random-split dashboard score. The release contract remains compatible with the Grainology website.
@@ -133,7 +134,7 @@ let configSource = cellSource(cells[configIndex])
   );
 
 if (!configSource.includes('EVALUATION_HOLDOUT_RATIO =')) {
-  const strictSettings = `\n# Leakage-safe evaluation and calibrated uncertainty controls.\nTEMPORAL_VALIDATION_FOLDS = int(os.environ.get("TEMPORAL_VALIDATION_FOLDS", "3"))\nMIN_TEMPORAL_FOLD_WIN_RATIO = float(os.environ.get("MIN_TEMPORAL_FOLD_WIN_RATIO", "0.50"))\nEVALUATION_HOLDOUT_RATIO = float(os.environ.get("EVALUATION_HOLDOUT_RATIO", "0.20"))\nENSEMBLE_CALIBRATION_RATIO = float(os.environ.get("ENSEMBLE_CALIBRATION_RATIO", "0.35"))\nREFIT_SELECTED_MODELS_ON_FULL_DATA = env_bool("REFIT_SELECTED_MODELS_ON_FULL_DATA", True)\n`;
+  const strictSettings = `\n# Leakage-safe evaluation and calibrated uncertainty controls.\nTEMPORAL_VALIDATION_FOLDS = int(os.environ.get("TEMPORAL_VALIDATION_FOLDS", "3"))\nMIN_TEMPORAL_FOLD_WIN_RATIO = float(os.environ.get("MIN_TEMPORAL_FOLD_WIN_RATIO", "0.50"))\nEVALUATION_HOLDOUT_RATIO = float(os.environ.get("EVALUATION_HOLDOUT_RATIO", "0.20"))\nENSEMBLE_CALIBRATION_RATIO = float(os.environ.get("ENSEMBLE_CALIBRATION_RATIO", "0.35"))\nEVALUATION_HOLDOUT_DAYS = int(os.environ.get("EVALUATION_HOLDOUT_DAYS", "365"))\nENSEMBLE_CALIBRATION_DAYS = int(os.environ.get("ENSEMBLE_CALIBRATION_DAYS", "365"))\nMAX_BIAS_CORRECTION_PCT = float(os.environ.get("MAX_BIAS_CORRECTION_PCT", "8"))\nREFIT_SELECTED_MODELS_ON_FULL_DATA = env_bool("REFIT_SELECTED_MODELS_ON_FULL_DATA", True)\n`;
   configSource = configSource.replace(
     'CONFORMAL_ALPHA = float(os.environ.get("CONFORMAL_ALPHA", "0.10"))',
     `CONFORMAL_ALPHA = float(os.environ.get("CONFORMAL_ALPHA", "0.10"))${strictSettings}`
@@ -165,6 +166,19 @@ trainSource = trainSource.replace(
   'registry["efficiency_rows"].extend(trained.get("efficiency_rows", trained["validation_rows"]))',
 );
 cells[trainIndex] = code(trainSource);
+
+// Apply the calibration factor learned before the untouched holdout to the
+// same serving path used for state, national-parity, and mandi forecasts.
+const predictHeadingIndex = findCell('## Source: predict');
+const predictIndex = cells.findIndex((cell, index) => index > predictHeadingIndex && cell.cell_type === 'code');
+let predictSource = cellSource(cells[predictIndex]);
+const predictMethodStart = predictSource.indexOf('def predict_method_price(');
+const liveNormalizerStart = predictSource.indexOf('def normalize_live_dashboard_grain(');
+if (predictMethodStart < 0 || liveNormalizerStart <= predictMethodStart) {
+  throw new Error('Notebook base predict cell is missing predict_method_price boundaries');
+}
+predictSource = `${predictSource.slice(0, predictMethodStart)}${readStandaloneCell('calibrated_predict_method.py')}\n${predictSource.slice(liveNormalizerStart)}`;
+cells[predictIndex] = code(predictSource);
 
 const reasoningHeadingIndex = findCell('## Source: reasoning');
 if (reasoningHeadingIndex < 0) throw new Error('Notebook base is missing reasoning source section');

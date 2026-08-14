@@ -11,15 +11,33 @@ def _apply_fixed_ensemble(predictions: dict[str, np.ndarray], weights: dict[str,
     predictions["ensemble"] = np.average(values, axis=0, weights=member_weights)
 
 
+def _bounded_bias_factor(actual: np.ndarray, predicted: np.ndarray) -> float:
+    actual = np.asarray(actual, dtype=float)
+    predicted = np.asarray(predicted, dtype=float)
+    valid = (actual > 0) & (predicted > 0) & np.isfinite(actual) & np.isfinite(predicted)
+    if valid.sum() < 5:
+        return 1.0
+    factor = float(np.exp(np.median(np.log(actual[valid] / predicted[valid]))))
+    max_bias = max(0.0, float(MAX_BIAS_CORRECTION_PCT)) / 100.0
+    return float(np.clip(factor, 1.0 - max_bias, 1.0 + max_bias))
+
+
 def _unfitted_copy(name: str, fitted: object) -> object:
     from sklearn.base import clone
 
     template = fitted[0] if name == "ridge" and isinstance(fitted, tuple) else fitted
     try:
-        return clone(template)
+        copied = clone(template)
     except Exception:
         params = template.get_params() if hasattr(template, "get_params") else {}
-        return template.__class__(**params)
+        copied = template.__class__(**params)
+    if name == "xgboost" and hasattr(copied, "set_params"):
+        updates = {"early_stopping_rounds": None}
+        best_iteration = getattr(template, "best_iteration", None)
+        if best_iteration is not None:
+            updates["n_estimators"] = max(1, int(best_iteration) + 1)
+        copied.set_params(**updates)
+    return copied
 
 
 def refit_selected_models(
@@ -75,11 +93,16 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
     if len(data) < MIN_VALIDATION_SAMPLES * 4:
         return None
 
-    holdout_ratio = min(0.35, max(0.10, EVALUATION_HOLDOUT_RATIO))
-    holdout_cutoff = pd.Timestamp(data["date"].quantile(1.0 - holdout_ratio)).normalize()
+    latest_origin_date = pd.Timestamp(data["date"].max()).normalize()
+    holdout_cutoff = latest_origin_date - pd.Timedelta(days=max(90, EVALUATION_HOLDOUT_DAYS) - 1)
+    if len(data[data["date"] >= holdout_cutoff]) < MIN_VALIDATION_SAMPLES:
+        holdout_ratio = min(0.35, max(0.10, EVALUATION_HOLDOUT_RATIO))
+        holdout_cutoff = pd.Timestamp(data["date"].quantile(1.0 - holdout_ratio)).normalize()
     development = data[data["date"] < holdout_cutoff].copy()
-    calibration_ratio = min(0.45, max(0.15, ENSEMBLE_CALIBRATION_RATIO))
-    calibration_cutoff = pd.Timestamp(development["date"].quantile(1.0 - calibration_ratio)).normalize()
+    calibration_cutoff = holdout_cutoff - pd.Timedelta(days=max(90, ENSEMBLE_CALIBRATION_DAYS))
+    if len(development[development["date"] >= calibration_cutoff]) < MIN_VALIDATION_SAMPLES:
+        calibration_ratio = min(0.45, max(0.15, ENSEMBLE_CALIBRATION_RATIO))
+        calibration_cutoff = pd.Timestamp(development["date"].quantile(1.0 - calibration_ratio)).normalize()
 
     pre_embargo_train = data[data["date"] < calibration_cutoff]
     train = data[
@@ -155,15 +178,27 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
     for state, state_calibration in calibration.groupby("state_name", sort=False):
         idx = state_calibration.index
         actual = state_calibration["target_price"].to_numpy(dtype=float)
+        current = state_calibration["price"].to_numpy(dtype=float)
+        method_bias_factors = {}
+        calibrated_state_predictions = {}
+        for name, series in calibration_series.items():
+            raw_prediction = series.loc[idx].to_numpy(dtype=float)
+            factor = 1.0 if name == "baseline" else _bounded_bias_factor(actual, raw_prediction)
+            method_bias_factors[name] = factor
+            calibrated_state_predictions[name] = horizon_clip(
+                current,
+                raw_prediction * factor,
+                horizon,
+            )
         method_scores = {
-            name: mape(actual, series.loc[idx].to_numpy(dtype=float))
-            for name, series in calibration_series.items()
+            name: mape(actual, prediction)
+            for name, prediction in calibrated_state_predictions.items()
         }
         method_maes = {
-            name: mae(actual, series.loc[idx].to_numpy(dtype=float))
-            for name, series in calibration_series.items()
+            name: mae(actual, prediction)
+            for name, prediction in calibrated_state_predictions.items()
         }
-        baseline_pred = calibration_series["baseline"].loc[idx].to_numpy(dtype=float)
+        baseline_pred = calibrated_state_predictions["baseline"]
         baseline_error = np.abs(baseline_pred - actual) / np.maximum(np.abs(actual), 1e-9) * 100
         robust_gate = {}
         passing = []
@@ -171,7 +206,7 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
         for method, score in method_scores.items():
             if method == "baseline" or not np.isfinite(score):
                 continue
-            candidate_pred = calibration_series[method].loc[idx].to_numpy(dtype=float)
+            candidate_pred = calibrated_state_predictions[method]
             candidate_error = np.abs(candidate_pred - actual) / np.maximum(np.abs(actual), 1e-9) * 100
             improvement = baseline_error - candidate_error
             lower_bound = _bootstrap_lower_bound(
@@ -217,7 +252,7 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
                 selected = "ensemble"
             reason = "temporal_calibration_gate_passed"
 
-        selected_calibration = calibration_series[selected].loc[idx].to_numpy(dtype=float)
+        selected_calibration = calibrated_state_predictions[selected]
         radius = _conformal_radius(actual, selected_calibration)
         gates[state] = {
             "selected_method": selected,
@@ -238,6 +273,12 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
                 for name, score in method_maes.items()
                 if np.isfinite(score)
             },
+            "method_bias_factors": {
+                name: round(float(factor), 8)
+                for name, factor in method_bias_factors.items()
+            },
+            "price_bias_factor": round(float(method_bias_factors.get(selected, 1.0)), 8),
+            "bias_calibration_method": "bounded_median_log_residual",
             "ensemble_weights": ensemble_weights,
             "robust_gate": robust_gate,
             "validation_strategy": "horizon_embargo_temporal_holdout",
@@ -257,9 +298,14 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
         name: pd.Series(prediction, index=holdout.index)
         for name, prediction in holdout_predictions.items()
     }
+    holdout_evaluated_series = {
+        name: series.copy()
+        for name, series in holdout_series.items()
+    }
     for state, state_holdout in holdout.groupby("state_name", sort=False):
         idx = state_holdout.index
         actual = state_holdout["target_price"].to_numpy(dtype=float)
+        current = state_holdout["price"].to_numpy(dtype=float)
         gate = gates.setdefault(state, {
             "selected_method": "baseline",
             "reason": "missing_calibration_series",
@@ -279,15 +325,20 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
             gate["selected_method"] = selected
             gate["reason"] = "selected_model_unavailable_on_holdout"
 
+        method_bias_factors = gate.get("method_bias_factors") or {}
+        for name, series in holdout_series.items():
+            factor = 1.0 if name == "baseline" else float(method_bias_factors.get(name, 1.0))
+            adjusted = horizon_clip(current, series.loc[idx].to_numpy(dtype=float) * factor, horizon)
+            holdout_evaluated_series[name].loc[idx] = adjusted
         holdout_mapes = {
             name: mape(actual, series.loc[idx].to_numpy(dtype=float))
-            for name, series in holdout_series.items()
+            for name, series in holdout_evaluated_series.items()
         }
         holdout_maes = {
             name: mae(actual, series.loc[idx].to_numpy(dtype=float))
-            for name, series in holdout_series.items()
+            for name, series in holdout_evaluated_series.items()
         }
-        selected_pred = holdout_series[selected].loc[idx].to_numpy(dtype=float)
+        selected_pred = holdout_evaluated_series[selected].loc[idx].to_numpy(dtype=float)
         radius = float(gate.get("conformal_log_radius") or np.log(1.25))
         lower = selected_pred * np.exp(-radius)
         upper = selected_pred * np.exp(radius)
@@ -335,17 +386,21 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
         .abs()
         .mean()
     )
+    evaluated_holdout_predictions = {
+        name: series.loc[holdout.index].to_numpy(dtype=float)
+        for name, series in holdout_evaluated_series.items()
+    }
     global_method_mapes = {
         name: round(mape(actual_all, prediction), 4)
-        for name, prediction in holdout_predictions.items()
+        for name, prediction in evaluated_holdout_predictions.items()
     }
     global_method_mae = {
         name: round(mae(actual_all, prediction), 4)
-        for name, prediction in holdout_predictions.items()
+        for name, prediction in evaluated_holdout_predictions.items()
     }
     global_method_mase = {
         name: round(mase(actual_all, prediction, scale), 4)
-        for name, prediction in holdout_predictions.items()
+        for name, prediction in evaluated_holdout_predictions.items()
     }
 
     if transparent:
@@ -418,6 +473,9 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int, transparent: boo
             "supervised_rows": int(len(data)),
             "raw_feature_rows": int(len(raw)),
             "target_match_tolerance_days": TARGET_MATCH_TOLERANCE_DAYS,
+            "evaluation_holdout_days": int(EVALUATION_HOLDOUT_DAYS),
+            "ensemble_calibration_days": int(ENSEMBLE_CALIBRATION_DAYS),
+            "max_bias_correction_pct": float(MAX_BIAS_CORRECTION_PCT),
             "embargo_removed_rows": int(embargo_removed),
             "validation_strategy": "horizon_embargo_temporal_holdout",
             "target_match_offsets": {

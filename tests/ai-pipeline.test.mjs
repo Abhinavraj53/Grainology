@@ -90,6 +90,10 @@ test('generated mandi notebook is standalone and contains the upgraded contract'
   const source = notebook.cells.map((cell) => (cell.source || []).join('')).join('\n');
 
   assert.match(source, /horizon_embargo_temporal_holdout/);
+  assert.match(source, /EVALUATION_HOLDOUT_DAYS/);
+  assert.match(source, /ENSEMBLE_CALIBRATION_DAYS/);
+  assert.match(source, /price_bias_factor/);
+  assert.match(source, /early_stopping_rounds": None/);
   assert.match(source, /evaluation_report\.json/);
   assert.match(source, /data_drift_report\.json/);
   assert.match(source, /apply_live_dashboard_price_overrides/);

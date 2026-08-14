@@ -1,0 +1,45 @@
+name: ML Contract CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ml-contract-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Compile Python pipeline sources
+        run: python -m compileall -q automation kaggle/src
+
+      - name: Regenerate standalone Kaggle notebooks
+        run: npm run ai:patch-mandi-notebook
+
+      - name: Verify generated notebooks are committed
+        run: git diff --exit-code -- kaggle/grainology_state_forecaster.ipynb kaggle/grainology_mandi_forecaster.ipynb
+
+      - name: Run AI contract tests
+        run: npm run ai:validate-release
+
+      - name: Build production frontend
+        run: npm run build

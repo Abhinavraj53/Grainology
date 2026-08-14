@@ -631,7 +631,15 @@ router.get('/predictions/v2/reasoning', async (req, res) => {
     const grain = String(req.query.grain || 'Wheat');
     const state = String(req.query.state || 'All States');
     const horizon = Number(req.query.horizon || 7);
-    const data = await getReasoningForState(grain, state, horizon);
+    const data = await getReasoningForState(grain, state, horizon, {
+      nearest: String(req.query.nearest || '').toLowerCase() === 'true',
+      lat: req.query.lat,
+      lng: req.query.lng,
+      market_id: req.query.market_id,
+      market: req.query.market,
+      district: req.query.district,
+      distance_km: req.query.distance_km,
+    });
     res.json({ success: true, data });
   } catch (error) {
     console.error('AI prediction reasoning error:', error);
@@ -643,7 +651,15 @@ router.get('/predictions/v2', async (req, res) => {
   try {
     const grain = String(req.query.grain || 'Wheat');
     const state = String(req.query.state || 'All States');
-    const data = await getPredictionForState(grain, state);
+    const data = await getPredictionForState(grain, state, {
+      nearest: String(req.query.nearest || '').toLowerCase() === 'true',
+      lat: req.query.lat,
+      lng: req.query.lng,
+      market_id: req.query.market_id,
+      market: req.query.market,
+      district: req.query.district,
+      distance_km: req.query.distance_km,
+    });
     res.json({ success: true, data });
   } catch (error) {
     console.error('AI prediction v2 error:', error);

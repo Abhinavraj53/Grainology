@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
 import Navigation from './components/Navigation';
@@ -9,13 +10,25 @@ import About from './pages/About';
 import Services from './pages/Services';
 import Features from './pages/Features';
 import Contact from './pages/Contact';
-import CustomerPanel from './components/CustomerPanel';
-import AdminPanel from './components/AdminPanel';
 import KYCCallback from './pages/KYCCallback';
 import { AgmarknetDashboard } from './components/agmarknet/AgmarknetDashboard';
 import ScrollToTop from './components/ScrollToTop';
 import { ToastProvider } from './contexts/ToastContext';
 import { PopupProvider } from './contexts/PopupContext';
+
+const CustomerPanel = lazy(() => import('./components/CustomerPanel'));
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+
+function DashboardLoading() {
+  return (
+    <div className="min-h-screen bg-green-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto" />
+        <p className="mt-4 text-gray-600">Loading dashboard...</p>
+      </div>
+    </div>
+  );
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, profile, loading } = useAuth();
@@ -43,21 +56,22 @@ function Dashboard() {
 
   // Wait for profile to load before determining which panel to show
   if (loading || !profile) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoading />;
   }
 
   if (profile.role === 'admin' || profile.role === 'super_admin') {
-    return <AdminPanel profile={profile} onSignOut={signOut} signingOut={signingOut} />;
+    return (
+      <Suspense fallback={<DashboardLoading />}>
+        <AdminPanel profile={profile} onSignOut={signOut} signingOut={signingOut} />
+      </Suspense>
+    );
   }
 
-  return <CustomerPanel profile={profile} onSignOut={signOut} signingOut={signingOut} />;
+  return (
+    <Suspense fallback={<DashboardLoading />}>
+      <CustomerPanel profile={profile} onSignOut={signOut} signingOut={signingOut} />
+    </Suspense>
+  );
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {

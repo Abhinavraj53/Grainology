@@ -41,6 +41,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install kaggle==2.2.3 supabase==2.31.0 jsonschema==4.25.1
 
+      - name: Validate AI contracts
+        run: |
+          npm run ai:validate-release
+          python -m compileall -q automation kaggle/src
+
       - name: Download current latest-data dataset as merge base
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}

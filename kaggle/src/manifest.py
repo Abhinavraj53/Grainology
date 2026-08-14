@@ -74,6 +74,14 @@ def finalize_release(canonical: pd.DataFrame) -> dict:
 
     generated_at = datetime.now(timezone.utc).isoformat()
     data_latest_date = pd.to_datetime(canonical["date"]).max().date().isoformat()
+    markets_path = RELEASE_DIR / "markets.json"
+    market_count = 0
+    if markets_path.exists():
+        try:
+            market_payload = json.loads(markets_path.read_text(encoding="utf-8"))
+            market_count = len(market_payload.get("markets", market_payload if isinstance(market_payload, list) else []))
+        except Exception:
+            market_count = 0
     manifest = {
         "schema_version": RELEASE_SCHEMA_VERSION,
         "canonical_schema_version": CANONICAL_SCHEMA_VERSION,
@@ -89,6 +97,9 @@ def finalize_release(canonical: pd.DataFrame) -> dict:
         "horizons": HORIZONS,
         "states": states,
         "aggregation_method": os.environ.get("AGGREGATION_METHOD", "median"),
+        "market_prediction_available": bool(market_count),
+        "market_count": int(market_count),
+        "market_model_mode": os.environ.get("MARKET_MODEL_MODE") if market_count else None,
         "code_version": os.environ.get("GITHUB_SHA") or os.environ.get("KAGGLE_KERNEL_RUN_ID") or "kaggle-local",
         "files": dict(sorted(files.items())),
     }

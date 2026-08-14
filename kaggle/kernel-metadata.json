@@ -1,7 +1,7 @@
 {
   "id": "sanjayj23iitk/graninology",
   "title": "Graninology",
-  "code_file": "grainology_state_forecaster.ipynb",
+  "code_file": "grainology_mandi_forecaster.ipynb",
   "language": "python",
   "kernel_type": "notebook",
   "is_private": true,

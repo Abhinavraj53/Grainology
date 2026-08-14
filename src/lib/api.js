@@ -781,8 +781,15 @@ class ApiClient {
     return response.data;
   }
 
-  async getAiPrediction(grain = 'Wheat', state = 'All States') {
+  async getAiPrediction(grain = 'Wheat', state = 'All States', options = {}) {
     const params = new URLSearchParams({ grain, state });
+    if (options.nearest) params.set('nearest', 'true');
+    if (options.lat != null) params.set('lat', String(options.lat));
+    if (options.lng != null) params.set('lng', String(options.lng));
+    if (options.market_id) params.set('market_id', String(options.market_id));
+    if (options.market) params.set('market', String(options.market));
+    if (options.district) params.set('district', String(options.district));
+    if (options.distance_km != null) params.set('distance_km', String(options.distance_km));
     const response = await this.request(`/mandi/predictions/v2?${params.toString()}`);
     return response.data;
   }
@@ -793,8 +800,15 @@ class ApiClient {
     return response.data;
   }
 
-  async getAiReasoning(grain = 'Wheat', state = 'All States', horizon = 7) {
+  async getAiReasoning(grain = 'Wheat', state = 'All States', horizon = 7, options = {}) {
     const params = new URLSearchParams({ grain, state, horizon: String(horizon) });
+    if (options.nearest) params.set('nearest', 'true');
+    if (options.lat != null) params.set('lat', String(options.lat));
+    if (options.lng != null) params.set('lng', String(options.lng));
+    if (options.market_id) params.set('market_id', String(options.market_id));
+    if (options.market) params.set('market', String(options.market));
+    if (options.district) params.set('district', String(options.district));
+    if (options.distance_km != null) params.set('distance_km', String(options.distance_km));
     const response = await this.request(`/mandi/predictions/v2/reasoning?${params.toString()}`);
     return response.data;
   }

@@ -4,7 +4,9 @@ import shutil
 
 from .canonical_dataset import build_canonical_dataset
 from .config import RELEASE_DIR, STAGING_DIR
+from .drift import generate_data_drift_report
 from .efficiency import generate_efficiency_data
+from .evaluation import generate_evaluation_report
 from .manifest import finalize_release
 from .predict import generate_predictions
 from .reasoning import generate_reasoning
@@ -21,6 +23,8 @@ def run_pipeline():
     registry = train_models(canonical)
     predictions, _forecast_series, _actuals, metrics = generate_predictions(canonical, registry)
     generate_efficiency_data(registry)
+    generate_evaluation_report(registry)
+    generate_data_drift_report(canonical)
     generate_reasoning(predictions, metrics)
     manifest = finalize_release(canonical)
     return manifest

@@ -11,6 +11,7 @@ from pathlib import Path
 from supabase import create_client
 
 from validate_prediction_bundle import validate_bundle
+from release_quality import write_release_quality_report
 
 
 def env(name: str, fallback: str | None = None) -> str:
@@ -91,7 +92,19 @@ def upload_historical_efficiency_chunks(storage, bucket: str, source: Path, arti
     )
 
 
-def publish_release(bundle_dir: Path, force: bool = False) -> str:
+def download_json(storage, bucket: str, path: str) -> dict | None:
+    try:
+        raw = storage.from_(bucket).download(path)
+        if isinstance(raw, bytes):
+            return json.loads(raw.decode("utf-8"))
+        if isinstance(raw, str):
+            return json.loads(raw)
+    except Exception as exc:
+        print(f"Quality comparison skipped for {path}: {exc}")
+    return None
+
+
+def publish_release(bundle_dir: Path, force: bool = False, allow_regression: bool = False) -> str:
     validate_bundle(bundle_dir)
     manifest = json.loads((bundle_dir / "manifest.json").read_text(encoding="utf-8"))
     supabase = get_supabase_client()
@@ -105,7 +118,7 @@ def publish_release(bundle_dir: Path, force: bool = False) -> str:
 
     active = (
         supabase.table("ai_prediction_releases")
-        .select("release_id,run_id,data_latest_date")
+        .select("release_id,run_id,data_latest_date,artifact_prefix")
         .eq("is_active", True)
         .limit(1)
         .execute()
@@ -119,9 +132,23 @@ def publish_release(bundle_dir: Path, force: bool = False) -> str:
         if str(manifest["data_latest_date"]) < str(active_release["data_latest_date"]):
             raise RuntimeError("Refusing to publish stale prediction bundle")
 
+    storage = supabase.storage
+    champion_metrics = None
+    champion_predictions = None
+    if active:
+        active_prefix = active[0].get("artifact_prefix")
+        if active_prefix:
+            champion_metrics = download_json(storage, bucket, f"{active_prefix}/metrics.json")
+            champion_predictions = download_json(storage, bucket, f"{active_prefix}/predictions.json")
+
+    quality_report = write_release_quality_report(bundle_dir, champion_metrics, champion_predictions)
+    if not quality_report["passed"] and not allow_regression:
+        raise RuntimeError("Release quality gate failed: " + "; ".join(quality_report["issues"][:6]))
+    if quality_report["warnings"]:
+        print("Release quality warnings: " + "; ".join(quality_report["warnings"][:6]))
+
     release_id = str(uuid.uuid4())
     artifact_prefix = f"releases/{release_id}"
-    storage = supabase.storage
     for path in bundle_dir.iterdir():
       if path.is_file():
           if path.name == "historical_efficiency.json":
@@ -145,7 +172,7 @@ def publish_release(bundle_dir: Path, force: bool = False) -> str:
         "code_version": manifest.get("code_version"),
         "kaggle_kernel": os.environ.get("KAGGLE_KERNEL_ID"),
         "artifact_prefix": artifact_prefix,
-        "manifest": manifest,
+        "manifest": {**manifest, "publish_quality": quality_report},
     }).execute()
 
     supabase.table("ai_prediction_releases").insert({
@@ -157,7 +184,7 @@ def publish_release(bundle_dir: Path, force: bool = False) -> str:
         "data_latest_date": manifest["data_latest_date"],
         "generated_at": manifest["generated_at"],
         "is_active": False,
-        "manifest": manifest,
+        "manifest": {**manifest, "publish_quality": quality_report},
     }).execute()
 
     supabase.rpc("activate_ai_prediction_release", {"p_release_id": release_id}).execute()
@@ -168,10 +195,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bundle-dir", default="staging")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--allow-regression", action="store_true")
     args = parser.parse_args()
 
     try:
-        release_id = publish_release(Path(args.bundle_dir), force=args.force)
+        release_id = publish_release(
+            Path(args.bundle_dir),
+            force=args.force,
+            allow_regression=args.allow_regression,
+        )
         print(f"Published AI prediction release {release_id}")
     except Exception as exc:
         print(f"Publish failed: {exc}", file=sys.stderr)

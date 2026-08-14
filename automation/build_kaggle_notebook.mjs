@@ -17,6 +17,8 @@ const standaloneOrder = [
   'train.py',
   'predict.py',
   'efficiency.py',
+  'evaluation.py',
+  'drift.py',
   'reasoning.py',
   'manifest.py',
   'diagnostics.py',
@@ -86,6 +88,8 @@ Safe model-improvement knobs can be set as Kaggle environment variables:
 - \`MAX_TRAIN_ROWS_PER_MODEL=250000\`
 - \`ENSEMBLE_PRUNE_RATIO=1.08\`
 - \`MIN_MAPE_IMPROVEMENT=0.01\`
+- \`TEMPORAL_VALIDATION_FOLDS=3\`
+- \`MIN_RELATIVE_MAPE_IMPROVEMENT=0.02\`
 
 Keep \`schema_version = 2.0\`, release filenames, grains, horizons, and state-wise structure unchanged unless the website is migrated.
 `),
@@ -138,7 +142,12 @@ inspect_prediction_output("Wheat", "All States")
 Writes state-wise predicted-vs-actual comparison rows for the dashboard chart and table.
 `),
   code(`efficiency, backtest = generate_efficiency_data(registry)
+evaluation_report = generate_evaluation_report(registry)
+data_drift_report = generate_data_drift_report(canonical)
 efficiency_summary(efficiency)
+print("Evaluation strategy:", evaluation_report["evaluation_strategy"])
+print("National MAPE range:", evaluation_report["summary"]["national_min_mape"], "to", evaluation_report["summary"]["national_max_mape"])
+print("Data drift warnings:", data_drift_report["summary"]["warning_series"], "/", data_drift_report["summary"]["series_checked"])
 `),
   code(`plot_efficiency_series(efficiency, grain="Wheat", state="All States", horizon=7, tail=365)
 plot_efficiency_series(efficiency, grain="Wheat", state="All States", horizon=30, tail=365)

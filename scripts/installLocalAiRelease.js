@@ -20,6 +20,20 @@ const requiredFiles = [
   'checksums.json',
 ];
 
+const optionalFiles = [
+  'markets.json',
+  'market_predictions.json',
+  'market_actuals.json',
+  'market_forecast_series.json',
+  'market_reasoning.json',
+  'market_metrics.json',
+  'market_canonical_daily.csv',
+  'market_canonical_daily.parquet',
+  'evaluation_report.json',
+  'publish_quality_report.json',
+  'data_drift_report.json',
+];
+
 const sha256 = async (filePath) => {
   const content = await fs.readFile(filePath);
   return createHash('sha256').update(content).digest('hex');
@@ -63,6 +77,14 @@ const install = async () => {
 
   for (const fileName of requiredFiles) {
     await fs.copyFile(path.join(sourceDir, fileName), path.join(targetDir, fileName));
+  }
+
+  for (const fileName of optionalFiles) {
+    try {
+      await fs.copyFile(path.join(sourceDir, fileName), path.join(targetDir, fileName));
+    } catch {
+      // Optional mandi-level files are only present in upgraded releases.
+    }
   }
 
   console.log({

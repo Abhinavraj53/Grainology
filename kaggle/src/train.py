@@ -6,19 +6,27 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 
 from .config import (
+    CONFORMAL_ALPHA,
     ENABLE_OPTUNA_TUNING,
+    ENSEMBLE_CALIBRATION_RATIO,
     ENSEMBLE_PRUNE_RATIO,
+    EVALUATION_HOLDOUT_RATIO,
     HORIZONS,
     MAX_TRAIN_ROWS_PER_MODEL,
     MIN_MAPE_IMPROVEMENT,
+    MIN_RELATIVE_MAPE_IMPROVEMENT,
     MIN_STATE_OBSERVED_DAYS,
+    MIN_TEMPORAL_FOLD_WIN_RATIO,
     MIN_VALIDATION_SAMPLES,
     MODEL_DIR,
     OPTUNA_TIMEOUT_SECONDS,
     OPTUNA_TRIALS,
+    REFIT_SELECTED_MODELS_ON_FULL_DATA,
     TARGET_GRAINS,
+    TEMPORAL_VALIDATION_FOLDS,
 )
 
 try:
@@ -143,9 +151,18 @@ def feature_engineering(canonical: pd.DataFrame) -> pd.DataFrame:
     df["market_count"] = pd.to_numeric(df["market_count"], errors="coerce").fillna(0)
     df = df.dropna(subset=["date", "state_name", "grain", "price"]).sort_values(["grain", "state_name", "date"])
 
-    national = df[df["state_name"].eq("All States")][["date", "grain", "price"]].rename(columns={"price": "national_price"})
+    national = (
+        df[df["state_name"].eq("All States")][["date", "grain", "price"]]
+        .rename(columns={"price": "national_price"})
+        .drop_duplicates(["date", "grain"], keep="last")
+        .sort_values(["grain", "date"])
+    )
+    national_group = national.groupby("grain", sort=False)
+    for lag in [1, 7, 30, 90]:
+        national[f"national_lag_{lag}"] = national_group["national_price"].shift(lag)
+    national["national_return_7"] = national_group["national_price"].pct_change(periods=7).clip(-0.5, 0.5)
+    national["national_return_30"] = national_group["national_price"].pct_change(periods=30).clip(-0.5, 0.5)
     df = df.merge(national, on=["date", "grain"], how="left")
-    df["national_price"] = df.groupby("grain")["national_price"].ffill().bfill()
 
     group = df.groupby(["grain", "state_name"], sort=False)
     for lag in [1, 2, 3, 7, 14, 30, 60, 90, 180, 365]:
@@ -194,11 +211,6 @@ def feature_engineering(canonical: pd.DataFrame) -> pd.DataFrame:
     df["is_harvest_rabi"] = df["month"].isin([3, 4, 5]).astype(int)
     df["is_harvest_kharif"] = df["month"].isin([9, 10, 11]).astype(int)
 
-    grain_group = df.groupby("grain", sort=False)
-    for lag in [1, 7, 30, 90]:
-        df[f"national_lag_{lag}"] = grain_group["national_price"].shift(lag)
-    df["national_return_7"] = grain_group["national_price"].pct_change(periods=7).clip(-0.5, 0.5)
-    df["national_return_30"] = grain_group["national_price"].pct_change(periods=30).clip(-0.5, 0.5)
     df["state_national_spread"] = df["price"] - df["national_price"]
     df["state_national_ratio"] = df["price"] / df["national_price"].replace(0, np.nan)
     df["state_code"] = df["state_name"].astype("category").cat.codes
@@ -302,13 +314,28 @@ def tune_hist_gb(train: pd.DataFrame, valid: pd.DataFrame, feature_fill_values: 
     return HistGradientBoostingRegressor(**params, random_state=42 + horizon)
 
 
-def train_candidate_models(train: pd.DataFrame, valid: pd.DataFrame, horizon: int, fill_values: dict[str, float]) -> dict[str, object]:
+def split_inner_tuning_window(train: pd.DataFrame, horizon: int) -> tuple[pd.DataFrame, pd.DataFrame]:
+    if len(train) < max(200, MIN_VALIDATION_SAMPLES * 5):
+        return train, train.tail(0)
+    cutoff = train["date"].quantile(0.85)
+    tune_valid = train[train["date"].ge(cutoff)].copy()
+    if tune_valid.empty:
+        return train, tune_valid
+    tune_start = tune_valid["date"].min()
+    tune_train = train[train["target_date"].lt(tune_start)].copy()
+    if len(tune_train) < 1000 or len(tune_valid) < MIN_VALIDATION_SAMPLES:
+        return train, train.tail(0)
+    return tune_train, tune_valid
+
+
+def train_candidate_models(train: pd.DataFrame, horizon: int, fill_values: dict[str, float]) -> dict[str, object]:
     fit_train = train
     if MAX_TRAIN_ROWS_PER_MODEL > 0 and len(fit_train) > MAX_TRAIN_ROWS_PER_MODEL:
         fit_train = fit_train.sample(MAX_TRAIN_ROWS_PER_MODEL, random_state=42 + horizon).sort_values("date")
 
     models = make_candidate_models(horizon, len(fit_train))
-    tuned = tune_hist_gb(fit_train, valid, fill_values, horizon)
+    tune_train, tune_valid = split_inner_tuning_window(fit_train, horizon)
+    tuned = tune_hist_gb(tune_train, tune_valid, fill_values, horizon) if not tune_valid.empty else None
     if tuned is not None:
         models["optuna_hist_gb"] = tuned
 
@@ -324,6 +351,77 @@ def train_candidate_models(train: pd.DataFrame, valid: pd.DataFrame, horizon: in
     if not fitted:
         raise RuntimeError("No candidate model could be trained")
     return fitted
+
+
+def temporal_fold_diagnostics(
+    state_valid: pd.DataFrame,
+    actual: np.ndarray,
+    baseline_pred: np.ndarray,
+    candidate_pred: np.ndarray,
+) -> list[dict]:
+    ordered = state_valid.assign(
+        _actual=np.asarray(actual, dtype=float),
+        _baseline=np.asarray(baseline_pred, dtype=float),
+        _candidate=np.asarray(candidate_pred, dtype=float),
+    ).sort_values("date")
+    unique_dates = np.array(sorted(ordered["date"].dropna().unique()))
+    fold_count = max(1, min(TEMPORAL_VALIDATION_FOLDS, len(unique_dates)))
+    folds = []
+    for fold_index, fold_dates in enumerate(np.array_split(unique_dates, fold_count), start=1):
+        if len(fold_dates) == 0:
+            continue
+        fold = ordered[ordered["date"].isin(fold_dates)]
+        if fold.empty:
+            continue
+        baseline_score = mape(fold["_actual"], fold["_baseline"])
+        candidate_score = mape(fold["_actual"], fold["_candidate"])
+        folds.append({
+            "fold": fold_index,
+            "start_date": pd.to_datetime(fold["date"].min()).date().isoformat(),
+            "end_date": pd.to_datetime(fold["date"].max()).date().isoformat(),
+            "sample_count": int(len(fold)),
+            "baseline_mape": round(float(baseline_score), 4),
+            "candidate_mape": round(float(candidate_score), 4),
+            "improvement_pp": round(float(baseline_score - candidate_score), 4),
+            "won": bool(candidate_score + MIN_MAPE_IMPROVEMENT < baseline_score),
+        })
+    return folds
+
+
+def refit_selected_models(
+    evaluation_models: dict[str, object],
+    full_data: pd.DataFrame,
+    horizon: int,
+    fill_values: dict[str, float],
+    selected_methods: set[str],
+    ensemble_weights: dict[str, float],
+) -> dict[str, object]:
+    if not REFIT_SELECTED_MODELS_ON_FULL_DATA:
+        return evaluation_models
+    required = {method for method in selected_methods if method not in {"baseline", "ensemble"}}
+    if "ensemble" in selected_methods:
+        required.update(ensemble_weights)
+    if not required:
+        return evaluation_models
+
+    fit_data = full_data
+    if MAX_TRAIN_ROWS_PER_MODEL > 0 and len(fit_data) > MAX_TRAIN_ROWS_PER_MODEL:
+        fit_data = fit_data.sample(MAX_TRAIN_ROWS_PER_MODEL, random_state=142 + horizon).sort_values("date")
+    X = fill_features(fit_data[FEATURE_COLUMNS], fill_values)
+    y = fit_data["target_log_return"]
+    refitted = {}
+    for name in sorted(required):
+        model = evaluation_models.get(name)
+        if model is None:
+            continue
+        try:
+            production_model = clone(model)
+            production_model.fit(X, y)
+            refitted[name] = production_model
+        except Exception as error:
+            print(f"Production refit skipped ({name}, {horizon}d): {type(error).__name__}: {str(error)[:120]}")
+            refitted[name] = model
+    return refitted or evaluation_models
 
 
 def predict_candidate_prices(models: dict[str, object], frame: pd.DataFrame, fill_values: dict[str, float]) -> dict[str, np.ndarray]:
@@ -390,26 +488,49 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int) -> dict | None:
     if len(data) < MIN_VALIDATION_SAMPLES * 4:
         return None
 
-    feature_fill_values = (
-        data[FEATURE_COLUMNS]
+    history_rows = [row_payload(row, float(row["price"]), "baseline_history") for _, row in data.iterrows()]
+
+    holdout_ratio = min(0.40, max(0.10, EVALUATION_HOLDOUT_RATIO))
+    holdout_cutoff = data["date"].quantile(1.0 - holdout_ratio)
+    holdout = data[data["date"].ge(holdout_cutoff)].copy()
+    if len(holdout) < MIN_VALIDATION_SAMPLES * 2:
+        return None
+
+    calibration_ratio = min(0.60, max(0.20, ENSEMBLE_CALIBRATION_RATIO))
+    calibration_cutoff = holdout["date"].quantile(calibration_ratio)
+    calibration = holdout[holdout["date"].lt(calibration_cutoff)].copy()
+    valid = holdout[holdout["date"].ge(calibration_cutoff)].copy()
+    if len(calibration) < MIN_VALIDATION_SAMPLES or len(valid) < MIN_VALIDATION_SAMPLES:
+        return None
+
+    evaluation_start = calibration["date"].min()
+    train = data[data["target_date"].lt(evaluation_start)].copy()
+    if len(train) < MIN_VALIDATION_SAMPLES * 3:
+        return None
+
+    evaluation_fill_values = (
+        train[FEATURE_COLUMNS]
         .replace([np.inf, -np.inf], np.nan)
         .median(numeric_only=True)
         .fillna(0)
         .to_dict()
     )
 
-    history_rows = [row_payload(row, float(row["price"]), "baseline_history") for _, row in data.iterrows()]
-
-    cutoff = data["date"].quantile(0.8)
-    train = data[data["date"] < cutoff].copy()
-    valid = data[data["date"] >= cutoff].copy()
-    if len(valid) < MIN_VALIDATION_SAMPLES:
-        return None
-
-    models = train_candidate_models(train, valid, horizon, feature_fill_values)
-    valid_predictions = predict_candidate_prices(models, valid, feature_fill_values)
-    ensemble_pred, ensemble_weights = weighted_ensemble(valid_predictions, valid["target_price"].to_numpy(dtype=float))
-    valid_predictions["ensemble"] = ensemble_pred
+    models = train_candidate_models(train, horizon, evaluation_fill_values)
+    calibration_predictions = predict_candidate_prices(models, calibration, evaluation_fill_values)
+    _calibration_ensemble, ensemble_weights = weighted_ensemble(
+        calibration_predictions,
+        calibration["target_price"].to_numpy(dtype=float),
+    )
+    calibration_predictions["ensemble"] = _calibration_ensemble
+    valid_predictions = predict_candidate_prices(models, valid, evaluation_fill_values)
+    ensemble_members = [name for name in ensemble_weights if name in valid_predictions]
+    if ensemble_members:
+        ensemble_matrix = np.vstack([valid_predictions[name] for name in ensemble_members])
+        ensemble_weight_values = np.array([ensemble_weights[name] for name in ensemble_members], dtype=float)
+        valid_predictions["ensemble"] = np.average(ensemble_matrix, axis=0, weights=ensemble_weight_values)
+    else:
+        valid_predictions["ensemble"] = valid_predictions["baseline"]
 
     gates = {}
     validation_rows = []
@@ -431,10 +552,62 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int) -> dict | None:
         baseline_mae = method_mae.get("baseline", math.inf)
         candidate_methods = [method for method in method_scores if method != "baseline" and np.isfinite(method_scores[method])]
         best_method = min(candidate_methods, key=lambda method: method_scores[method]) if candidate_methods else "baseline"
-        selected = best_method if method_scores.get(best_method, math.inf) + MIN_MAPE_IMPROVEMENT < baseline_mape else "baseline"
+        best_mape = method_scores.get(best_method, math.inf)
+        absolute_gain = baseline_mape - best_mape
+        relative_gain = absolute_gain / baseline_mape if np.isfinite(baseline_mape) and baseline_mape > 0 else -math.inf
+        baseline_pred = pd.Series(valid_predictions["baseline"], index=valid.index).loc[idx].to_numpy(dtype=float)
+        best_pred = pd.Series(valid_predictions[best_method], index=valid.index).loc[idx].to_numpy(dtype=float)
+        temporal_folds = temporal_fold_diagnostics(state_valid, actual, baseline_pred, best_pred)
+        fold_wins = sum(1 for fold in temporal_folds if fold["won"])
+        required_wins = max(1, math.ceil(len(temporal_folds) * MIN_TEMPORAL_FOLD_WIN_RATIO))
+        gate_passed = (
+            best_method != "baseline"
+            and absolute_gain > MIN_MAPE_IMPROVEMENT
+            and relative_gain >= MIN_RELATIVE_MAPE_IMPROVEMENT
+            and fold_wins >= required_wins
+        )
+        selected = best_method if gate_passed else "baseline"
+        selected_holdout_pred = (
+            pd.Series(valid_predictions[selected], index=valid.index)
+            .loc[idx]
+            .to_numpy(dtype=float)
+        )
+
+        state_calibration = calibration[calibration["state_name"].eq(state)]
+        calibration_radius = None
+        interval_sample_count = 0
+        if not state_calibration.empty and selected in calibration_predictions:
+            calibration_pred = (
+                pd.Series(calibration_predictions[selected], index=calibration.index)
+                .loc[state_calibration.index]
+                .to_numpy(dtype=float)
+            )
+            calibration_actual = state_calibration["target_price"].to_numpy(dtype=float)
+            valid_interval = (
+                np.isfinite(calibration_actual)
+                & np.isfinite(calibration_pred)
+                & (calibration_actual > 0)
+                & (calibration_pred > 0)
+            )
+            residuals = np.abs(np.log(calibration_actual[valid_interval] / calibration_pred[valid_interval]))
+            if residuals.size:
+                interval_sample_count = int(residuals.size)
+                conformal_quantile = min(
+                    1.0,
+                    math.ceil((interval_sample_count + 1) * (1.0 - CONFORMAL_ALPHA)) / interval_sample_count,
+                )
+                calibration_radius = float(np.quantile(residuals, conformal_quantile, method="higher"))
+
+        holdout_interval_coverage = None
+        if calibration_radius is not None:
+            interval_lower = selected_holdout_pred * np.exp(-calibration_radius)
+            interval_upper = selected_holdout_pred * np.exp(calibration_radius)
+            holdout_interval_coverage = float(np.mean((actual >= interval_lower) & (actual <= interval_upper)))
 
         gates[state] = {
             "selected_method": selected,
+            "candidate_method": best_method,
+            "reason": "temporal_gate_passed" if gate_passed else "temporal_gate_failed",
             "sample_count": int(len(state_valid)),
             "baseline_mape": round(float(baseline_mape), 4) if np.isfinite(baseline_mape) else None,
             "baseline_mae": round(float(baseline_mae), 4) if np.isfinite(baseline_mae) else None,
@@ -443,29 +616,62 @@ def train_one(features: pd.DataFrame, grain: str, horizon: int) -> dict | None:
             "method_mapes": {name: round(float(score), 4) for name, score in method_scores.items() if np.isfinite(score)},
             "method_maes": {name: round(float(score), 4) for name, score in method_mae.items() if np.isfinite(score)},
             "ensemble_weights": ensemble_weights,
+            "absolute_mape_gain_pp": round(float(absolute_gain), 4) if np.isfinite(absolute_gain) else None,
+            "relative_mape_gain": round(float(relative_gain), 6) if np.isfinite(relative_gain) else None,
+            "temporal_folds": temporal_folds,
+            "fold_wins": int(fold_wins),
+            "fold_count": int(len(temporal_folds)),
+            "required_fold_wins": int(required_wins),
+            "validation_strategy": "horizon_embargo_temporal_holdout",
+            "training_end_date": pd.to_datetime(train["date"].max()).date().isoformat(),
+            "calibration_start_date": pd.to_datetime(calibration["date"].min()).date().isoformat(),
+            "validation_start_date": pd.to_datetime(valid["date"].min()).date().isoformat(),
+            "target_embargo_days": int(horizon),
+            "conformal_log_radius": None if calibration_radius is None else round(calibration_radius, 8),
+            "interval_sample_count": interval_sample_count,
+            "interval_coverage_target": round(1.0 - CONFORMAL_ALPHA, 2),
+            "holdout_interval_coverage": None if holdout_interval_coverage is None else round(holdout_interval_coverage, 4),
         }
 
         selected_pred_all = pd.Series(valid_predictions[selected], index=valid.index)
         for row_idx, row in state_valid.iterrows():
             validation_rows.append(row_payload(row, float(selected_pred_all.loc[row_idx]), selected))
 
+    production_fill_values = (
+        data[FEATURE_COLUMNS]
+        .replace([np.inf, -np.inf], np.nan)
+        .median(numeric_only=True)
+        .fillna(0)
+        .to_dict()
+    )
+    selected_methods = {gate.get("selected_method", "baseline") for gate in gates.values()}
+    production_models = refit_selected_models(
+        models,
+        data,
+        horizon,
+        production_fill_values,
+        selected_methods,
+        ensemble_weights,
+    )
+
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
     model_path = MODEL_DIR / f"ensemble_{grain.lower()}_{horizon}d.pkl"
     with model_path.open("wb") as handle:
-        pickle.dump({"models": models, "feature_fill_values": feature_fill_values, "ensemble_weights": ensemble_weights}, handle)
+        pickle.dump({"models": production_models, "feature_fill_values": production_fill_values, "ensemble_weights": ensemble_weights}, handle)
 
     return {
         "grain": grain,
         "horizon": horizon,
-        "models": models,
+        "models": production_models,
         "model_path": str(model_path.name),
         "feature_columns": FEATURE_COLUMNS,
-        "feature_fill_values": feature_fill_values,
+        "feature_fill_values": production_fill_values,
         "ensemble_weights": ensemble_weights,
         "gates": gates,
         "history_rows": history_rows,
         "validation_rows": validation_rows,
         "latest_training_date": data["date"].max().date().isoformat(),
+        "evaluation_strategy": "horizon_embargo_temporal_holdout",
     }
 
 

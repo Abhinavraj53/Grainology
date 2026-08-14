@@ -12,18 +12,9 @@ import {
   Area,
   Brush,
 } from 'recharts';
-import { Brain, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Info } from 'lucide-react';
+import { Brain, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Info, MapPin, Truck } from 'lucide-react';
 import { api } from '../lib/api';
 import type { PredictionMeta } from '../types/aiPrediction.types';
-// Bundled fallback keeps public AI predictions visible while the Render backend redeploys.
-// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
-import fallbackPredictions from '../../services/ml-pipeline/dashboard/data/predictions.json';
-// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
-import fallbackActuals from '../../services/ml-pipeline/dashboard/data/actuals.json';
-// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
-import fallbackForecastSeries from '../../services/ml-pipeline/dashboard/data/forecast_series.json';
-// @ts-ignore JSON is bundled by Vite; project typecheck does not enable resolveJsonModule.
-import fallbackReasoning from '../../services/ml-pipeline/dashboard/data/reasoning.json';
 
 const GRAIN_COLORS: Record<string, string> = {
   Wheat: '#F59E0B', // Amber
@@ -63,45 +54,71 @@ const toFiniteNumber = (value: any) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
-const fallbackPredictionMap: any = fallbackPredictions;
-const fallbackActualMap: any = fallbackActuals;
-const fallbackForecastMap: any = fallbackForecastSeries;
-const fallbackReasoningMap: any = fallbackReasoning;
+type FallbackBundle = {
+  predictions: any;
+  actuals: any;
+  forecastSeries: any;
+  reasoning: any;
+};
 
-const getFallbackStates = () => Array.from(
+let fallbackBundlePromise: Promise<FallbackBundle> | null = null;
+
+const loadFallbackBundle = () => {
+  if (!fallbackBundlePromise) {
+    fallbackBundlePromise = Promise.all([
+      // @ts-ignore Vite supports JSON modules even though resolveJsonModule is disabled.
+      import('../../services/ml-pipeline/dashboard/data/predictions.json'),
+      // @ts-ignore Vite supports JSON modules even though resolveJsonModule is disabled.
+      import('../../services/ml-pipeline/dashboard/data/actuals.json'),
+      // @ts-ignore Vite supports JSON modules even though resolveJsonModule is disabled.
+      import('../../services/ml-pipeline/dashboard/data/forecast_series.json'),
+      // @ts-ignore Vite supports JSON modules even though resolveJsonModule is disabled.
+      import('../../services/ml-pipeline/dashboard/data/reasoning.json'),
+    ]).then(([predictions, actuals, forecastSeries, reasoning]) => ({
+      predictions: predictions.default,
+      actuals: actuals.default,
+      forecastSeries: forecastSeries.default,
+      reasoning: reasoning.default,
+    }));
+  }
+  return fallbackBundlePromise;
+};
+
+const getFallbackStates = (predictionMap: any) => Array.from(
   new Set(
-    Object.values(fallbackPredictionMap)
+    Object.values(predictionMap)
       .flatMap((grainMap: any) => Object.keys(grainMap || {}))
       .filter(Boolean)
   )
 );
 
-const getFallbackMeta = (): PredictionMeta => ({
+const getFallbackMeta = (predictionMap: any): PredictionMeta => ({
   release_id: 'bundled-local-release',
   generated_at: null,
   data_latest_date: null,
   schema_version: 'local',
   source: 'bundled_local',
-  grains: Object.keys(fallbackPredictionMap),
-  states: getFallbackStates() as string[],
+  grains: Object.keys(predictionMap),
+  states: getFallbackStates(predictionMap) as string[],
 });
 
 const pickFallbackStatePayload = (payload: any, grain: string, state: string) => (
   payload?.[grain]?.[state] || null
 );
 
-const getFallbackPrediction = (grain: string, state: string) => {
+const getFallbackPrediction = (bundle: FallbackBundle, grain: string, state: string) => {
+  const { predictions, actuals, forecastSeries, reasoning } = bundle;
   const selectedState = state || 'All States';
-  const prediction = pickFallbackStatePayload(fallbackPredictionMap, grain, selectedState)
-    || pickFallbackStatePayload(fallbackPredictionMap, grain, 'All States');
-  const effectiveState = pickFallbackStatePayload(fallbackPredictionMap, grain, selectedState)
+  const prediction = pickFallbackStatePayload(predictions, grain, selectedState)
+    || pickFallbackStatePayload(predictions, grain, 'All States');
+  const effectiveState = pickFallbackStatePayload(predictions, grain, selectedState)
     ? selectedState
     : 'All States';
 
   if (!prediction) throw new Error(`No bundled prediction found for ${grain} / ${selectedState}`);
 
   return {
-    meta: getFallbackMeta(),
+    meta: getFallbackMeta(predictions),
     grain,
     requested_state: selectedState,
     state: effectiveState,
@@ -109,14 +126,14 @@ const getFallbackPrediction = (grain: string, state: string) => {
       ? `${selectedState} forecast is not bundled; showing All States forecast.`
       : null,
     prediction,
-    actuals: pickFallbackStatePayload(fallbackActualMap, grain, effectiveState),
-    forecast_series: pickFallbackStatePayload(fallbackForecastMap, grain, effectiveState) || [],
-    reasoning: fallbackReasoningMap?.[grain]?.[effectiveState] || fallbackReasoningMap?.[grain] || null,
+    actuals: pickFallbackStatePayload(actuals, grain, effectiveState),
+    forecast_series: pickFallbackStatePayload(forecastSeries, grain, effectiveState) || [],
+    reasoning: reasoning?.[grain]?.[effectiveState] || reasoning?.[grain] || null,
   };
 };
 
-const getFallbackReasoning = (grain: string, state: string, horizon: number) => {
-  const predictionPayload = getFallbackPrediction(grain, state);
+const getFallbackReasoning = (bundle: FallbackBundle, grain: string, state: string, horizon: number) => {
+  const predictionPayload = getFallbackPrediction(bundle, grain, state);
   const stateReasoning = predictionPayload.reasoning;
   return {
     meta: predictionPayload.meta,
@@ -279,6 +296,8 @@ export default function AIPredictions() {
   const [efficiencyPage, setEfficiencyPage] = useState(0);
   const [efficiencyYear, setEfficiencyYear] = useState<string>('all');
   const [efficiencyBrushSelection, setEfficiencyBrushSelection] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'requesting' | 'allowed' | 'blocked' | 'unsupported'>('idle');
 
   useEffect(() => {
     if (data) {
@@ -306,7 +325,9 @@ export default function AIPredictions() {
       } catch (err) {
         if (cancelled) return;
         console.error(err);
-        const nextMeta = getFallbackMeta();
+        const fallbackBundle = await loadFallbackBundle();
+        if (cancelled) return;
+        const nextMeta = getFallbackMeta(fallbackBundle.predictions);
         setMeta(nextMeta);
         setError('');
         if (nextMeta.grains?.length && !nextMeta.grains.includes(currentGrain)) setCurrentGrain(nextMeta.grains[0]);
@@ -324,6 +345,27 @@ export default function AIPredictions() {
   }, []);
 
   useEffect(() => {
+    if (locationStatus !== 'idle') return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setLocationStatus('unsupported');
+      return;
+    }
+
+    setLocationStatus('requesting');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationStatus('allowed');
+      },
+      () => setLocationStatus('blocked'),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 }
+    );
+  }, [locationStatus]);
+
+  useEffect(() => {
     let cancelled = false;
     const fetchSelectedData = async () => {
       setRefreshing(true);
@@ -333,16 +375,18 @@ export default function AIPredictions() {
         let reasoningPayload;
 
         try {
+          const locationOptions = userLocation ? { nearest: true, ...userLocation } : {};
           [predictionPayload, efficiencyPayload, reasoningPayload] = await Promise.all([
-            api.getAiPrediction(currentGrain, currentState),
+            api.getAiPrediction(currentGrain, currentState, locationOptions),
             api.getAiEfficiency(currentGrain, currentState, currentHorizon).catch(() => null),
-            api.getAiReasoning(currentGrain, currentState, currentHorizon).catch(() => null),
+            api.getAiReasoning(currentGrain, currentState, currentHorizon, locationOptions).catch(() => null),
           ]);
         } catch (apiError) {
           console.error(apiError);
-          predictionPayload = getFallbackPrediction(currentGrain, currentState);
+          const fallbackBundle = await loadFallbackBundle();
+          predictionPayload = getFallbackPrediction(fallbackBundle, currentGrain, currentState);
           efficiencyPayload = null;
-          reasoningPayload = getFallbackReasoning(currentGrain, currentState, currentHorizon);
+          reasoningPayload = getFallbackReasoning(fallbackBundle, currentGrain, currentState, currentHorizon);
         }
 
         const selectedReasoning = reasoningPayload?.reasoning || predictionPayload.reasoning;
@@ -363,6 +407,7 @@ export default function AIPredictions() {
           historicalEfficiency: { [currentGrain]: { [currentState]: efficiency } },
           fallbackReason: predictionPayload.fallback_reason || efficiencyPayload?.fallback_reason || null,
           effectiveState: predictionPayload.state || currentState,
+          marketContext: predictionPayload.market_context || null,
         });
         setError('');
       } catch (err) {
@@ -387,7 +432,7 @@ export default function AIPredictions() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [meta, currentGrain, currentState, currentHorizon]);
+  }, [meta, currentGrain, currentState, currentHorizon, userLocation]);
 
   useEffect(() => {
     setEfficiencyPage(0);
@@ -436,11 +481,11 @@ export default function AIPredictions() {
       const statePreds = data.predictions[currentGrain]?.[currentState] || data.predictions[currentGrain]?.["All States"];
       const currentMape = interpolateForecastMape(daysIntoFuture, statePreds?.horizons);
       const margin = item.price * (currentMape / 100);
-      const lowerBound = Number.isFinite(Number(item.lowerBound ?? item.lower_bound))
-        ? Number(item.lowerBound ?? item.lower_bound)
+      const lowerBound = Number.isFinite(Number(item.lowerBound ?? item.lower_bound ?? item.confidence_lower))
+        ? Number(item.lowerBound ?? item.lower_bound ?? item.confidence_lower)
         : item.price - margin;
-      const upperBound = Number.isFinite(Number(item.upperBound ?? item.upper_bound))
-        ? Number(item.upperBound ?? item.upper_bound)
+      const upperBound = Number.isFinite(Number(item.upperBound ?? item.upper_bound ?? item.confidence_upper))
+        ? Number(item.upperBound ?? item.upper_bound ?? item.confidence_upper)
         : item.price + margin;
 
       existing.forecastPrice = item.price;
@@ -625,6 +670,9 @@ export default function AIPredictions() {
     `${currentGrain}|${currentState}|${currentActualPrice ?? 'pending'}`
   );
   const hasCurrentPrice = currentActualPrice != null && currentActualPrice > 0;
+  const marketContext = data?.marketContext || null;
+  const farmGatePrice = toFiniteNumber(selectedPredictionData?.farm_gate_current_price);
+  const carryingCost = toFiniteNumber(marketContext?.total_carrying_cost_rs_per_quintal ?? selectedPredictionData?.carrying_cost_rs_per_quintal);
 
   if (loading) return <AIPredictionsSkeleton />;
 
@@ -708,6 +756,40 @@ export default function AIPredictions() {
               </span>
               <span className="text-sm font-normal text-slate-400">/Quintal</span>
             </div>
+            {marketContext?.mode === 'market' && (
+              <div className="mt-3 grid gap-2 text-xs text-slate-300 sm:grid-cols-2">
+                <div className="inline-flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2">
+                  <MapPin size={14} className="text-blue-300" />
+                  <span>
+                    {marketContext.market_name || 'Nearest mandi'}
+                    {marketContext.distance_km != null ? ` · ${Number(marketContext.distance_km).toFixed(1)} km` : ''}
+                  </span>
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-lg bg-slate-800/80 px-3 py-2">
+                  <Truck size={14} className="text-emerald-300" />
+                  <span>
+                    Farm-gate: {formatCurrency(farmGatePrice)} / Quintal
+                    {carryingCost != null ? ` after ${formatCurrency(carryingCost, 2)} cost` : ''}
+                  </span>
+                </div>
+              </div>
+            )}
+            {marketContext?.mode === 'state_fallback' && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                <MapPin size={14} />
+                <span>{marketContext.note || 'Mandi-level forecast is not available yet; showing state-level forecast.'}</span>
+              </div>
+            )}
+            {locationStatus === 'blocked' && !marketContext && (
+              <button
+                type="button"
+                onClick={() => setLocationStatus('idle')}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs text-blue-200 hover:bg-slate-700"
+              >
+                <MapPin size={14} />
+                Allow location to find nearest mandi
+              </button>
+            )}
           </div>
           <div className="text-right text-xs text-slate-400">
             <div>Last actuals: {predictionData?.last_actual_date || predictionData?.last_data_date || 'N/A'}</div>
@@ -747,7 +829,11 @@ export default function AIPredictions() {
             const isUp = changePct == null ? true : changePct >= 0;
             const mape = getMetric(hData.metrics, 'mape', 'ensemble_mape');
             const mae = getMetric(hData.metrics, 'mae', 'ensemble_mae', 'ml_mae');
-            const confidence = mape == null ? null : Math.max(0, 100 - mape);
+            const rawIntervalCoverage = getMetric(hData.metrics, 'interval_coverage', 'holdout_interval_coverage');
+            const intervalCoverage = rawIntervalCoverage == null
+              ? null
+              : rawIntervalCoverage <= 1 ? rawIntervalCoverage * 100 : rawIntervalCoverage;
+            const validationScore = mape == null ? null : Math.max(0, 100 - mape);
 
             const TrendIcon = isUp ? ArrowUpRight : ArrowDownRight;
             const trendColor = isUp ? 'text-emerald-600' : 'text-red-600';
@@ -773,9 +859,9 @@ export default function AIPredictions() {
                 </div>
                 <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-y-2 text-xs">
                   <div>
-                    <div className="text-slate-400">Confidence</div>
+                    <div className="text-slate-400">{intervalCoverage == null ? 'Validation score' : 'Interval coverage'}</div>
                     <div className="font-medium text-slate-700">
-                      {confidence == null ? 'N/A' : formatPercent(confidence, 1)}
+                      {formatPercent(intervalCoverage ?? validationScore, 1)}
                     </div>
                   </div>
                   <div>
@@ -787,6 +873,11 @@ export default function AIPredictions() {
                     <div className="font-medium text-slate-700">{mae == null ? 'After retrain' : formatCurrency(mae, 2)}</div>
                   </div>
                 </div>
+                {hData.farm_gate_predicted_price != null && (
+                  <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    Farm-gate forecast: <span className="font-semibold">{formatCurrency(hData.farm_gate_predicted_price)}</span> / Quintal
+                  </div>
+                )}
               </div>
             );
           })}

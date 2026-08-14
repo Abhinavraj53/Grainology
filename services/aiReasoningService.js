@@ -46,7 +46,7 @@ const compactForecast = (forecastSeries) => {
     .slice(0, 6);
 };
 
-const fallbackReasoning = ({ grain, state, horizon, prediction, actuals, forecastSeries, existingReasoning }) => {
+const fallbackReasoning = ({ grain, state, horizon, prediction, actuals, forecastSeries, existingReasoning, marketContext }) => {
   const horizonPayload = prediction?.horizons?.[horizon] || prediction?.horizons?.[String(horizon)] || {};
   const currentPrice = asNumber(prediction?.current_price);
   const predictedPrice = asNumber(horizonPayload.predicted_price);
@@ -61,6 +61,9 @@ const fallbackReasoning = ({ grain, state, horizon, prediction, actuals, forecas
   const method = horizonPayload.selected_method || metrics.selected_method || 'forecast model';
   const mape = asNumber(metrics.mape ?? metrics.ensemble_mape ?? metrics.ml_mape);
   const mae = asNumber(metrics.mae ?? metrics.ensemble_mae);
+  const farmGateCurrent = asNumber(prediction?.farm_gate_current_price);
+  const farmGateForecast = asNumber(horizonPayload?.farm_gate_predicted_price);
+  const carryingCost = asNumber(marketContext?.total_carrying_cost_rs_per_quintal ?? prediction?.carrying_cost_rs_per_quintal);
 
   const direction = changePct == null ? 'remain near the current range' : changePct >= 0 ? 'move up' : 'soften';
   const bullets = [
@@ -75,6 +78,12 @@ const fallbackReasoning = ({ grain, state, horizon, prediction, actuals, forecas
       ? `The selected method is ${method}; validation error is not available for this exact card.`
       : `Backtesting MAPE is ${formatPct(mape)}${mae == null ? '' : `, with an average miss of about ${formatInr(mae)}`}.`,
   ];
+
+  if (marketContext?.mode === 'market') {
+    bullets.splice(1, 0,
+      `${marketContext.market_name || 'The nearest mandi'} is ${marketContext.distance_km == null ? 'the selected market' : `about ${Number(marketContext.distance_km).toFixed(1)} km away`}; estimated farm-gate value is ${formatInr(farmGateCurrent)} now and ${formatInr(farmGateForecast)} at the selected horizon after approximately ${formatInr(carryingCost)} in carrying costs.`
+    );
+  }
 
   if (existingReasoning?.text) {
     bullets.push(String(existingReasoning.text).replace(/\s+/g, ' ').trim());
@@ -252,6 +261,7 @@ export const buildAiReasoning = async ({
   forecastSeries,
   existingReasoning,
   meta,
+  marketContext,
 }) => {
   const cacheKey = [
     meta?.release_id || meta?.generated_at || 'release',
@@ -259,6 +269,8 @@ export const buildAiReasoning = async ({
     state,
     horizon,
     prediction?.current_price ?? 'no-current-price',
+    marketContext?.market_key || 'state',
+    marketContext?.distance_km ?? 'no-distance',
   ].join(':');
   const cached = reasoningCache.get(cacheKey);
   if (cached && Date.now() - cached.createdAt < GEMINI_REASONING_CACHE_MS) return cached.value;
@@ -282,10 +294,16 @@ export const buildAiReasoning = async ({
     forecast_anchors: compactForecast(forecastSeries),
     model_reasoning: existingReasoning?.text || null,
     model_key_drivers: existingReasoning?.key_drivers || [],
+    market_context: marketContext || null,
+    farm_gate_current_price: prediction?.farm_gate_current_price ?? null,
+    farm_gate_predicted_price: horizonPayload?.farm_gate_predicted_price ?? null,
+    carrying_cost_rs_per_quintal: marketContext?.total_carrying_cost_rs_per_quintal
+      ?? prediction?.carrying_cost_rs_per_quintal
+      ?? null,
   };
 
   const value = await callGemini(payload)
-    || fallbackReasoning({ grain, state, horizon, prediction, actuals, forecastSeries, existingReasoning });
+    || fallbackReasoning({ grain, state, horizon, prediction, actuals, forecastSeries, existingReasoning, marketContext });
 
   reasoningCache.set(cacheKey, { createdAt: Date.now(), value });
   return value;

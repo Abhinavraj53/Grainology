@@ -105,6 +105,49 @@ def validate_bundle(bundle_dir: Path) -> None:
         if invalid_locations:
             raise ValueError(f"{json_file.name} contains NaN/Infinity at {invalid_locations[:3]}")
 
+    evaluation_path = bundle_dir / "evaluation_report.json"
+    if evaluation_path.exists():
+        evaluation = load_json(evaluation_path)
+        if evaluation.get("evaluation_strategy") != "horizon_embargo_temporal_holdout":
+            raise ValueError("evaluation_report.json must use horizon_embargo_temporal_holdout")
+        for row in evaluation.get("series", []):
+            horizon = int(row.get("horizon_days", 0))
+            if int(row.get("target_embargo_days", 0)) < horizon:
+                raise ValueError(f"Evaluation embargo is shorter than horizon for {row.get('grain')}/{horizon}d")
+            train_end = row.get("training_end_date")
+            calibration_start = row.get("calibration_start_date")
+            validation_start = row.get("validation_start_date")
+            if train_end and calibration_start and train_end >= calibration_start:
+                raise ValueError("Evaluation training period overlaps calibration period")
+            if calibration_start and validation_start and calibration_start > validation_start:
+                raise ValueError("Evaluation calibration period begins after validation period")
+
+    markets_path = bundle_dir / "markets.json"
+    market_predictions_path = bundle_dir / "market_predictions.json"
+    if markets_path.exists() or market_predictions_path.exists():
+        if not markets_path.exists() or not market_predictions_path.exists():
+            raise ValueError("Mandi release must include both markets.json and market_predictions.json")
+        markets_payload = load_json(markets_path)
+        markets = markets_payload.get("markets", markets_payload if isinstance(markets_payload, list) else [])
+        keys = [item.get("market_key") for item in markets if isinstance(item, dict)]
+        if any(not key for key in keys) or len(keys) != len(set(keys)):
+            raise ValueError("markets.json contains missing or duplicate market_key values")
+        for market in markets:
+            lat, lng = market.get("lat"), market.get("lng")
+            if lat is not None and not -90 <= float(lat) <= 90:
+                raise ValueError(f"Invalid market latitude for {market.get('market_key')}")
+            if lng is not None and not -180 <= float(lng) <= 180:
+                raise ValueError(f"Invalid market longitude for {market.get('market_key')}")
+        known = set(keys)
+        for grain, by_market in load_json(market_predictions_path).items():
+            for market_key, payload in (by_market or {}).items():
+                if market_key not in known:
+                    raise ValueError(f"Market prediction {grain}/{market_key} missing from markets.json")
+                prediction = payload.get("prediction", payload)
+                horizons = {str(key) for key in (prediction.get("horizons") or {})}
+                if horizons != {"7", "30", "90"}:
+                    raise ValueError(f"Market prediction {grain}/{market_key} must contain 7/30/90 horizons")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()

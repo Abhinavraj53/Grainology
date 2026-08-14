@@ -161,8 +161,13 @@ const main = async () => {
   await ensureKernelMetadata();
 
   if (!skipBuild && !useRemoteNotebook) {
-    console.log('Regenerating Kaggle notebook from local source...');
+    console.log('Regenerating state and mandi-level Kaggle notebooks from local source...');
     await runCommand('node', ['automation/build_kaggle_notebook.mjs'], { live: true });
+    await runCommand('node', [
+      'scripts/patchNotebookMandiLevel.cjs',
+      'kaggle/grainology_state_forecaster.ipynb',
+      'kaggle/grainology_mandi_forecaster.ipynb',
+    ], { live: true });
   } else if (useRemoteNotebook) {
     console.log('Using Kaggle notebook source as-is; local notebook regeneration is skipped.');
   }

@@ -12,7 +12,7 @@
     "build": "vite build",
     "build:frontend": "vite build",
     "preview": "vite preview",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run ai:validate-release",
     "db:check": "node scripts/checkMongoConnection.js",
     "import:supply-transactions": "node scripts/importSupplyTransactions.js",
     "seed:quality-parameters": "node scripts/seedQualityParameters.js",
@@ -31,7 +31,10 @@
     "ai:auto:force": "node scripts/autoAiRefresh.js --once --force",
     "ai:auto": "node scripts/autoAiRefresh.js",
     "ai:kaggle-run": "node scripts/runKaggleNotebookLocal.js",
-    "ai:kaggle-run:no-sync": "node scripts/runKaggleNotebookLocal.js --no-sync"
+    "ai:kaggle-run:no-sync": "node scripts/runKaggleNotebookLocal.js --no-sync",
+    "ai:patch-mandi-notebook": "node automation/build_kaggle_notebook.mjs && node scripts/patchNotebookMandiLevel.cjs kaggle/grainology_state_forecaster.ipynb kaggle/grainology_mandi_forecaster.ipynb",
+    "ai:validate-release": "node --test tests/ai-pipeline.test.mjs",
+    "ci:ml": "npm run ai:patch-mandi-notebook && npm run ai:validate-release && npm run build"
   },
   "keywords": [
     "grainology",

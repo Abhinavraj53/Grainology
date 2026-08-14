@@ -6,7 +6,7 @@ from datetime import timedelta
 import numpy as np
 import pandas as pd
 
-from .config import FORECAST_HISTORY_DAYS, HORIZONS, RELEASE_DIR, TARGET_GRAINS
+from .config import CONFORMAL_ALPHA, FORECAST_HISTORY_DAYS, HORIZONS, RELEASE_DIR, TARGET_GRAINS
 from .train import fill_features
 
 
@@ -16,17 +16,34 @@ def as_json_float(value: object) -> float | None:
     return float(round(float(value), 4))
 
 
-def interpolate_series(last_date, current_price: float, horizon_points: dict[int, float]) -> list[dict]:
+HORIZON_PRICE_CLIP_BOUNDS = {7: (0.70, 1.35), 30: (0.60, 1.55), 90: (0.50, 1.85)}
+
+
+def interpolate_series(
+    last_date,
+    current_price: float,
+    horizon_points: dict[int, float],
+    horizon_intervals: dict[int, tuple[float, float]] | None = None,
+) -> list[dict]:
     points = {0: current_price, **horizon_points}
+    horizon_intervals = horizon_intervals or {}
+    lower_points = {0: current_price, **{int(key): float(value[0]) for key, value in horizon_intervals.items()}}
+    upper_points = {0: current_price, **{int(key): float(value[1]) for key, value in horizon_intervals.items()}}
     xs = np.array(sorted(points.keys()), dtype=float)
     ys = np.array([points[int(x)] for x in xs], dtype=float)
+    lowers = np.array([lower_points.get(int(x), points[int(x)]) for x in xs], dtype=float)
+    uppers = np.array([upper_points.get(int(x), points[int(x)]) for x in xs], dtype=float)
     max_horizon = int(xs.max()) if len(xs) else 0
     series = []
     for day in range(1, max_horizon + 1):
         price = float(np.interp(day, xs, ys))
+        lower = min(price, float(np.interp(day, xs, lowers)))
+        upper = max(price, float(np.interp(day, xs, uppers)))
         series.append({
             "date": (last_date + timedelta(days=day)).isoformat(),
             "price": round(price, 2),
+            "confidence_lower": round(lower, 2),
+            "confidence_upper": round(upper, 2),
             "is_anchor": day in horizon_points,
             "anchor_horizon": day if day in horizon_points else None,
         })
@@ -98,6 +115,7 @@ def generate_predictions(canonical: pd.DataFrame, registry: dict) -> tuple[dict,
             last_date = row["date"].date()
             current_price = float(row["price"])
             horizon_points: dict[int, float] = {}
+            horizon_intervals: dict[int, tuple[float, float]] = {}
             predictions[grain][state] = {
                 "current_price": round(current_price, 2),
                 "last_actual_date": last_date.isoformat(),
@@ -117,10 +135,28 @@ def generate_predictions(canonical: pd.DataFrame, registry: dict) -> tuple[dict,
 
                 horizon_points[horizon] = predicted_price
                 metric_payload = gate or {"selected_method": selected_method, "sample_count": 0}
+                interval_samples = int(metric_payload.get("interval_sample_count", 0))
+                has_calibrated_interval = metric_payload.get("conformal_log_radius") is not None and interval_samples > 0
+                radius = float(metric_payload.get("conformal_log_radius") or np.log(1.10))
+                lower = float(predicted_price * np.exp(-radius))
+                upper = float(predicted_price * np.exp(radius))
+                low_ratio, high_ratio = HORIZON_PRICE_CLIP_BOUNDS.get(int(horizon), (0.55, 1.75))
+                lower = min(float(predicted_price), max(lower, current_price * low_ratio))
+                upper = max(float(predicted_price), min(upper, current_price * high_ratio))
+                horizon_intervals[horizon] = (lower, upper)
                 metrics[grain][state][str(horizon)] = metric_payload
                 predictions[grain][state]["horizons"][str(horizon)] = {
                     "target_date": (last_date + timedelta(days=horizon)).isoformat(),
                     "predicted_price": round(float(predicted_price), 2),
+                    "confidence_lower": round(lower, 2),
+                    "confidence_upper": round(upper, 2),
+                    "prediction_interval": {
+                        "lower": round(lower, 2),
+                        "upper": round(upper, 2),
+                        "coverage_target": round(1.0 - CONFORMAL_ALPHA, 2),
+                        "method": "split_conformal_log_residual" if has_calibrated_interval else "conservative_fallback",
+                        "calibration_samples": interval_samples,
+                    },
                     "selected_method": selected_method,
                     "metrics": {
                         "mape": as_json_float(metric_payload.get("ml_mape")),
@@ -130,11 +166,13 @@ def generate_predictions(canonical: pd.DataFrame, registry: dict) -> tuple[dict,
                         "sample_count": int(metric_payload.get("sample_count", 0)),
                         "method_mapes": metric_payload.get("method_mapes", {}),
                         "method_maes": metric_payload.get("method_maes", {}),
+                        "interval_coverage": as_json_float(metric_payload.get("holdout_interval_coverage")),
+                        "interval_coverage_target": as_json_float(metric_payload.get("interval_coverage_target")),
                     },
                     "model_price": round(float(ml_price), 2) if ml_price is not None else None,
                 }
 
-            forecast_series[grain][state] = interpolate_series(last_date, current_price, horizon_points)
+            forecast_series[grain][state] = interpolate_series(last_date, current_price, horizon_points, horizon_intervals)
 
         grain_actuals = canonical[canonical["grain"].eq(grain)].copy()
         grain_actuals["date"] = pd.to_datetime(grain_actuals["date"])

@@ -48,7 +48,7 @@ Run the application with:
 npm run dev:all
 ```
 
-The generated standalone Kaggle notebook is `kaggle/grainology_mandi_forecaster.ipynb`. It embeds the Python pipeline source, so it does not import project files at Kaggle runtime.
+The working notebook baseline is versioned at `kaggle/grainology_model_base.ipynb`. `npm run ai:patch-mandi-notebook` preserves its live-price and diagnostic workflow, replaces model training with the audited temporal implementation, and generates the standalone `kaggle/grainology_mandi_forecaster.ipynb`. It does not import project files at Kaggle runtime.
 
 ## Documentation
 

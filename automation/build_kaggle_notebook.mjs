@@ -3,26 +3,20 @@ import path from 'path';
 
 const root = process.cwd();
 const srcDir = path.join(root, 'kaggle', 'src');
+const basePath = path.join(root, 'kaggle', 'grainology_model_base.ipynb');
 const output = path.join(root, 'kaggle', 'grainology_state_forecaster.ipynb');
 
 const lines = (source) => source.split(/(?<=\n)/);
-const code = (source) => ({ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: lines(source) });
-const markdown = (source) => ({ cell_type: 'markdown', metadata: {}, source: lines(source) });
-
-const standaloneOrder = [
-  'config.py',
-  'historical_loader.py',
-  'supabase_source.py',
-  'canonical_dataset.py',
-  'train.py',
-  'predict.py',
-  'efficiency.py',
-  'evaluation.py',
-  'drift.py',
-  'reasoning.py',
-  'manifest.py',
-  'diagnostics.py',
-];
+const normalizeText = (source) => String(source)
+  .replaceAll('â€“â‚¹', '- Rs ')
+  .replaceAll('â†’', '->')
+  .replaceAll('â‚¹', 'Rs ')
+  .replaceAll('â€”', '-')
+  .replaceAll('â€“', '-')
+  .replaceAll('Ã—', 'x');
+const code = (source) => ({ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: lines(normalizeText(source)) });
+const markdown = (source) => ({ cell_type: 'markdown', metadata: {}, source: lines(normalizeText(source)) });
+const cellSource = (cell) => Array.isArray(cell?.source) ? cell.source.join('') : String(cell?.source || '');
 
 const stripInternalImports = (source) => {
   const sourceLines = source.split(/\r?\n/);
@@ -31,157 +25,198 @@ const stripInternalImports = (source) => {
 
   for (const line of sourceLines) {
     const trimmed = line.trim();
-
     if (skippingRelativeImportBlock) {
-      if (trimmed === ')' || trimmed.endsWith(')')) {
-        skippingRelativeImportBlock = false;
-      }
+      if (trimmed === ')' || trimmed.endsWith(')')) skippingRelativeImportBlock = false;
       continue;
     }
-
     if (/^from \.\w+ import \($/.test(trimmed)) {
       skippingRelativeImportBlock = true;
       continue;
     }
-
-    if (/^from \.\w+ import /.test(trimmed)) {
-      continue;
-    }
-
+    if (/^from \.\w+ import /.test(trimmed)) continue;
     out.push(line);
   }
 
-  return out.join('\n').trimEnd() + '\n';
+  return `${out.join('\n').trimEnd()}\n`;
 };
 
-const readStandaloneCell = (fileName) => {
-  const filePath = path.join(srcDir, fileName);
-  const source = fs.readFileSync(filePath, 'utf-8');
-  return stripInternalImports(source);
+const readStandaloneCell = (fileName) => stripInternalImports(
+  fs.readFileSync(path.join(srcDir, fileName), 'utf8')
+);
+
+if (!fs.existsSync(basePath)) {
+  throw new Error(`Missing notebook base: ${basePath}`);
+}
+
+const base = JSON.parse(fs.readFileSync(basePath, 'utf8'));
+let cells = base.cells.map((cell) => {
+  const source = cellSource(cell);
+  return cell.cell_type === 'code' ? code(source) : markdown(source);
+});
+
+// The user-maintained notebook is the source of the rich data audit, live-price
+// parity checks, visual diagnostics, and release workflow. Generated upgrade
+// cells are replaced deterministically on every build.
+cells = cells.filter((cell) => {
+  const source = cellSource(cell);
+  return !source.includes('## Mandi-Level Forecast Extension')
+    && !source.includes('ENABLE_MANDI_LEVEL_RELEASE = env_bool')
+    && !source.includes('## Source: evaluation')
+    && !source.includes('## Source: drift')
+    && !source.includes('evaluation_report = generate_evaluation_report');
+});
+
+const findCell = (pattern, start = 0) => cells.findIndex((cell, index) => index >= start && cellSource(cell).includes(pattern));
+
+const replaceCodeAfterHeading = (heading, source) => {
+  const headingIndex = findCell(heading);
+  if (headingIndex < 0) throw new Error(`Notebook base is missing heading: ${heading}`);
+  const codeIndex = cells.findIndex((cell, index) => index > headingIndex && cell.cell_type === 'code');
+  if (codeIndex < 0) throw new Error(`Notebook base is missing code after: ${heading}`);
+  cells[codeIndex] = code(source);
 };
 
-const cells = [
-  markdown(`# Grainology State-wise AI Forecaster
+const replaceCellText = (pattern, transform) => {
+  const index = findCell(pattern);
+  if (index < 0) throw new Error(`Notebook base is missing cell containing: ${pattern}`);
+  const next = transform(cellSource(cells[index]));
+  cells[index] = cells[index].cell_type === 'code' ? code(next) : markdown(next);
+};
 
-This is a fully standalone Kaggle notebook. It does not import local project files such as \`train.py\`.
+replaceCellText('# Grainology State-wise AI Forecaster', () => `# Grainology State and Mandi Price Forecaster
 
-All model code is embedded directly into notebook cells, while the final release contract stays stable for the Grainology website.
+This standalone Kaggle notebook is built from the working Grainology notebook and preserves its live-price sanity checks, Supabase merge, transparent visual diagnostics, and website release contract.
 
-Release output:
+The model path is upgraded with:
 
-\`\`\`text
-/kaggle/working/release/
-/kaggle/working/*.json, *.csv, *.parquet
-/kaggle/working/grainology_release.zip
-\`\`\`
-`),
+1. Horizon-embargoed chronological train, calibration, and final holdout windows
+2. Train-only feature imputation and calibration-only ensemble selection
+3. Temporal-fold promotion gates against persistence
+4. Split-conformal prediction intervals with measured holdout coverage
+5. State-aware and mandi-aware forecasts for 7, 30, and 90 days
+6. Evaluation and data-drift reports included in every release
 
-  code(`%pip install -q "catboost>=1.2" "lightgbm>=4.0" "xgboost>=2.0" "optuna>=3.6" "jsonschema>=4.21" "matplotlib>=3.8" "numpy>=1.26" "pandas>=2.2" "polars>=1.0" "pyarrow>=15" "requests>=2.31" "scikit-learn>=1.4" "supabase>=2.0"
-`),
+The website-facing state files remain backward compatible. Optional mandi files are added by the generated mandi notebook.
+`);
 
-  markdown(`## Runtime Notes
+replaceCellText('## Runtime Notes', () => `## Runtime Notes
 
 Safe model-improvement knobs can be set as Kaggle environment variables:
 
 - \`ENABLE_OPTUNA_TUNING=true\`
 - \`OPTUNA_TRIALS=25\`
+- \`OPTUNA_TIMEOUT_SECONDS=180\`
 - \`MAX_TRAIN_ROWS_PER_MODEL=250000\`
-- \`ENSEMBLE_PRUNE_RATIO=1.08\`
-- \`MIN_MAPE_IMPROVEMENT=0.01\`
 - \`TEMPORAL_VALIDATION_FOLDS=3\`
-- \`MIN_RELATIVE_MAPE_IMPROVEMENT=0.02\`
+- \`MIN_TEMPORAL_FOLD_WIN_RATIO=0.50\`
+- \`EVALUATION_HOLDOUT_RATIO=0.20\`
+- \`ENSEMBLE_CALIBRATION_RATIO=0.35\`
+- \`CONFORMAL_ALPHA=0.10\`
 
-Keep \`schema_version = 2.0\`, release filenames, grains, horizons, and state-wise structure unchanged unless the website is migrated.
-`),
-];
+Reported MAPE and MAE come from an untouched chronological holdout. Do not compare them with the older random-split dashboard score. The release contract remains compatible with the Grainology website.
+`);
 
-for (const fileName of standaloneOrder) {
-  cells.push(markdown(`## Source: ${fileName.replace('.py', '')}`));
-  cells.push(code(readStandaloneCell(fileName)));
+replaceCellText('## Source: config', (heading) => heading);
+const configHeadingIndex = findCell('## Source: config');
+const configIndex = cells.findIndex((cell, index) => index > configHeadingIndex && cell.cell_type === 'code');
+let configSource = cellSource(cells[configIndex])
+  .replace('MODEL_MODE = "dashboard_ensemble_state_aware_v3"', 'MODEL_MODE = "temporal_ensemble_state_mandi_v4"')
+  .replace('VALIDATION_STRATEGY = os.environ.get("VALIDATION_STRATEGY", "dashboard_random").strip().lower()', 'VALIDATION_STRATEGY = "horizon_embargo_temporal_holdout"')
+  .replace('TRAINING_SCOPE = os.environ.get("TRAINING_SCOPE", "national").strip().lower()', 'TRAINING_SCOPE = os.environ.get("TRAINING_SCOPE", "all").strip().lower()')
+  .replace(
+    '# Dashboard training-parity controls. The default mirrors grain_dashboard\'s\n# random validation blend that produced sub-2% MAPE in its metrics summary.\n# Set VALIDATION_STRATEGY=temporal_embargo to restore strict chronological gates.',
+    '# Compatibility controls retained for the existing prediction schema.\n# Model selection and reported metrics always use chronological holdout windows.',
+  )
+  .replace(
+    '# Dashboard training-parity controls. The default mirrors grain_dashboard\'s random validation blend that produced sub-2% MAPE in its metrics summary. Set VALIDATION_STRATEGY=temporal_embargo to restore strict chronological gates.',
+    '# Compatibility controls retained for the existing prediction schema. Model selection and reported metrics always use chronological holdout windows.',
+  );
+
+if (!configSource.includes('EVALUATION_HOLDOUT_RATIO =')) {
+  const strictSettings = `\n# Leakage-safe evaluation and calibrated uncertainty controls.\nTEMPORAL_VALIDATION_FOLDS = int(os.environ.get("TEMPORAL_VALIDATION_FOLDS", "3"))\nMIN_TEMPORAL_FOLD_WIN_RATIO = float(os.environ.get("MIN_TEMPORAL_FOLD_WIN_RATIO", "0.50"))\nEVALUATION_HOLDOUT_RATIO = float(os.environ.get("EVALUATION_HOLDOUT_RATIO", "0.20"))\nENSEMBLE_CALIBRATION_RATIO = float(os.environ.get("ENSEMBLE_CALIBRATION_RATIO", "0.35"))\nREFIT_SELECTED_MODELS_ON_FULL_DATA = env_bool("REFIT_SELECTED_MODELS_ON_FULL_DATA", True)\n`;
+  configSource = configSource.replace(
+    'CONFORMAL_ALPHA = float(os.environ.get("CONFORMAL_ALPHA", "0.10"))',
+    `CONFORMAL_ALPHA = float(os.environ.get("CONFORMAL_ALPHA", "0.10"))${strictSettings}`
+  );
 }
+cells[configIndex] = code(configSource);
 
-cells.push(
-  markdown(`## 1. Build Canonical Dataset
-
-Loads historical Kaggle datasets, merges latest Supabase/cache data when configured, normalizes states/grains, and writes the canonical daily dataset.
-`),
-  code(`canonical = build_canonical_dataset()
-canonical_summary(canonical)
-missingness_summary(canonical)
-recent_data_summary(canonical, days=14)
-`),
-  code(`plot_history(canonical, states=["All States"], grains=["Wheat", "Paddy", "Maize", "Mustard"])
-plot_recent_history(canonical, days=365, state="All States")
-`),
-
-  markdown(`## 2. Train State-aware Ensemble Models
-
-Creates lag/rolling/arrival/seasonality/national-spread features, trains candidate models for every grain and horizon, prunes weak models, and selects the best method per state.
-`),
-  code(`registry = train_models(canonical)
-training_summary(registry)
-method_leaderboard(registry, top=80)
-validation_rows_summary(registry)
-`),
-  code(`plot_validation_fit(registry, grain="Wheat", state="All States", horizon=7)
-plot_validation_fit(registry, grain="Wheat", state="All States", horizon=30)
-plot_validation_fit(registry, grain="Wheat", state="All States", horizon=90)
-`),
-
-  markdown(`## 3. Generate Forecasts, Actual Context, And Dashboard Metrics
-
-Writes \`predictions.json\`, \`forecast_series.json\`, \`actuals.json\`, and \`metrics.json\` in the website schema.
-`),
-  code(`predictions, forecast_series, actuals, metrics = generate_predictions(canonical, registry)
-print("Prediction grains:", list(predictions.keys()))
-inspect_prediction_output("Wheat", "All States")
-`),
-
-  markdown(`## 4. Generate Historical Efficiency And Backtests
-
-Writes state-wise predicted-vs-actual comparison rows for the dashboard chart and table.
-`),
-  code(`efficiency, backtest = generate_efficiency_data(registry)
-evaluation_report = generate_evaluation_report(registry)
-data_drift_report = generate_data_drift_report(canonical)
-efficiency_summary(efficiency)
-print("Evaluation strategy:", evaluation_report["evaluation_strategy"])
-print("National MAPE range:", evaluation_report["summary"]["national_min_mape"], "to", evaluation_report["summary"]["national_max_mape"])
-print("Data drift warnings:", data_drift_report["summary"]["warning_series"], "/", data_drift_report["summary"]["series_checked"])
-`),
-  code(`plot_efficiency_series(efficiency, grain="Wheat", state="All States", horizon=7, tail=365)
-plot_efficiency_series(efficiency, grain="Wheat", state="All States", horizon=30, tail=365)
-plot_efficiency_series(efficiency, grain="Wheat", state="All States", horizon=90, tail=365)
-`),
-
-  markdown(`## 5. Generate Reasoning Text
-
-Writes the human-readable explanation layer consumed by the website.
-`),
-  code(`reasoning = generate_reasoning(predictions, metrics)
-print("Reasoning generated for grains:", list(reasoning.keys()))
-print(reasoning.get("Wheat", {}).get("All States", {}))
-`),
-
-  markdown(`## 6. Finalize Release Bundle
-
-Validates required files, writes \`manifest.json\`, mirrors files to \`/kaggle/working\`, and creates the downloadable release archive.
-`),
-  code(`manifest = finalize_release(canonical)
-release_file_summary()
-manifest
-`)
+// Preserve the working notebook's complete feature engineering, categorical
+// models, Optuna search, and diagnostics. Replace only train_one with the
+// audited chronological selection/evaluation implementation.
+const trainHeadingIndex = findCell('## Source: train');
+const trainIndex = cells.findIndex((cell, index) => index > trainHeadingIndex && cell.cell_type === 'code');
+let trainSource = cellSource(cells[trainIndex]).replace(
+  'if TRAINING_SCOPE == "national" and NATIONAL_DAILY_FILL:',
+  'if NATIONAL_DAILY_FILL:',
 );
+trainSource = trainSource.replace(
+  'min(VALIDATION_FOLDS, len(ordered))',
+  'min(TEMPORAL_VALIDATION_FOLDS, len(ordered))',
+);
+const trainOneStart = trainSource.indexOf('def train_one(');
+const trainModelsStart = trainSource.indexOf('def train_models(');
+if (trainOneStart < 0 || trainModelsStart <= trainOneStart) {
+  throw new Error('Notebook base train cell is missing train_one/train_models boundaries');
+}
+trainSource = `${trainSource.slice(0, trainOneStart)}${readStandaloneCell('temporal_train_one.py')}\n${trainSource.slice(trainModelsStart)}`;
+trainSource = trainSource.replace(
+  'registry["efficiency_rows"].extend(trained.get("efficiency_rows", trained["validation_rows"]))\n                registry["efficiency_rows"].extend(trained.get("efficiency_rows", trained["validation_rows"]))',
+  'registry["efficiency_rows"].extend(trained.get("efficiency_rows", trained["validation_rows"]))',
+);
+cells[trainIndex] = code(trainSource);
+
+const reasoningHeadingIndex = findCell('## Source: reasoning');
+if (reasoningHeadingIndex < 0) throw new Error('Notebook base is missing reasoning source section');
+cells.splice(
+  reasoningHeadingIndex,
+  0,
+  markdown('## Source: evaluation\n'),
+  code(readStandaloneCell('evaluation.py')),
+  markdown('## Source: drift\n'),
+  code(readStandaloneCell('drift.py')),
+);
+
+replaceCellText('## 8. Train Models', () => `## 8. Train Leakage-Safe Ensemble Models
+
+Each grain and horizon uses chronological train, ensemble-calibration, and final-holdout windows. Candidate models are promoted only when they beat persistence across temporal folds. Production models are refit only after evaluation is frozen.
+`);
+
+const efficiencyRunIndex = findCell('efficiency, backtest = generate_efficiency_data(registry)');
+if (efficiencyRunIndex < 0) throw new Error('Notebook base is missing efficiency execution cell');
+cells.splice(efficiencyRunIndex + 1, 0, code(`evaluation_report = generate_evaluation_report(registry)
+data_drift_report = generate_data_drift_report(canonical)
+print("Evaluation strategy:", evaluation_report.get("evaluation_strategy"))
+print("National holdout MAPE range:", evaluation_report.get("summary", {}).get("national_min_mape"), "to", evaluation_report.get("summary", {}).get("national_max_mape"))
+print("Data drift warnings:", data_drift_report.get("summary", {}).get("warning_series"), "/", data_drift_report.get("summary", {}).get("series_checked"))
+display(pd.DataFrame(evaluation_report.get("national_metrics", [])))
+`));
+
+// Surface evaluation and mandi availability in the manifest without changing
+// the existing required release filenames.
+const manifestHeadingIndex = findCell('## Source: manifest');
+const manifestIndex = cells.findIndex((cell, index) => index > manifestHeadingIndex && cell.cell_type === 'code');
+let manifestSource = cellSource(cells[manifestIndex]);
+manifestSource = manifestSource.replace(
+  '"quality_gates": quality, "files": dict(sorted(files.items())),',
+  '"quality_gates": quality, "evaluation_strategy": "horizon_embargo_temporal_holdout", "market_model_mode": os.environ.get("MARKET_MODEL_MODE", "not_generated"), "market_level_available": (RELEASE_DIR / "market_predictions.json").exists(), "files": dict(sorted(files.items())),',
+);
+cells[manifestIndex] = code(manifestSource);
 
 const notebook = {
   cells,
   metadata: {
     kernelspec: { display_name: 'Python 3', language: 'python', name: 'python3' },
     language_info: { name: 'python', pygments_lexer: 'ipython3' },
+    grainology: {
+      base_notebook: 'grainology_model_base.ipynb',
+      evaluation_strategy: 'horizon_embargo_temporal_holdout',
+      live_price_parity_check: true,
+    },
   },
   nbformat: 4,
   nbformat_minor: 5,
 };
 
 fs.writeFileSync(output, JSON.stringify(notebook, null, 2));
-console.log(`Wrote standalone ${output} (${cells.length} cells, ${standaloneOrder.length} embedded source sections)`);
+console.log(`Wrote ${output} from ${basePath} (${cells.length} cells)`);

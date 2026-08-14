@@ -83,17 +83,28 @@ test('findMarket accepts snake-case IDs and chooses nearest coordinates', () => 
 });
 
 test('generated mandi notebook is standalone and contains the upgraded contract', () => {
+  const basePath = path.join(projectRoot, 'kaggle', 'grainology_model_base.ipynb');
   const notebookPath = path.join(projectRoot, 'kaggle', 'grainology_mandi_forecaster.ipynb');
+  assert.ok(fs.existsSync(basePath), 'user-maintained notebook base must be versioned');
   const notebook = JSON.parse(fs.readFileSync(notebookPath, 'utf8'));
   const source = notebook.cells.map((cell) => (cell.source || []).join('')).join('\n');
 
   assert.match(source, /horizon_embargo_temporal_holdout/);
   assert.match(source, /evaluation_report\.json/);
+  assert.match(source, /data_drift_report\.json/);
+  assert.match(source, /apply_live_dashboard_price_overrides/);
   assert.match(source, /market_predictions\.json/);
   assert.match(source, /market_forecast_series\.json/);
   assert.match(source, /ENABLE_MANDI_LEVEL_FULL_TRAINING/);
-  assert.match(source, /national_group\["national_price"\]\.shift\(lag\)/);
+  assert.match(source, /MAX_MARKET_SERIES = int\(os\.environ\.get\("MAX_MARKET_SERIES", "0"\)\)/);
+  assert.match(source, /if MAX_MARKET_SERIES > 0:/);
+  assert.match(source, /group\["national_price"\]\.shift\(lag\)/);
+  assert.match(source, /FOURIER_PERIODS = \[7, 30, 90, 365\]/);
+  assert.match(source, /msp_gap_ratio/);
+  assert.match(source, /arrival_trend_30/);
   assert.doesNotMatch(source, /\["national_price"\]\.ffill\(\)\.bfill\(\)/);
   assert.doesNotMatch(source, /from \.train import/);
   assert.doesNotMatch(source, /from \.config import/);
+  assert.doesNotMatch(source, /train_test_split/);
+  assert.doesNotMatch(source, /â†’|â‚¹|â€”|Ã—/);
 });

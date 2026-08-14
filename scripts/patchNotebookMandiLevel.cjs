@@ -13,7 +13,7 @@ const mandiMarkdown = `## Mandi-Level Forecast Extension
 This section keeps the existing state-wise website contract unchanged and adds optional mandi-level files:
 
 - \`markets.json\`: available mandi/market series with state, district, latest date, and optional coordinates.
-- \`market_predictions.json\`: mandi-wise current price, 7/30/90 day forecasts, carrying charges, and farm-gate prices.
+- \`market_predictions.json\`: mandi-wise current price and 7/30/90 day forecasts. User-specific carrying charges and farm-gate prices are added by the backend after distance is known.
 - \`market_forecast_series.json\`: mandi-wise chart forecast paths.
 - \`market_actuals.json\`: recent mandi-wise actual context.
 - \`market_reasoning.json\`: lightweight market notes; the backend can still enrich reasoning with Gemini.
@@ -25,7 +25,7 @@ const mandiCode = `import hashlib
 
 ENABLE_MANDI_LEVEL_RELEASE = env_bool("ENABLE_MANDI_LEVEL_RELEASE", True)
 ENABLE_MANDI_LEVEL_FULL_TRAINING = env_bool("ENABLE_MANDI_LEVEL_FULL_TRAINING", True)
-MAX_MARKET_SERIES = int(os.environ.get("MAX_MARKET_SERIES", "150"))
+MAX_MARKET_SERIES = int(os.environ.get("MAX_MARKET_SERIES", "0"))
 MIN_MARKET_OBSERVED_DAYS = int(os.environ.get("MIN_MARKET_OBSERVED_DAYS", "180"))
 MANDI_FORECAST_HISTORY_DAYS = int(os.environ.get("MANDI_FORECAST_HISTORY_DAYS", "60"))
 CONFORMAL_ALPHA = float(os.environ.get("CONFORMAL_ALPHA", "0.10"))
@@ -162,7 +162,10 @@ def load_market_level_sources():
         row_count=("price", "size"),
     ).reset_index()
     eligible = coverage[coverage["observed_days"].ge(MIN_MARKET_OBSERVED_DAYS)].sort_values(["latest_date", "observed_days"], ascending=[False, False])
-    selected_keys = eligible["market_key"].drop_duplicates().head(MAX_MARKET_SERIES).tolist()
+    selected = eligible["market_key"].drop_duplicates()
+    if MAX_MARKET_SERIES > 0:
+        selected = selected.head(MAX_MARKET_SERIES)
+    selected_keys = selected.tolist()
     market_daily = market_daily[market_daily["market_key"].isin(selected_keys)].copy()
 
     locations = load_market_locations()
@@ -479,7 +482,9 @@ if ENABLE_MANDI_LEVEL_RELEASE:
         if ENABLE_MANDI_LEVEL_FULL_TRAINING:
             print("Full global mandi-aware retraining is enabled.")
             previous_min_observed_days = MIN_STATE_OBSERVED_DAYS
+            previous_training_scope = TRAINING_SCOPE
             MIN_STATE_OBSERVED_DAYS = MIN_MARKET_OBSERVED_DAYS
+            TRAINING_SCOPE = "all"
             try:
                 market_registry = train_models(market_canonical)
                 market_predictions = generate_market_predictions(market_daily, market_canonical, market_registry)
@@ -490,6 +495,7 @@ if ENABLE_MANDI_LEVEL_RELEASE:
                 os.environ["MARKET_MODEL_MODE"] = "market_adjusted_state_fallback"
             finally:
                 MIN_STATE_OBSERVED_DAYS = previous_min_observed_days
+                TRAINING_SCOPE = previous_training_scope
         else:
             print("Using fast mandi mode: current mandi price + trained state/national forecast ratios.")
             market_predictions = generate_fast_market_predictions(market_daily, market_canonical)

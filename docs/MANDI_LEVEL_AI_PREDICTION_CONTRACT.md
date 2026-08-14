@@ -2,6 +2,23 @@
 
 This upgrade keeps the existing state-wise AI release files working and adds optional mandi-level sidecar files.
 
+## Notebook Build Chain
+
+The user-maintained working notebook is versioned as:
+
+```text
+kaggle/grainology_model_base.ipynb
+```
+
+`npm run ai:patch-mandi-notebook` preserves its Supabase merge, live-price parity checks, visual diagnostics, and release flow while generating:
+
+```text
+kaggle/grainology_state_forecaster.ipynb
+kaggle/grainology_mandi_forecaster.ipynb
+```
+
+The generated training cell uses chronological train, calibration, and untouched final-holdout windows. CI regenerates both notebooks and compiles every Python code cell before allowing the automation workflow to proceed.
+
 ## Notebook Output
 
 The mandi notebook should still write all existing files:
@@ -44,13 +61,11 @@ It may additionally write:
       "lng": 85.14,
       "prediction": {
         "current_price": 2500,
-        "farm_gate_current_price": 2440,
         "last_actual_date": "2026-07-11",
         "horizons": {
           "7": {
             "target_date": "2026-07-18",
             "predicted_price": 2525,
-            "farm_gate_predicted_price": 2465,
             "metrics": { "mape": 2.1, "mae": 42, "sample_count": 120 }
           }
         }
@@ -59,6 +74,8 @@ It may additionally write:
   }
 }
 ```
+
+Farm-gate fields are calculated in the backend response after browser location determines distance and carrying cost. They are not baked into the Kaggle artifact because the cost is user-specific.
 
 ## Runtime Modes
 
@@ -71,10 +88,12 @@ ENABLE_MANDI_LEVEL_FULL_TRAINING=true
 
 In this mode, the notebook:
 
-- trains the existing state/national model exactly as before
+- preserves the existing state/national website contract while using chronological evaluation
 - trains a global mandi-aware model for eligible markets
 - uses horizon-embargoed temporal validation and per-mandi promotion gates
 - writes mandi-level sidecar files while preserving the state-wise contract
+
+Every mandi with at least `MIN_MARKET_OBSERVED_DAYS` is included by default. Set `MAX_MARKET_SERIES` to a positive number only for a shorter experimental run; `0` means no cap.
 
 For a quick presentation run, full mandi retraining can be disabled:
 

@@ -35,6 +35,9 @@ jobs:
       - name: Regenerate standalone Kaggle notebooks
         run: npm run ai:patch-mandi-notebook
 
+      - name: Compile generated notebook cells
+        run: python automation/validate_notebook_syntax.py
+
       - name: Verify generated notebooks are committed
         run: git diff --exit-code -- kaggle/grainology_state_forecaster.ipynb kaggle/grainology_mandi_forecaster.ipynb
 

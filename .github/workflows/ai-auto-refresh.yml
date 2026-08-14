@@ -45,6 +45,8 @@ jobs:
         run: |
           npm run ai:validate-release
           python -m compileall -q automation kaggle/src
+          npm run ai:patch-mandi-notebook
+          python automation/validate_notebook_syntax.py
 
       - name: Download current latest-data dataset as merge base
         env:

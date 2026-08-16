@@ -48,12 +48,6 @@ The default `showcase` notebook profile is designed for dependable daily executi
 npm run ai:build-research-notebook
 ```
 
-After syncing a successful showcase release, generate verified resume evidence with:
-
-```bash
-npm run resume:evidence
-```
-
 Run the application with:
 
 ```bash
@@ -65,7 +59,6 @@ The working notebook baseline is versioned at `kaggle/grainology_model_base.ipyn
 ## Documentation
 
 - [ML engineering case study](docs/ML_ENGINEERING_CASE_STUDY.md)
-- [Resume-ready project entry](docs/RESUME_PROJECT_ENTRY.md)
 - [Forecasting model card](docs/MODEL_CARD.md)
 - [Mandi-level prediction contract](docs/MANDI_LEVEL_AI_PREDICTION_CONTRACT.md)
 - [AI release architecture](docs/AI_PREDICTION_ARCHITECTURE.md)

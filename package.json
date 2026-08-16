@@ -34,7 +34,6 @@
     "ai:kaggle-run:no-sync": "node scripts/runKaggleNotebookLocal.js --no-sync",
     "ai:patch-mandi-notebook": "node automation/build_kaggle_notebook.mjs --profile=showcase && node scripts/patchNotebookMandiLevel.cjs kaggle/grainology_state_forecaster.ipynb kaggle/grainology_mandi_forecaster.ipynb --profile=showcase",
     "ai:build-research-notebook": "node automation/build_kaggle_notebook.mjs --profile=research --output=kaggle/grainology_state_research_forecaster.ipynb && node scripts/patchNotebookMandiLevel.cjs kaggle/grainology_state_research_forecaster.ipynb kaggle/grainology_mandi_research_forecaster.ipynb --profile=research",
-    "resume:evidence": "node scripts/buildResumeEvidence.js",
     "ai:validate-release": "node --test tests/ai-pipeline.test.mjs",
     "ci:ml": "npm run ai:patch-mandi-notebook && npm run ai:validate-release && npm run build"
   },

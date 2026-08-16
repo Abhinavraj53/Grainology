@@ -80,7 +80,11 @@ jobs:
           KAGGLE_KERNEL_ID: ${{ secrets.KAGGLE_KERNEL_ID }}
           KAGGLE_DATASET_SOURCES: ${{ secrets.KAGGLE_DATASET_SOURCES }}
           KAGGLE_LATEST_DATASET_ID: ${{ secrets.KAGGLE_LATEST_DATASET_ID }}
-          KAGGLE_USE_REMOTE_NOTEBOOK: true
+          # Build the audited repository notebook. Pulling the remote Kaggle draft
+          # here silently bypasses fixes reviewed and tested in this repository.
+          KAGGLE_USE_REMOTE_NOTEBOOK: false
+          GRAINOLOGY_NOTEBOOK_PROFILE: showcase
+          LOCAL_KAGGLE_RUN_TIMEOUT_MINUTES: 300
           LATEST_DATA_BASE_CSV: staging/kaggle-latest-data-base/latest_data.csv
           LATEST_DATA_EXPORT_DIR: staging/kaggle-latest-data
           LATEST_DATA_MIN_BYTES: 10485760

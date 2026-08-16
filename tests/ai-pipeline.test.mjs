@@ -100,6 +100,9 @@ test('generated mandi notebook is standalone and contains the upgraded contract'
   assert.match(source, /market_predictions\.json/);
   assert.match(source, /market_forecast_series\.json/);
   assert.match(source, /ENABLE_MANDI_LEVEL_FULL_TRAINING/);
+  assert.match(source, /ENABLE_MANDI_LEVEL_FULL_TRAINING = env_bool\("ENABLE_MANDI_LEVEL_FULL_TRAINING", False\)/);
+  assert.match(source, /NOTEBOOK_RUN_PROFILE = os\.environ\.get\("GRAINOLOGY_RUN_PROFILE", "showcase"\)/);
+  assert.match(source, /"notebook_profile": NOTEBOOK_RUN_PROFILE/);
   assert.match(source, /MAX_MARKET_SERIES = int\(os\.environ\.get\("MAX_MARKET_SERIES", "0"\)\)/);
   assert.match(source, /if MAX_MARKET_SERIES > 0:/);
   assert.match(source, /group\["national_price"\]\.shift\(lag\)/);
@@ -110,5 +113,8 @@ test('generated mandi notebook is standalone and contains the upgraded contract'
   assert.doesNotMatch(source, /from \.train import/);
   assert.doesNotMatch(source, /from \.config import/);
   assert.doesNotMatch(source, /train_test_split/);
+  const workflow = fs.readFileSync(path.join(projectRoot, '.github', 'workflows', 'ai-auto-refresh.yml'), 'utf8');
+  assert.match(workflow, /KAGGLE_USE_REMOTE_NOTEBOOK: false/);
+  assert.match(workflow, /GRAINOLOGY_NOTEBOOK_PROFILE: showcase/);
   assert.doesNotMatch(source, /â†’|â‚¹|â€”|Ã—/);
 });

@@ -3,12 +3,20 @@ const path = require('path');
 
 const source = path.resolve(process.argv[2] || 'kaggle/grainology_state_forecaster.ipynb');
 const target = path.resolve(process.argv[3] || 'kaggle/grainology_mandi_forecaster.ipynb');
+const profileArg = process.argv.find((arg) => arg.startsWith('--profile='));
+const notebookProfile = (profileArg?.split('=')[1] || process.env.GRAINOLOGY_NOTEBOOK_PROFILE || 'showcase').trim().toLowerCase();
+if (!['showcase', 'research'].includes(notebookProfile)) {
+  throw new Error(`Unknown notebook profile "${notebookProfile}". Use showcase or research.`);
+}
+const fullMandiTrainingDefault = notebookProfile === 'research' ? 'True' : 'False';
 
 const toLines = (text) => text.split(/(?<=\n)/);
 const markdown = (sourceText) => ({ cell_type: 'markdown', metadata: {}, source: toLines(sourceText) });
 const code = (sourceText) => ({ cell_type: 'code', execution_count: null, metadata: {}, outputs: [], source: toLines(sourceText) });
 
 const mandiMarkdown = `## Mandi-Level Forecast Extension
+
+Generated profile: **${notebookProfile}**.
 
 This section keeps the existing state-wise website contract unchanged and adds optional mandi-level files:
 
@@ -24,7 +32,7 @@ Nearest-mandi distance works only when market coordinates are available. If the 
 const mandiCode = `import hashlib
 
 ENABLE_MANDI_LEVEL_RELEASE = env_bool("ENABLE_MANDI_LEVEL_RELEASE", True)
-ENABLE_MANDI_LEVEL_FULL_TRAINING = env_bool("ENABLE_MANDI_LEVEL_FULL_TRAINING", True)
+ENABLE_MANDI_LEVEL_FULL_TRAINING = env_bool("ENABLE_MANDI_LEVEL_FULL_TRAINING", ${fullMandiTrainingDefault})
 MAX_MARKET_SERIES = int(os.environ.get("MAX_MARKET_SERIES", "0"))
 MIN_MARKET_OBSERVED_DAYS = int(os.environ.get("MIN_MARKET_OBSERVED_DAYS", "180"))
 MANDI_FORECAST_HISTORY_DAYS = int(os.environ.get("MANDI_FORECAST_HISTORY_DAYS", "60"))
@@ -522,6 +530,7 @@ nb.metadata = nb.metadata || {};
 nb.metadata.grainology = {
   ...(nb.metadata.grainology || {}),
   mandi_level_extension: true,
+  notebook_profile: notebookProfile,
   optional_mandi_files: [
     'markets.json',
     'market_predictions.json',
@@ -534,4 +543,4 @@ nb.metadata.grainology = {
 
 fs.mkdirSync(path.dirname(target), { recursive: true });
 fs.writeFileSync(target, JSON.stringify(nb, null, 2));
-console.log(`Wrote ${target} from ${source} with mandi-level extension`);
+console.log(`Wrote ${target} from ${source} with mandi-level extension (${notebookProfile} profile)`);

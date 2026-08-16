@@ -4,7 +4,35 @@ import path from 'path';
 const root = process.cwd();
 const srcDir = path.join(root, 'kaggle', 'src');
 const basePath = path.join(root, 'kaggle', 'grainology_model_base.ipynb');
-const output = path.join(root, 'kaggle', 'grainology_state_forecaster.ipynb');
+const profileArg = process.argv.find((arg) => arg.startsWith('--profile='));
+const outputArg = process.argv.find((arg) => arg.startsWith('--output='));
+const notebookProfile = (profileArg?.split('=')[1] || process.env.GRAINOLOGY_NOTEBOOK_PROFILE || 'showcase').trim().toLowerCase();
+const profileDefaults = {
+  showcase: {
+    optunaEnabled: 'False',
+    optunaTrials: 5,
+    optunaTimeoutSeconds: 30,
+    bootstrapIterations: 200,
+    temporalValidationFolds: 3,
+  },
+  research: {
+    optunaEnabled: 'True',
+    optunaTrials: 15,
+    optunaTimeoutSeconds: 60,
+    bootstrapIterations: 400,
+    temporalValidationFolds: 3,
+  },
+};
+
+if (!profileDefaults[notebookProfile]) {
+  throw new Error(`Unknown notebook profile "${notebookProfile}". Use showcase or research.`);
+}
+
+const defaults = profileDefaults[notebookProfile];
+const output = path.resolve(
+  root,
+  outputArg?.slice('--output='.length) || path.join('kaggle', 'grainology_state_forecaster.ipynb'),
+);
 
 const lines = (source) => source.split(/(?<=\n)/);
 const normalizeText = (source) => String(source)
@@ -101,13 +129,18 @@ The website-facing state files remain backward compatible. Optional mandi files 
 
 replaceCellText('## Runtime Notes', () => `## Runtime Notes
 
-Safe model-improvement knobs can be set as Kaggle environment variables:
+This notebook was generated with the **${notebookProfile}** profile.
 
-- \`ENABLE_OPTUNA_TUNING=true\`
-- \`OPTUNA_TRIALS=25\`
-- \`OPTUNA_TIMEOUT_SECONDS=180\`
+- **showcase** is the production default: audited temporal evaluation, fixed model candidates, calibrated intervals, and fast all-mandi sidecars. It disables Optuna and full per-mandi retraining so scheduled runs finish reliably.
+- **research** enables Optuna and full global mandi-aware retraining. Use it for manual benchmark experiments, not the daily release job.
+
+Active defaults in this build:
+
+- \`ENABLE_OPTUNA_TUNING=${defaults.optunaEnabled.toLowerCase()}\`
+- \`OPTUNA_TRIALS=${defaults.optunaTrials}\`
+- \`OPTUNA_TIMEOUT_SECONDS=${defaults.optunaTimeoutSeconds}\`
 - \`MAX_TRAIN_ROWS_PER_MODEL=250000\`
-- \`TEMPORAL_VALIDATION_FOLDS=3\`
+- \`TEMPORAL_VALIDATION_FOLDS=${defaults.temporalValidationFolds}\`
 - \`MIN_TEMPORAL_FOLD_WIN_RATIO=0.50\`
 - \`EVALUATION_HOLDOUT_DAYS=365\`
 - \`ENSEMBLE_CALIBRATION_DAYS=365\`
@@ -121,9 +154,16 @@ replaceCellText('## Source: config', (heading) => heading);
 const configHeadingIndex = findCell('## Source: config');
 const configIndex = cells.findIndex((cell, index) => index > configHeadingIndex && cell.cell_type === 'code');
 let configSource = cellSource(cells[configIndex])
-  .replace('MODEL_MODE = "dashboard_ensemble_state_aware_v3"', 'MODEL_MODE = "temporal_ensemble_state_mandi_v4"')
+  .replace(
+    'MODEL_MODE = "dashboard_ensemble_state_aware_v3"',
+    `MODEL_MODE = "temporal_ensemble_state_mandi_v4"\nNOTEBOOK_RUN_PROFILE = os.environ.get("GRAINOLOGY_RUN_PROFILE", "${notebookProfile}").strip().lower()`,
+  )
   .replace('VALIDATION_STRATEGY = os.environ.get("VALIDATION_STRATEGY", "dashboard_random").strip().lower()', 'VALIDATION_STRATEGY = "horizon_embargo_temporal_holdout"')
   .replace('TRAINING_SCOPE = os.environ.get("TRAINING_SCOPE", "national").strip().lower()', 'TRAINING_SCOPE = os.environ.get("TRAINING_SCOPE", "all").strip().lower()')
+  .replace('BOOTSTRAP_ITERATIONS = int(os.environ.get("BOOTSTRAP_ITERATIONS", "400"))', `BOOTSTRAP_ITERATIONS = int(os.environ.get("BOOTSTRAP_ITERATIONS", "${defaults.bootstrapIterations}"))`)
+  .replace('ENABLE_OPTUNA_TUNING = env_bool("ENABLE_OPTUNA_TUNING", True)', `ENABLE_OPTUNA_TUNING = env_bool("ENABLE_OPTUNA_TUNING", ${defaults.optunaEnabled})`)
+  .replace('OPTUNA_TRIALS = int(os.environ.get("OPTUNA_TRIALS", "15"))', `OPTUNA_TRIALS = int(os.environ.get("OPTUNA_TRIALS", "${defaults.optunaTrials}"))`)
+  .replace('OPTUNA_TIMEOUT_SECONDS = int(os.environ.get("OPTUNA_TIMEOUT_SECONDS", "60"))', `OPTUNA_TIMEOUT_SECONDS = int(os.environ.get("OPTUNA_TIMEOUT_SECONDS", "${defaults.optunaTimeoutSeconds}"))`)
   .replace(
     '# Dashboard training-parity controls. The default mirrors grain_dashboard\'s\n# random validation blend that produced sub-2% MAPE in its metrics summary.\n# Set VALIDATION_STRATEGY=temporal_embargo to restore strict chronological gates.',
     '# Compatibility controls retained for the existing prediction schema.\n# Model selection and reported metrics always use chronological holdout windows.',
@@ -141,6 +181,15 @@ if (!configSource.includes('EVALUATION_HOLDOUT_RATIO =')) {
   );
 }
 cells[configIndex] = code(configSource);
+
+const controlCentreIndex = findCell('run_configuration = pd.DataFrame');
+if (controlCentreIndex >= 0) {
+  const controlSource = cellSource(cells[controlCentreIndex]).replace(
+    'run_configuration = pd.DataFrame([{\n    "transparent_mode": TRANSPARENT_MODE,',
+    'run_configuration = pd.DataFrame([{\n    "notebook_profile": NOTEBOOK_RUN_PROFILE,\n    "transparent_mode": TRANSPARENT_MODE,',
+  );
+  cells[controlCentreIndex] = code(controlSource);
+}
 
 // Preserve the working notebook's complete feature engineering, categorical
 // models, Optuna search, and diagnostics. Replace only train_one with the
@@ -226,6 +275,7 @@ const notebook = {
       base_notebook: 'grainology_model_base.ipynb',
       evaluation_strategy: 'horizon_embargo_temporal_holdout',
       live_price_parity_check: true,
+      notebook_profile: notebookProfile,
     },
   },
   nbformat: 4,
@@ -233,4 +283,4 @@ const notebook = {
 };
 
 fs.writeFileSync(output, JSON.stringify(notebook, null, 2));
-console.log(`Wrote ${output} from ${basePath} (${cells.length} cells)`);
+console.log(`Wrote ${output} from ${basePath} (${cells.length} cells, ${notebookProfile} profile)`);

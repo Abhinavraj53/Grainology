@@ -85,6 +85,13 @@ def build_release_quality_report(
             issues.append(f"{key[0]}/{key[1]}d MAPE {candidate_mape:.3f}% exceeds {max_mape:.3f}%")
         champion = champion_rows.get(key)
         champion_mape = champion.get("mape") if champion else None
+        candidate_strategy = candidate.get("validation_strategy")
+        champion_strategy = champion.get("validation_strategy") if champion else None
+        strategies_comparable = bool(
+            candidate_strategy
+            and champion_strategy
+            and candidate_strategy == champion_strategy
+        )
         regression_pp = None if champion_mape is None else candidate_mape - champion_mape
         regression_ratio = None if champion_mape in {None, 0} else regression_pp / champion_mape
         comparisons.append({
@@ -92,11 +99,20 @@ def build_release_quality_report(
             "horizon_days": int(key[1]),
             "candidate_mape": round(candidate_mape, 4),
             "champion_mape": None if champion_mape is None else round(champion_mape, 4),
+            "candidate_validation_strategy": candidate_strategy,
+            "champion_validation_strategy": champion_strategy,
+            "strategies_comparable": strategies_comparable,
             "regression_pp": None if regression_pp is None else round(regression_pp, 4),
             "regression_ratio": None if regression_ratio is None else round(regression_ratio, 6),
         })
+        if champion_mape is not None and not strategies_comparable:
+            warnings.append(
+                f"Skipped MAPE regression gate for {key[0]}/{key[1]}d because validation strategies differ "
+                f"(candidate={candidate_strategy or 'unknown'}, champion={champion_strategy or 'unknown'})"
+            )
         if (
-            regression_pp is not None
+            strategies_comparable
+            and regression_pp is not None
             and regression_ratio is not None
             and regression_pp > max_regression_pp
             and regression_ratio > max_regression_ratio

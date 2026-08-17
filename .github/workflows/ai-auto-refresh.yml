@@ -44,6 +44,7 @@ jobs:
       - name: Validate AI contracts
         run: |
           npm run ai:validate-release
+          python -m unittest tests.test_release_quality
           python -m compileall -q automation kaggle/src
           npm run ai:patch-mandi-notebook
           python automation/validate_notebook_syntax.py

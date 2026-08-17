@@ -260,6 +260,18 @@ display(pd.DataFrame(evaluation_report.get("national_metrics", [])))
 const manifestHeadingIndex = findCell('## Source: manifest');
 const manifestIndex = cells.findIndex((cell, index) => index > manifestHeadingIndex && cell.cell_type === 'code');
 let manifestSource = cellSource(cells[manifestIndex]);
+const perSeriesHoldoutFailure = 'critical.append(f"selected ML does not beat baseline for {grain}/{state}/{horizon}d")';
+if (!manifestSource.includes(perSeriesHoldoutFailure)) {
+  throw new Error('Notebook base manifest cell is missing the per-series holdout quality check');
+}
+// The final holdout is reserved for unbiased reporting, not model selection.
+// A weak state/horizon result must remain visible, but using it to switch the
+// selected model or reject the entire release would turn the holdout into a
+// selection set and make one sparse series block every otherwise valid slot.
+manifestSource = manifestSource.replace(
+  perSeriesHoldoutFailure,
+  'warnings.append(f"selected method does not beat baseline on final holdout for {grain}/{state}/{horizon}d")',
+);
 manifestSource = manifestSource.replace(
   '"quality_gates": quality, "files": dict(sorted(files.items())),',
   '"quality_gates": quality, "evaluation_strategy": "horizon_embargo_temporal_holdout", "market_model_mode": os.environ.get("MARKET_MODEL_MODE", "not_generated"), "market_level_available": (RELEASE_DIR / "market_predictions.json").exists(), "files": dict(sorted(files.items())),',

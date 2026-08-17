@@ -109,6 +109,8 @@ test('generated mandi notebook is standalone and contains the upgraded contract'
   assert.match(source, /FOURIER_PERIODS = \[7, 30, 90, 365\]/);
   assert.match(source, /msp_gap_ratio/);
   assert.match(source, /arrival_trend_30/);
+  assert.match(source, /warnings\.append\(f"selected method does not beat baseline on final holdout/);
+  assert.doesNotMatch(source, /critical\.append\(f"selected ML does not beat baseline/);
   assert.doesNotMatch(source, /\["national_price"\]\.ffill\(\)\.bfill\(\)/);
   assert.doesNotMatch(source, /from \.train import/);
   assert.doesNotMatch(source, /from \.config import/);

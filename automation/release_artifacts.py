@@ -10,6 +10,10 @@ TRAINING_ONLY_RELEASE_FILES = {
     "market_canonical_daily.parquet",
 }
 
+PACKAGE_ONLY_RELEASE_FILES = {
+    "grainology_release.zip",
+}
+
 CHUNKED_MARKET_RELEASE_FILES = {
     "market_actuals.json",
     "market_forecast_series.json",
@@ -75,7 +79,11 @@ def build_serving_manifest(bundle_dir: Path, manifest: dict) -> tuple[dict, dict
         if (bundle_dir / name).exists()
     )
 
-    omitted_checksums = TRAINING_ONLY_RELEASE_FILES | TRANSFORMED_SERVING_FILES
+    omitted_checksums = (
+        TRAINING_ONLY_RELEASE_FILES
+        | PACKAGE_ONLY_RELEASE_FILES
+        | TRANSFORMED_SERVING_FILES
+    )
     serving_checksums = {
         name: digest
         for name, digest in checksums.items()
@@ -91,5 +99,8 @@ def build_serving_manifest(bundle_dir: Path, manifest: dict) -> tuple[dict, dict
     }
     serving_manifest["files"]["checksums.json"] = checksums_digest
     serving_manifest["training_artifacts_retained_in_kaggle"] = excluded
+    serving_manifest["package_artifacts_retained_in_kaggle"] = sorted(
+        name for name in PACKAGE_ONLY_RELEASE_FILES if (bundle_dir / name).exists()
+    )
     serving_manifest["chunked_serving_artifacts"] = sorted(TRANSFORMED_SERVING_FILES)
     return serving_manifest, serving_checksums, excluded

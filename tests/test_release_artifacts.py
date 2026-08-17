@@ -38,12 +38,14 @@ class ReleaseArtifactTests(unittest.TestCase):
                 "predictions.json": "prediction-hash",
                 "market_forecast_series.json": "transformed-market-hash",
                 "historical_efficiency.json": "transformed-efficiency-hash",
+                "grainology_release.zip": "package-hash",
                 "market_canonical_daily.csv": "large-csv-hash",
                 "market_canonical_daily.parquet": "large-parquet-hash",
             }
             (bundle / "checksums.json").write_text(json.dumps(checksums), encoding="utf-8")
             (bundle / "market_canonical_daily.csv").write_text("large", encoding="utf-8")
             (bundle / "market_canonical_daily.parquet").write_bytes(b"large")
+            (bundle / "grainology_release.zip").write_bytes(b"package")
             manifest = {
                 "files": {
                     **checksums,
@@ -62,6 +64,11 @@ class ReleaseArtifactTests(unittest.TestCase):
             self.assertNotIn("market_canonical_daily.parquet", serving_manifest["files"])
             self.assertNotIn("market_forecast_series.json", serving_manifest["files"])
             self.assertNotIn("historical_efficiency.json", serving_manifest["files"])
+            self.assertNotIn("grainology_release.zip", serving_manifest["files"])
+            self.assertEqual(
+                serving_manifest["package_artifacts_retained_in_kaggle"],
+                ["grainology_release.zip"],
+            )
             self.assertEqual(
                 serving_manifest["chunked_serving_artifacts"],
                 [

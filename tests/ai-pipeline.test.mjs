@@ -149,4 +149,6 @@ test('Supabase publisher chunks large market serving artifacts at module scope',
     'market chunk uploader must not be nested inside publish_release',
   );
   assert.match(publisher, /path\.name in CHUNKED_MARKET_RELEASE_FILES/);
+  assert.match(publisher, /path\.name in PACKAGE_ONLY_RELEASE_FILES/);
+  assert.match(publisher, /Failed to upload \{source\.name\}/);
 });

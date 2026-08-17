@@ -14,6 +14,7 @@ from validate_prediction_bundle import validate_bundle
 from release_quality import write_release_quality_report
 from release_artifacts import (
     CHUNKED_MARKET_RELEASE_FILES,
+    PACKAGE_ONLY_RELEASE_FILES,
     TRAINING_ONLY_RELEASE_FILES,
     build_market_payload_chunks,
     build_serving_manifest,
@@ -36,12 +37,20 @@ def get_supabase_client():
 
 
 def upload_file(storage, bucket: str, source: Path, destination: str) -> None:
-    with source.open("rb") as handle:
-        storage.from_(bucket).upload(
-            destination,
-            handle,
-            file_options={"upsert": "true"},
-        )
+    size_bytes = source.stat().st_size
+    print(f"Uploading {source.name} ({size_bytes / (1024 * 1024):.2f} MiB) -> {destination}")
+    try:
+        with source.open("rb") as handle:
+            storage.from_(bucket).upload(
+                destination,
+                handle,
+                file_options={"upsert": "true"},
+            )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to upload {source.name} ({size_bytes / (1024 * 1024):.2f} MiB) "
+            f"to {destination}: {exc}"
+        ) from exc
 
 
 def upload_json(storage, bucket: str, payload, destination: str) -> None:
@@ -193,7 +202,11 @@ def publish_release(bundle_dir: Path, force: bool = False, allow_regression: boo
     )
     for path in bundle_dir.iterdir():
       if path.is_file():
-          if path.name in TRAINING_ONLY_RELEASE_FILES or path.name in {"manifest.json", "checksums.json"}:
+          if (
+              path.name in TRAINING_ONLY_RELEASE_FILES
+              or path.name in PACKAGE_ONLY_RELEASE_FILES
+              or path.name in {"manifest.json", "checksums.json"}
+          ):
               continue
           if path.name == "historical_efficiency.json":
               upload_historical_efficiency_chunks(storage, bucket, path, artifact_prefix)

@@ -4,15 +4,40 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from automation.release_artifacts import build_serving_manifest, encode_json
+from automation.release_artifacts import (
+    build_market_payload_chunks,
+    build_serving_manifest,
+    encode_json,
+)
 
 
 class ReleaseArtifactTests(unittest.TestCase):
+    def test_market_payload_chunks_are_bounded_and_lossless(self):
+        payload = {
+            "Wheat": {
+                "market-a": {"series": [1] * 40},
+                "market-b": {"series": [2] * 40},
+                "market-c": {"series": [3] * 40},
+            },
+            "Maize": {"market-d": {"series": [4] * 20}},
+        }
+
+        chunks = build_market_payload_chunks(payload, max_bytes=180)
+
+        rebuilt = {}
+        self.assertGreater(len(chunks), 1)
+        for grain, chunk in chunks:
+            self.assertLessEqual(len(encode_json(chunk)), 180)
+            rebuilt.setdefault(grain, {}).update(chunk[grain])
+        self.assertEqual(rebuilt, payload)
+
     def test_training_canonical_files_are_excluded_with_consistent_checksums(self):
         with tempfile.TemporaryDirectory() as directory:
             bundle = Path(directory)
             checksums = {
                 "predictions.json": "prediction-hash",
+                "market_forecast_series.json": "transformed-market-hash",
+                "historical_efficiency.json": "transformed-efficiency-hash",
                 "market_canonical_daily.csv": "large-csv-hash",
                 "market_canonical_daily.parquet": "large-parquet-hash",
             }
@@ -35,6 +60,16 @@ class ReleaseArtifactTests(unittest.TestCase):
             self.assertEqual(serving_checksums, {"predictions.json": "prediction-hash"})
             self.assertNotIn("market_canonical_daily.csv", serving_manifest["files"])
             self.assertNotIn("market_canonical_daily.parquet", serving_manifest["files"])
+            self.assertNotIn("market_forecast_series.json", serving_manifest["files"])
+            self.assertNotIn("historical_efficiency.json", serving_manifest["files"])
+            self.assertEqual(
+                serving_manifest["chunked_serving_artifacts"],
+                [
+                    "historical_efficiency.json",
+                    "market_actuals.json",
+                    "market_forecast_series.json",
+                ],
+            )
             self.assertEqual(
                 serving_manifest["files"]["checksums.json"],
                 hashlib.sha256(encode_json(serving_checksums)).hexdigest(),

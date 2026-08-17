@@ -9,6 +9,7 @@ import {
   carryingCostForDistance,
   findMarket,
   haversineKm,
+  resolveMarketChunkPath,
 } from '../services/aiPredictionService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -119,4 +120,33 @@ test('generated mandi notebook is standalone and contains the upgraded contract'
   assert.match(workflow, /KAGGLE_USE_REMOTE_NOTEBOOK: false/);
   assert.match(workflow, /GRAINOLOGY_NOTEBOOK_PROFILE: showcase/);
   assert.doesNotMatch(source, /â†’|â‚¹|â€”|Ã—/);
+});
+
+test('market chunk index resolves only the selected mandi payload', () => {
+  const index = {
+    chunks: {
+      Wheat: {
+        'bihar::patna': 'market_forecast_series/wheat-1.json',
+        'bihar::gaya': 'market_forecast_series/wheat-2.json',
+      },
+    },
+  };
+
+  assert.equal(
+    resolveMarketChunkPath(index, 'Wheat', 'bihar::patna'),
+    'market_forecast_series/wheat-1.json',
+  );
+  assert.equal(resolveMarketChunkPath(index, 'Wheat', 'bihar::missing'), null);
+});
+
+test('Supabase publisher chunks large market serving artifacts at module scope', () => {
+  const publisher = fs.readFileSync(
+    path.join(projectRoot, 'automation', 'publish_kaggle_release.py'),
+    'utf8',
+  );
+  assert.ok(
+    publisher.indexOf('def upload_market_payload_chunks') < publisher.indexOf('def publish_release'),
+    'market chunk uploader must not be nested inside publish_release',
+  );
+  assert.match(publisher, /path\.name in CHUNKED_MARKET_RELEASE_FILES/);
 });

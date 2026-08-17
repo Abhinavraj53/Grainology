@@ -13,7 +13,9 @@ from supabase import create_client
 from validate_prediction_bundle import validate_bundle
 from release_quality import write_release_quality_report
 from release_artifacts import (
+    CHUNKED_MARKET_RELEASE_FILES,
     TRAINING_ONLY_RELEASE_FILES,
+    build_market_payload_chunks,
     build_serving_manifest,
     encode_json,
 )
@@ -97,6 +99,38 @@ def upload_historical_efficiency_chunks(storage, bucket: str, source: Path, arti
     )
 
 
+def upload_market_payload_chunks(storage, bucket: str, source: Path, artifact_prefix: str) -> None:
+    payload = json.loads(source.read_text(encoding="utf-8"))
+    stem = source.stem
+    base_prefix = f"{artifact_prefix}/{stem}"
+    index: dict = {
+        "kind": "chunked_market_payload",
+        "schema_version": "1.0",
+        "source_file": source.name,
+        "chunks": {},
+    }
+
+    for chunk_number, (grain, chunk_payload) in enumerate(build_market_payload_chunks(payload), start=1):
+        chunk_name = safe_chunk_name(stem, grain, chunk_number)
+        relative_path = f"{stem}/{chunk_name}"
+        upload_json(storage, bucket, chunk_payload, f"{base_prefix}/{chunk_name}")
+        grain_index = index["chunks"].setdefault(grain, {})
+        for market_key in (chunk_payload.get(grain) or {}):
+            grain_index[str(market_key)] = relative_path
+
+    upload_json(storage, bucket, index, f"{artifact_prefix}/{stem}.index.json")
+    upload_json(
+        storage,
+        bucket,
+        {
+            "chunked": True,
+            "index_file": f"{stem}.index.json",
+            "message": f"{source.name} is stored in bounded market payload chunks.",
+        },
+        f"{artifact_prefix}/{source.name}",
+    )
+
+
 def download_json(storage, bucket: str, path: str) -> dict | None:
     try:
         raw = storage.from_(bucket).download(path)
@@ -163,6 +197,9 @@ def publish_release(bundle_dir: Path, force: bool = False, allow_regression: boo
               continue
           if path.name == "historical_efficiency.json":
               upload_historical_efficiency_chunks(storage, bucket, path, artifact_prefix)
+              continue
+          if path.name in CHUNKED_MARKET_RELEASE_FILES:
+              upload_market_payload_chunks(storage, bucket, path, artifact_prefix)
               continue
           upload_file(storage, bucket, path, f"{artifact_prefix}/{path.name}")
     upload_json(storage, bucket, serving_checksums, f"{artifact_prefix}/checksums.json")

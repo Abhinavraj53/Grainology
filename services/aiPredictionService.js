@@ -351,6 +351,36 @@ const getChunkedEfficiencyPayload = async (grain, state, horizon) => {
   return downloadReleaseJson(release, chunkPath);
 };
 
+export const resolveMarketChunkPath = (index, grain, marketKey) => {
+  const chunkPath = pickMarketPayload(index?.chunks, grain, marketKey);
+  return typeof chunkPath === 'string' && chunkPath ? chunkPath : null;
+};
+
+const getChunkedMarketPayload = async (fileName, grain, marketKey) => {
+  if (sourceMode() === 'local_files' || !marketKey) return null;
+
+  const release = await getActiveReleaseMetadata();
+  const stem = fileName.replace(/\.json$/i, '');
+  let index = null;
+  try {
+    index = await downloadReleaseJson(release, `${stem}.index.json`);
+  } catch {
+    return null;
+  }
+
+  const chunkPath = resolveMarketChunkPath(index, grain, marketKey);
+  if (!chunkPath) return null;
+  const chunk = await downloadReleaseJson(release, chunkPath);
+  return pickMarketPayload(chunk, grain, marketKey);
+};
+
+const loadMarketPayload = async (fileName, grain, marketKey) => {
+  const chunked = await getChunkedMarketPayload(fileName, grain, marketKey);
+  if (chunked != null) return chunked;
+  const complete = await loadOptionalReleaseJson(fileName, {});
+  return pickMarketPayload(complete, grain, marketKey);
+};
+
 const daysBetween = (leftDate, rightDate) => {
   const left = new Date(leftDate).getTime();
   const right = new Date(rightDate).getTime();
@@ -495,10 +525,8 @@ export const getPredictionForState = async (grain, state, options = {}) => {
 
 export const getPredictionForMarket = async (grain, state, options = {}, context = {}) => {
   const meta = context.meta || await getPredictionMeta();
-  const [marketPredictions, marketActuals, marketForecastSeries, marketReasoning, marketsFile] = await Promise.all([
+  const [marketPredictions, marketReasoning, marketsFile] = await Promise.all([
     loadOptionalReleaseJson('market_predictions.json', {}),
-    loadOptionalReleaseJson('market_actuals.json', {}),
-    loadOptionalReleaseJson('market_forecast_series.json', {}),
     loadOptionalReleaseJson('market_reasoning.json', {}),
     loadOptionalReleaseJson('markets.json', null),
   ]);
@@ -532,6 +560,10 @@ export const getPredictionForMarket = async (grain, state, options = {}, context
 
   const distanceKm = finiteNumber(payload.distance_km) ?? selected?.distance_km ?? finiteNumber(options.distance_km);
   const carryingCost = carryingCostForDistance(distanceKm);
+  const [marketActuals, marketForecastSeries] = await Promise.all([
+    loadMarketPayload('market_actuals.json', grain, marketKey),
+    loadMarketPayload('market_forecast_series.json', grain, marketKey),
+  ]);
   const marketContext = {
     mode: 'market',
     market_key: marketKey,
@@ -553,8 +585,8 @@ export const getPredictionForMarket = async (grain, state, options = {}, context
     state: marketContext.state || state || 'All States',
     fallback_reason: null,
     prediction: applyFarmGatePrices(payload.prediction || payload, carryingCost),
-    actuals: pickMarketPayload(marketActuals, grain, marketKey) || payload.actuals || null,
-    forecast_series: pickMarketPayload(marketForecastSeries, grain, marketKey) || payload.forecast_series || null,
+    actuals: marketActuals || payload.actuals || null,
+    forecast_series: marketForecastSeries || payload.forecast_series || null,
     reasoning: pickMarketPayload(marketReasoning, grain, marketKey) || payload.reasoning || null,
     market_context: marketContext,
   };

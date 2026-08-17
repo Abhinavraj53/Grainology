@@ -12,6 +12,11 @@ from supabase import create_client
 
 from validate_prediction_bundle import validate_bundle
 from release_quality import write_release_quality_report
+from release_artifacts import (
+    TRAINING_ONLY_RELEASE_FILES,
+    build_serving_manifest,
+    encode_json,
+)
 
 
 def env(name: str, fallback: str | None = None) -> str:
@@ -38,7 +43,7 @@ def upload_file(storage, bucket: str, source: Path, destination: str) -> None:
 
 
 def upload_json(storage, bucket: str, payload, destination: str) -> None:
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    encoded = encode_json(payload)
     storage.from_(bucket).upload(
         destination,
         encoded,
@@ -149,12 +154,24 @@ def publish_release(bundle_dir: Path, force: bool = False, allow_regression: boo
 
     release_id = str(uuid.uuid4())
     artifact_prefix = f"releases/{release_id}"
+    serving_manifest, serving_checksums, excluded_training_artifacts = build_serving_manifest(
+        bundle_dir, manifest
+    )
     for path in bundle_dir.iterdir():
       if path.is_file():
+          if path.name in TRAINING_ONLY_RELEASE_FILES or path.name in {"manifest.json", "checksums.json"}:
+              continue
           if path.name == "historical_efficiency.json":
               upload_historical_efficiency_chunks(storage, bucket, path, artifact_prefix)
               continue
           upload_file(storage, bucket, path, f"{artifact_prefix}/{path.name}")
+    upload_json(storage, bucket, serving_checksums, f"{artifact_prefix}/checksums.json")
+    upload_json(storage, bucket, serving_manifest, f"{artifact_prefix}/manifest.json")
+    if excluded_training_artifacts:
+        print(
+            "Training-only artifacts retained in Kaggle and excluded from Supabase serving release: "
+            + ", ".join(excluded_training_artifacts)
+        )
 
     canonical_prefix = "canonical/latest"
     for name in ["canonical_daily.parquet", "canonical_daily.csv"]:
@@ -172,7 +189,7 @@ def publish_release(bundle_dir: Path, force: bool = False, allow_regression: boo
         "code_version": manifest.get("code_version"),
         "kaggle_kernel": os.environ.get("KAGGLE_KERNEL_ID"),
         "artifact_prefix": artifact_prefix,
-        "manifest": {**manifest, "publish_quality": quality_report},
+        "manifest": {**serving_manifest, "publish_quality": quality_report},
     }).execute()
 
     supabase.table("ai_prediction_releases").insert({
@@ -184,7 +201,7 @@ def publish_release(bundle_dir: Path, force: bool = False, allow_regression: boo
         "data_latest_date": manifest["data_latest_date"],
         "generated_at": manifest["generated_at"],
         "is_active": False,
-        "manifest": {**manifest, "publish_quality": quality_report},
+        "manifest": {**serving_manifest, "publish_quality": quality_report},
     }).execute()
 
     supabase.rpc("activate_ai_prediction_release", {"p_release_id": release_id}).execute()

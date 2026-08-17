@@ -40,7 +40,7 @@ jobs:
 
       - name: Validate release quality policy
         run: |
-          python -m unittest tests.test_release_quality
+          python -m unittest tests.test_release_quality tests.test_release_artifacts
           python -m compileall -q automation
 
       - name: Download latest Kaggle output
